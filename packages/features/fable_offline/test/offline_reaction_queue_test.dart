@@ -26,4 +26,17 @@ void main(){
     expect(()=>OfflineReactionQueue(backendOrigin:Uri.parse('https://api.example.com'),
       accountId:'user',catalog:readonly,serverApprovedOperations:{op.id}),throwsArgumentError);
   });
+
+  test('rejects replay when authentication is claimed but not enforced',(){
+    const declared=FableOperation('social.react','POST','/react','hash',
+      requiresAuth:true,enforceAuth:false);
+    expect(()=>OfflineReactionQueue(backendOrigin:Uri.parse('https://api.example.com'),
+      accountId:'account-1',catalog:Catalog(declared),
+      serverApprovedOperations:{declared.id}),throwsArgumentError);
+    const enforced=FableOperation('social.react','POST','/react','verified-hash',
+      requiresAuth:true,enforceAuth:true);
+    expect(()=>OfflineReactionQueue(backendOrigin:Uri.parse('https://api.example.com'),
+      accountId:'account-1',catalog:Catalog(enforced),
+      serverApprovedOperations:{enforced.id}),returnsNormally);
+  });
 }

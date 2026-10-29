@@ -49,7 +49,11 @@ class OfflineReactionQueue {
     if(maxActions<1||maxActions>500)throw ArgumentError('Invalid bounded queue size');
     for(final id in _approved){
       final op=catalog.require(id);
-      if(!op.requiresAuth||!const {'POST','PUT','PATCH'}.contains(op.method.toUpperCase())||
+      // Offline replay is allowed only for operations with a verified,
+      // enforced authorization contract. A hand-written operation with a
+      // merely declared requiresAuth flag must not authorize replay.
+      if(!op.requiresAuth||!op.enforceAuth||
+        !const {'POST','PUT','PATCH'}.contains(op.method.toUpperCase())||
         _unsafeOperation.hasMatch(id)){
         throw ArgumentError('Offline replay operation is not an approved authenticated interaction');
       }
