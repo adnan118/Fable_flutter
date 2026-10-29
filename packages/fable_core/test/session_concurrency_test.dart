@@ -67,11 +67,11 @@ Dio _stub(FutureOr<int> Function(RequestOptions) status) {
       final result = await status(request);
       handler.resolve(Response<dynamic>(requestOptions: request, statusCode: result,
           data: <String, dynamic>{}));
-    } catch (error) {
+    } catch (error, stack) {
       // Test-only diagnostics: never print any Bearer token or request body.
       // Dio otherwise converts an assertion in this stub to network_error.
       // ignore: avoid_print
-      print('DIO_TEST_STUB_FAILURE host=${request.uri.host} path=${request.path} error=$error');
+      print('DIO_TEST_STUB_FAILURE host=${request.uri.host} path=${request.path} error=$error\n$stack');
       rethrow;
     }
   }));
