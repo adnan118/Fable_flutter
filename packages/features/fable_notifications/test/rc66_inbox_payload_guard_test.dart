@@ -16,9 +16,15 @@ void main() {
     expect(() => FableInboxItem.fromPayload({
       'id':'../admin','title':'Wrong','body':'Unsafe',
     }),throwsFormatException);
+    // Backend accepts a title exactly at its 400-character bound.
+    final atLimit=FableInboxItem.fromPayload({
+      'id':'29b22238-8d4e-4d0d-b6fa-cc2a1a390001',
+      'title':'Too long'*50,'body':'Allowed',
+    });
+    expect(atLimit.title.length,400);
     expect(() => FableInboxItem.fromPayload({
       'id':'29b22238-8d4e-4d0d-b6fa-cc2a1a390001',
-      'title':'Too long'*50,'body':'Unsafe',
+      'title':('Too long'*50)+'x','body':'Rejected',
     }),throwsFormatException);
   });
 }
