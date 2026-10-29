@@ -55,7 +55,7 @@ class UnifiedApiClient implements BackendApiGateway {
     }
     // Pin even injected Dio transports to the verified origin. Preserve
     // operation-relative paths for interceptors and race-condition tests.
-    _dio.options.baseUrl = baseUri.origin;
+    _dio.options.baseUrl = _baseUri.origin;
   }
   final Uri _baseUri;
   final OperationCatalog contract;
@@ -262,7 +262,6 @@ class UnifiedApiClient implements BackendApiGateway {
       throw const FormatException('Invalid credential header value');
     }
   }
-  String _origin() => _baseUri.origin;
   Future<Response<dynamic>> _send(FableOperation op,String endpoint,Map<String,String> headers,
       Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,
       {int? expectedIdentity}) async {
