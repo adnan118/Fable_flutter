@@ -3,12 +3,12 @@ import 'package:fable_push_notifications/fable_push_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 FableContract _catalog(Map<String,FableOperation> operations) => FableContract(
-  contractHash: 'a'*64, operations: operations, featureIds: const <String>{'notifications'},
+  contractHash: List.filled(64,'a').join(), operations: operations, featureIds: const <String>{'notifications'},
   projectName: 'verified-rc66-test', selectionMode: 'explicit',
 );
 
 FableOperation _op(String id,String method,{bool auth=true,bool enforced=true}) =>
-    FableOperation(id,method,'/verified/$id','b'*64,requiresAuth:auth,enforceAuth:enforced);
+    FableOperation(id,method,'/verified/$id',List.filled(64,'b').join(),requiresAuth:auth,enforceAuth:enforced);
 
 void main() {
   test('RC66 push requires protected POST/DELETE operations', () {

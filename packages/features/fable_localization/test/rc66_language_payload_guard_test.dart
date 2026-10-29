@@ -10,7 +10,7 @@ void main() {
     expect(ar.isDefault,isTrue);
     final en=FableLanguage.parse({'code':'en','name':'English','isDefault':false});
     expect(en.name,'English');
-    for(final code in ['../ar','ar?token','ar/en','','a'*36]){
+    for(final code in ['../ar','ar?token','ar/en','',List.filled(36,'a').join()]){
       expect(() => FableLanguage.parse({'code':code,'name':'Invalid'}),throwsFormatException);
     }
     expect(() => FableLanguage.parse({'code':'ar','name':''}),throwsFormatException);
