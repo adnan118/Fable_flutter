@@ -36,8 +36,7 @@ class OfflineReactionQueue {
   OfflineReactionQueue({required Uri backendOrigin,required String accountId,
     required this.catalog,required Set<String> serverApprovedOperations,
     SharedPreferencesAsync? storage,this.maxActions=100})
-   :_storage=storage??SharedPreferencesAsync(),
-    _approved=Set.unmodifiable(serverApprovedOperations),
+   :_approved=Set.unmodifiable(serverApprovedOperations),
     _key='fable.offline.reaction.v1.${sha256.convert(utf8.encode('$backendOrigin:$accountId'))}' {
     final local=backendOrigin.scheme=='http'&&
       const {'localhost','127.0.0.1','10.0.2.2','::1'}.contains(backendOrigin.host);
@@ -55,6 +54,9 @@ class OfflineReactionQueue {
         throw ArgumentError('Offline replay operation is not an approved authenticated interaction');
       }
     }
+    // Validate the contract BEFORE initializing platform storage. An invalid
+    // financial/auth operation must fail closed even on a headless test runner.
+    _storage = storage ?? SharedPreferencesAsync();
   }
   static final _unsafeOperation=RegExp(
     r'(payment|purchase|billing|balance|wallet|ledger|financial|price|refund|order|booking|stock|inventory|transfer|message|admin|account|auth|permission|delete)',
@@ -62,7 +64,7 @@ class OfflineReactionQueue {
   static final _resource=RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$');
   static final _random=Random.secure();
   final OperationCatalog catalog;
-  final SharedPreferencesAsync _storage;
+  late final SharedPreferencesAsync _storage;
   final Set<String> _approved;
   final String _key;
   final int maxActions;
