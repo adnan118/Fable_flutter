@@ -19,7 +19,7 @@ const backendDigest = value => digest(canonical(value));
 const sha256 = value => /^[a-f0-9]{64}$/.test(value ?? '');
 const methods = new Set(['GET','POST','PUT','PATCH','DELETE','HEAD']);
 
-export function verifyFableContract(root, {mode='source', expectedProjectId=null}={}) {
+export function verifyFableContract(root, {mode='source', expectedProjectId=null, expectedContractHash=null}={}) {
   const messages = [];
   const failures = [];
   const fail = (code) => failures.push(code);
@@ -97,6 +97,10 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
     if(!expectedProjectId || typeof expectedProjectId!=='string' || !expectedProjectId.trim()) fail('expected_project_id_required');
     if(fixture) fail('fixture_project_not_accepted');
     if(expectedProjectId && contract.project?.id!==expectedProjectId) fail('expected_project_id_mismatch');
+    // The source-of-truth Backend export digest must be supplied independently;
+    // a forged/matched project label does not make a client contract trusted.
+    if(!sha256(expectedContractHash)) fail('expected_backend_export_hash_required');
+    else if(expectedContractHash!==contract.contractHash) fail('expected_backend_export_hash_mismatch');
     // A project with only Auth may legitimately have zero business operations.
     // Never infer missing capabilities from the number of OpenAPI routes.
   } else if(fixture) messages.push('Starter/test project: structurally valid, NOT a project integration approval.');
@@ -109,14 +113,15 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
 }
 
 function cli(argv) {
-  let root=process.cwd(), mode='source', expectedProjectId=null;
+  let root=process.cwd(), mode='source', expectedProjectId=null, expectedContractHash=null;
   for(let i=0;i<argv.length;i++){
     if(argv[i]==='--root' && argv[i+1]) root=resolve(argv[++i]);
     else if(argv[i]==='--mode' && argv[i+1]) mode=argv[++i];
     else if(argv[i]==='--expected-project-id' && argv[i+1]) expectedProjectId=argv[++i];
+    else if(argv[i]==='--expected-contract-hash' && argv[i+1]) expectedContractHash=argv[++i];
     else throw new Error(`Unsupported/missing CLI argument: ${argv[i]}`);
   }
-  const result=verifyFableContract(root,{mode,expectedProjectId});
+  const result=verifyFableContract(root,{mode,expectedProjectId,expectedContractHash});
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
   if(!result.ok)process.exitCode=2;
 }
