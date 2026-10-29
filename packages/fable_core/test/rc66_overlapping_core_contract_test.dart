@@ -68,10 +68,12 @@ void main() {
 
   test('Conflicting OpenAPI versus mobile-core route fails closed', () {
     expect(() => _Fixture(corePath:'/auth/other').parse(), throwsFormatException);
+    expect(() => _Fixture(openApiPath:'/auth/other').parse(), throwsFormatException);
   });
 
   test('Conflicting public/private authorization fails closed', () {
     expect(() => _Fixture(openApiPublic:false).parse(), throwsFormatException);
+    expect(() => _Fixture(corePublic:false).parse(), throwsFormatException);
   });
 
   test('Duplicates within the mobile-core export still fail closed', () {
