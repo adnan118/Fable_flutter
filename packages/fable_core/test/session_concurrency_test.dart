@@ -63,9 +63,17 @@ class _MemorySession extends FableSecureSession {
 Dio _stub(FutureOr<int> Function(RequestOptions) status) {
   final dio = Dio();
   dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) async {
-    final result = await status(request);
-    handler.resolve(Response<dynamic>(requestOptions: request, statusCode: result,
-        data: <String, dynamic>{}));
+    try {
+      final result = await status(request);
+      handler.resolve(Response<dynamic>(requestOptions: request, statusCode: result,
+          data: <String, dynamic>{}));
+    } catch (error) {
+      // Test-only diagnostics: never print any Bearer token or request body.
+      // Dio otherwise converts an assertion in this stub to network_error.
+      // ignore: avoid_print
+      print('DIO_TEST_STUB_FAILURE host=${request.uri.host} path=${request.path} error=$error');
+      rethrow;
+    }
   }));
   return dio;
 }
