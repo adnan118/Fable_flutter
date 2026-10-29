@@ -53,6 +53,9 @@ class UnifiedApiClient implements BackendApiGateway {
     if (!identical(this.adapter.catalog, contract)) {
       throw ArgumentError('Backend adapter must use the verified catalog');
     }
+    // Pin even injected Dio transports to the verified origin. Preserve
+    // operation-relative paths for interceptors and race-condition tests.
+    _dio.options.baseUrl = baseUri.origin;
   }
   final Uri _baseUri;
   final OperationCatalog contract;
@@ -273,7 +276,7 @@ class UnifiedApiClient implements BackendApiGateway {
       }
       try {
         final response = await _dio.request<dynamic>(
-          Uri.parse('${_origin()}$endpoint').toString(),
+          endpoint,
           options: Options(method: op.method, headers: headers,
             followRedirects: false,
             validateStatus: (status) => status != null && status < 500),
