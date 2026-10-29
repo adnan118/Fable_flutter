@@ -89,7 +89,7 @@ jobs:
 
   ios-unsigned:
     name: iOS simulator build (no signing)
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -99,5 +99,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
+      - name: Verify modern Xcode toolchain
+        run: xcodebuild -version
       - name: Build iOS simulator (does not require signing)
         run: flutter build ios --simulator --debug --no-codesign

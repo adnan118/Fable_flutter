@@ -22,7 +22,7 @@ class PublicChangeSync {
     required this.operationId,required this.namespace,
     SharedPreferencesAsync? storage,
     this.checkInterval=const Duration(seconds:15),
-  }):_storage=storage??SharedPreferencesAsync() {
+  }) {
     final uri=Uri.tryParse(namespace);
     final local=uri?.scheme=='http'&&const {'localhost','127.0.0.1','10.0.2.2','::1'}.contains(uri?.host);
     if(uri==null||!uri.hasAuthority||uri.host.isEmpty||
@@ -37,12 +37,14 @@ class PublicChangeSync {
     if(checkInterval<const Duration(seconds:5)){
       throw ArgumentError('Bound change polling to at least 5 seconds');
     }
+    // Trust and operation checks must succeed before touching platform storage.
+    _storage = storage ?? SharedPreferencesAsync();
   }
   final BackendApiGateway gateway;
   final OperationCatalog catalog;
   final String operationId,namespace;
   final Duration checkInterval;
-  final SharedPreferencesAsync _storage;
+  late final SharedPreferencesAsync _storage;
   static final _hex=RegExp(r'^[a-f0-9]{64}$');
   // Other Backend may use opaque, URL-safe stable revision IDs instead of UUIDs.
   static final _entryRevision=RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$');
