@@ -35,5 +35,5 @@ const List<FableFeature> installedFeatures = <FableFeature>[
   offlineFeature,
   analyticsFeature,
   contentFeature,
-  access_controlFeature,
+  accessControlFeature,
 ];

@@ -181,7 +181,7 @@ class ExternalAuthGateway implements BackendApiGateway {
         // An account switch or sign-out invalidated this refresh attempt.
         return false;
       }
-      return session.saveTokensIfIdentity(expectedIdentity: identityAtStart,
+      return await session.saveTokensIfIdentity(expectedIdentity: identityAtStart,
         accessToken: access, refreshToken: rotated, expectedRefreshToken: old);
     } on FableApiException catch (e) {
       if (e.status == 401 || e.status == 403) {

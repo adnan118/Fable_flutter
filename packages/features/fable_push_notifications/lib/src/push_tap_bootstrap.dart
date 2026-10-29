@@ -46,7 +46,11 @@ class _FablePushTapBootstrapState extends State<FablePushTapBootstrap> {
     // Delay until MaterialApp installs its navigation callbacks.
     await WidgetsBinding.instance.endOfFrame;
     if(_closed||!mounted)return;
-    await FableNotificationNavigation.instance.open(message.data);
+    final payload = <String, String>{};
+    for (final entry in message.data.entries) {
+      if (entry.value is String) payload[entry.key] = entry.value as String;
+    }
+    await FableNotificationNavigation.instance.open(payload);
   }
   @override void dispose(){_closed=true;unawaited(_opened?.cancel());unawaited(_foreground?.cancel());super.dispose();}
   @override Widget build(BuildContext context)=>widget.child;

@@ -1,4 +1,3 @@
-library fable_core;
 export 'src/fable_contract.dart';
 export 'src/backend_transport_adapter.dart';
 export 'src/backend_credential_provider.dart';

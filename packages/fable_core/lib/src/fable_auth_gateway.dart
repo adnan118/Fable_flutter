@@ -149,7 +149,7 @@ class FableAuthGateway implements BackendApiGateway {
         // Logout or a different login happened while refresh was in flight.
         return false;
       }
-      return _saveNewSession(_payload(response.data), expectedIdentity: identityAtStart,
+      return await _saveNewSession(_payload(response.data), expectedIdentity: identityAtStart,
         expectedRefreshToken: token);
     } on FableApiException catch (error) {
       // A definite authentication failure invalidates this session. Server

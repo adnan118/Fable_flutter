@@ -8,6 +8,6 @@ export 'src/access_session.dart';
 export 'src/authorized_action.dart';
 export 'src/access_bootstrap.dart';
 export 'src/role_view.dart';
-const FableFeature access_controlFeature = FableFeature(
+const FableFeature accessControlFeature = FableFeature(
   id: 'access_control', title: 'Access control', icon: Icons.shield_outlined,
   backendKeywords: ['access', 'permissions', 'roles']);

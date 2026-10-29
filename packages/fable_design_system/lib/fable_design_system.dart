@@ -1,7 +1,6 @@
 export 'src/fable_async_action_button.dart';
 import 'package:material_ui/material_ui.dart';
 import 'src/tokens.g.dart';
-import 'src/fable_adaptive.dart';
 import 'src/fable_component_tokens.dart';
 import 'src/fable_ui_colors.dart';
 

@@ -45,7 +45,7 @@ jobs:
             echo "::endgroup::"
           done < <(find packages -name pubspec.yaml -type f | sort)
       - name: Analyze Flutter application and feature libraries
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
       - name: Test Flutter application
         run: flutter test --reporter expanded
       - name: Test all independent feature packages

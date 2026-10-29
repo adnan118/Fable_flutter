@@ -15,7 +15,6 @@ class FableDeepLinksBootstrap extends StatefulWidget {
   State<FableDeepLinksBootstrap> createState() => _FableDeepLinksBootstrapState();
 }
 class _FableDeepLinksBootstrapState extends State<FableDeepLinksBootstrap> {
-  AppLinks? _appLinks;
   StreamSubscription<Uri>? _subscription;
   FableDeepLinkPolicy? _policy;
   String? _last;
@@ -31,7 +30,6 @@ class _FableDeepLinksBootstrapState extends State<FableDeepLinksBootstrap> {
       if (!mounted || _closed) return;
       _policy = policy;
       final links = AppLinks();
-      _appLinks = links;
       // Subscribe first to avoid dropping links received while loading initial intent.
       _subscription = links.uriLinkStream.listen((link) => unawaited(_route(link)),
         onError:(Object err, StackTrace trace) => debugPrint('Deep link delivery failed: $err'));
