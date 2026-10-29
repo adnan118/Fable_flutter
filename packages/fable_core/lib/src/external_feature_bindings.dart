@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show FlutterError;
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'external_operation_catalog.dart';

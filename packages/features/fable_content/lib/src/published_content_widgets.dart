@@ -87,11 +87,12 @@ class _FablePublishedContentPageState extends State<FablePublishedContentPage>{
  @override void didUpdateWidget(covariant FablePublishedContentPage old){
   super.didUpdateWidget(old);
   if(old.slug!=widget.slug||old.locale!=widget.locale||!identical(old.repository,widget.repository)){
-   _document=null;_accepted=false;_load();
+   _requestEpoch++;_loading=false;_document=null;_accepted=false;_load();
   }
  }
  Future<void> _load()async{
   if(_loading)return;
+  final epoch=++_requestEpoch;
   setState((){_loading=true;_error=null;});
   final slug=widget.slug,locale=widget.locale;
   try{

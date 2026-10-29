@@ -34,7 +34,17 @@ jobs:
           dart --version
       - name: Install app dependencies
         run: flutter pub get
-      - name: Analyze Flutter application
+      - name: Resolve dependencies for all optional packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r spec; do
+            package="${spec%/pubspec.yaml}"
+            echo "::group::Dependencies $package"
+            (cd "$package" && flutter pub get)
+            echo "::endgroup::"
+          done < <(find packages -name pubspec.yaml -type f | sort)
+      - name: Analyze Flutter application and feature libraries
         run: flutter analyze
       - name: Test Flutter application
         run: flutter test --reporter expanded

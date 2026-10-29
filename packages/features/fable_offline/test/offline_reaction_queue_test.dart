@@ -22,7 +22,7 @@ void main(){
     const op=FableOperation('social.react','POST','/react','hash',requiresAuth:true);
     expect(()=>OfflineReactionQueue(backendOrigin:Uri.parse('http://remote.example.com'),
       accountId:'user',catalog:Catalog(op),serverApprovedOperations:{op.id}),throwsArgumentError);
-    const readonly=Catalog(const FableOperation('social.react','GET','/react','hash',requiresAuth:false));
+    final readonly=Catalog(const FableOperation('social.react','GET','/react','hash',requiresAuth:false));
     expect(()=>OfflineReactionQueue(backendOrigin:Uri.parse('https://api.example.com'),
       accountId:'user',catalog:readonly,serverApprovedOperations:{op.id}),throwsArgumentError);
   });

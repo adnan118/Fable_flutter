@@ -54,7 +54,7 @@ class PublicRevisionSse {
       final body=response.data;
       if(body==null)throw const FormatException('SSE empty response');
       String? kind;
-      await for(final line in body.stream.transform(utf8.decoder).transform(const LineSplitter())){
+      await for(final line in body.stream.cast<List<int>>().transform(utf8.decoder).transform(const LineSplitter())){
         if(cancel.isCancelled)break;
         if(line.length>2048)throw const FormatException('Oversized SSE line');
         if(line.isEmpty){kind=null;continue;}

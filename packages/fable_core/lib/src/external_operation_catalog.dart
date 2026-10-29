@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show FlutterError;
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';

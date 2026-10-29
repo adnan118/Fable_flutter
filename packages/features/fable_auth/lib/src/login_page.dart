@@ -246,6 +246,6 @@ class _FableLoginPageState extends State<FableLoginPage> {
         if(_message!=null)Padding(padding:const EdgeInsets.only(top:20),child:Text(_message!,textAlign:TextAlign.center)),
         if(_url.isEmpty)const Padding(padding:EdgeInsets.only(top:14),child:Text(
           'Configure with --dart-define=FABLE_API_BASE_URL=https://your-api.example',textAlign:TextAlign.center)),
-      ]))));
+      ])))));
   }
 }

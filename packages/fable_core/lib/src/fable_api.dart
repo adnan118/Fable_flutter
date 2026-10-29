@@ -272,8 +272,8 @@ class UnifiedApiClient implements BackendApiGateway {
         throw FableApiException(0, 'request_cancelled');
       }
       try {
-        final response = await _dio.requestUri<dynamic>(
-          Uri.parse('${_origin()}$endpoint'),
+        final response = await _dio.request<dynamic>(
+          Uri.parse('${_origin()}$endpoint').toString(),
           options: Options(method: op.method, headers: headers,
             followRedirects: false,
             validateStatus: (status) => status != null && status < 500),

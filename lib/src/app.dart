@@ -118,7 +118,7 @@ class _AppState extends State<FableStarterApp> {
     // FABLE_PUSH_NAV_END
     onGenerateTitle:(context)=>AppLocalizations.of(context).appTitle,debugShowCheckedModeBanner:false,
     locale:_locale,supportedLocales:AppLocalizations.supportedLocales,
-    localeResolutionCallback:(device,allowed)=>FableLanguagePolicy.resolveUi(device,allowed),
+    localeResolutionCallback:(device,allowed)=>FableLanguagePolicy.resolveUi(device,allowed.toList(growable:false)),
     localizationsDelegates:AppLocalizations.localizationsDelegates,
     // FABLE_ACCESS_BUILDER_BEGIN
 
