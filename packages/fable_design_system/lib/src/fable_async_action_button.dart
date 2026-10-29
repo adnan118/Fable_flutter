@@ -18,13 +18,18 @@ class FableAsyncActionButton extends StatefulWidget {
 
 class _FableAsyncActionButtonState extends State<FableAsyncActionButton> {
   bool _busy = false;
+  bool _confirming = false;
   String? _error;
   bool get _ar => Localizations.maybeLocaleOf(context)?.languageCode == 'ar';
 
   Future<void> _execute() async {
     if (_busy || !widget.enabled) return;
     // Reserve the action immediately to prevent double taps during the dialog.
-    setState(() {_busy = true; _error = null;});
+    setState(() {
+      _busy = true;
+      _confirming = widget.requireConfirmation || widget.isDestructive;
+      _error = null;
+    });
     try {
       if (widget.requireConfirmation || widget.isDestructive) {
         final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -36,6 +41,7 @@ class _FableAsyncActionButtonState extends State<FableAsyncActionButton> {
           ],
         ));
         if (confirmed != true || !mounted) return;
+        setState(() => _confirming = false);
       }
       await widget.onExecute();
       if (mounted) widget.onSucceeded?.call();
@@ -45,7 +51,7 @@ class _FableAsyncActionButtonState extends State<FableAsyncActionButton> {
         ? 'تعذّر تنفيذ الإجراء. تحقّق من النتيجة قبل إعادة المحاولة.'
         : 'Action could not be confirmed. Verify the outcome before trying again.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() { _busy = false; _confirming = false; });
     }
   }
 
@@ -55,7 +61,7 @@ class _FableAsyncActionButtonState extends State<FableAsyncActionButton> {
     children: [
       FilledButton(
         onPressed: widget.enabled && !_busy ? _execute : null,
-        child: _busy ? const SizedBox(width:20, height:20,
+        child: _busy && !_confirming ? const SizedBox(width:20, height:20,
           child: CircularProgressIndicator(strokeWidth:2)) : Text(widget.label),
       ),
       if (_error != null) Padding(
