@@ -96,9 +96,11 @@ void main() {
         final auth = request.headers['Authorization'];
         if (auth == 'Bearer new') return 200;
         expect(auth, 'Bearer old');
-        oldRequests++;
-        if (oldRequests == 1) await secondStarted.future;
-        if (oldRequests == 2) { secondStarted.complete(); await releaseLate.future; }
+        // Snapshot the request ordinal BEFORE awaiting: another concurrent
+        // request may advance the shared count while this callback is paused.
+        final ordinal = ++oldRequests;
+        if (ordinal == 1) await secondStarted.future;
+        if (ordinal == 2) { secondStarted.complete(); await releaseLate.future; }
         return 401;
       }));
     addTearDown(client.dispose);
