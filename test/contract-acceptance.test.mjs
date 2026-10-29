@@ -35,9 +35,15 @@ test('Starter graph can be structurally valid without being a real project appro
 test('A project gate must pin the exact non-fixture backend project id',()=>{
  const root=fixture();try{
   rebindProject(root,'real-project-123','my-app');
-  const missing=verify(root,{mode:'project'}),wrong=verify(root,{mode:'project',expectedProjectId:'another-project'});
-  const correct=verify(root,{mode:'project',expectedProjectId:'real-project-123'});
+  const expectedHash=JSON.parse(readFileSync(join(root,'assets/contracts/contract.json'))).contractHash;
+  const missing=verify(root,{mode:'project'});
+  const wrong=verify(root,{mode:'project',expectedProjectId:'another-project',expectedContractHash:expectedHash});
+  const noHash=verify(root,{mode:'project',expectedProjectId:'real-project-123'});
+  const wrongHash=verify(root,{mode:'project',expectedProjectId:'real-project-123',expectedContractHash:'0'.repeat(64)});
+  const correct=verify(root,{mode:'project',expectedProjectId:'real-project-123',expectedContractHash:expectedHash});
   assert.ok(missing.failures.includes('expected_project_id_required'));
+  assert.ok(noHash.failures.includes('expected_backend_export_hash_required'));
+  assert.ok(wrongHash.failures.includes('expected_backend_export_hash_mismatch'));
   assert.ok(wrong.failures.includes('expected_project_id_mismatch'));
   assert.equal(correct.ok,true,JSON.stringify(correct.failures));
   assert.equal(correct.projectBound,true);
@@ -72,7 +78,8 @@ test('Backend readiness flag without imported contract is rejected',()=>{
 test('A genuine empty-business-API application can pass with an explicitly pinned project',()=>{
  const root=fixture();try{
   rebindProject(root,'auth-only-production','auth-only');
-  const result=verify(root,{mode:'project',expectedProjectId:'auth-only-production'});
+  const expectedHash=JSON.parse(readFileSync(join(root,'assets/contracts/contract.json'))).contractHash;
+  const result=verify(root,{mode:'project',expectedProjectId:'auth-only-production',expectedContractHash:expectedHash});
   assert.equal(result.ok,true,JSON.stringify(result));
   assert.equal(result.operationCount,0);
  }finally{rmSync(root,{recursive:true,force:true});}
