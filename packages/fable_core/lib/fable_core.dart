@@ -1,0 +1,17 @@
+library fable_core;
+export 'src/fable_contract.dart';
+export 'src/backend_transport_adapter.dart';
+export 'src/backend_credential_provider.dart';
+export 'src/fable_api.dart';
+export 'src/fable_cache.dart';
+export 'src/fable_validation.dart';
+export 'src/fable_session.dart';
+export 'src/fable_auth_gateway.dart';
+export 'src/backend_selection.dart';
+export 'src/external_operation_catalog.dart';
+export 'src/external_api_gateway.dart';
+export 'src/external_feature_bindings.dart';
+export 'src/external_auth_gateway.dart';
+export 'src/fable_retry_policy.dart';
+export 'src/fable_financial_freshness.dart';
+export 'src/fable_immutable_payload.dart';

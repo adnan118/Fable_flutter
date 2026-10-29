@@ -1,0 +1,14 @@
+name: fable_design_system
+description: Shared Fable semantic tokens and accessible layout primitives.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  material_ui: ^1.0.0
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

@@ -1,0 +1,17 @@
+name: fable_core
+description: Shared contract-aware networking, validation, caching and secure session helpers.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.9.0
+  crypto: ^3.0.6
+  flutter_secure_storage: ^11.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

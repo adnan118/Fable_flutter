@@ -1,0 +1,7 @@
+{
+  "@@locale": "en",
+  "appTitle": "Fable App",
+  "loading": "Loading…",
+  "networkError": "Connection failed. Try again.",
+  "emptyState": "No data yet."
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.language-policy",
+  "mode": "specified",
+  "defaultLocale": "ar",
+  "locales": [
+    "ar",
+    "en"
+  ],
+  "aiProvider": null,
+  "backendAuthoritative": true,
+  "notifications": "recipient-locale",
+  "runtimeTranslation": false
+}

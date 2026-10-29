@@ -1,0 +1,25 @@
+name: fable_access_control
+version: 0.1.0
+publish_to: none
+description: Provider-neutral permissions and role UI capability.
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+dependencies:
+  crypto: ^3.0.6
+  material_ui: ^1.0.0
+  fable_feature_contract:
+    path: ../../fable_feature_contract
+  fable_design_system:
+    path: ../../fable_design_system
+  flutter:
+    sdk: flutter
+  fable_core:
+    path: ../../fable_core
+dev_dependencies:
+  dio: ^5.9.0
+  crypto: ^3.0.6
+  material_ui: ^1.0.0
+  fable_feature_contract:
+    path: ../../fable_feature_contract
+  flutter_test:
+    sdk: flutter

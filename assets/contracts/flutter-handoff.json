@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.flutter-handoff",
+  "client": "flutter",
+  "backend": {
+    "project": {
+      "id": "test-project",
+      "name": "fable-test"
+    },
+    "contractHash": "04a78abad83bc69a6b0eaefa9d44daa703efff19579f07e89c3a92ddb77bf42c"
+  },
+  "selection": {
+    "mode": "explicit",
+    "features": [
+      "auth",
+      "profile",
+      "notifications",
+      "media",
+      "localization",
+      "support",
+      "social",
+      "biometrics",
+      "realtime",
+      "deeplinks",
+      "messaging",
+      "location",
+      "payments",
+      "offline",
+      "analytics"
+    ],
+    "recommendedKeep": [
+      "auth",
+      "notifications",
+      "media",
+      "payments"
+    ],
+    "needsReview": [
+      "profile",
+      "localization",
+      "support",
+      "social",
+      "biometrics",
+      "realtime",
+      "deeplinks",
+      "messaging",
+      "location",
+      "offline",
+      "analytics"
+    ]
+  },
+  "featureCatalog": [
+    {
+      "id": "auth",
+      "backendEvidence": [
+        "core:auth"
+      ],
+      "recommendation": "keep",
+      "dependsOn": []
+    },
+    {
+      "id": "profile",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": [
+        "auth"
+      ]
+    },
+    {
+      "id": "notifications",
+      "backendEvidence": [
+        "capability:push-notifications",
+        "core:push"
+      ],
+      "recommendation": "keep",
+      "dependsOn": []
+    },
+    {
+      "id": "media",
+      "backendEvidence": [
+        "capability:media"
+      ],
+      "recommendation": "keep",
+      "dependsOn": []
+    },
+    {
+      "id": "localization",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    },
+    {
+      "id": "support",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    },
+    {
+      "id": "social",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": [
+        "auth"
+      ]
+    },
+    {
+      "id": "biometrics",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": [
+        "auth"
+      ]
+    },
+    {
+      "id": "realtime",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    },
+    {
+      "id": "deeplinks",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    },
+    {
+      "id": "messaging",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": [
+        "auth"
+      ]
+    },
+    {
+      "id": "location",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    },
+    {
+      "id": "payments",
+      "backendEvidence": [
+        "capability:financial-platform"
+      ],
+      "recommendation": "keep",
+      "dependsOn": []
+    },
+    {
+      "id": "offline",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    },
+    {
+      "id": "analytics",
+      "backendEvidence": [],
+      "recommendation": "review",
+      "dependsOn": []
+    }
+  ],
+  "warning": "Explicit selection confirmed by backend command author; frontend still checks dependencies and lock.",
+  "manifestHash": "dcf9985cffc7fa861470110f2679a8fdd9fc2091684a3ecbf07c44a67d575b94"
+}

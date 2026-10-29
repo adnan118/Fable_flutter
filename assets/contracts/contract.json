@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 2,
+  "kind": "fable.client-contract",
+  "project": {
+    "id": "test-project",
+    "name": "fable-test"
+  },
+  "core": {
+    "schemaVersion": 1,
+    "project": {
+      "name": "fable-test",
+      "clients": [
+        "flutter"
+      ]
+    },
+    "auth": {
+      "authority": "fable",
+      "firebaseAuthenticationRequired": false,
+      "transports": {
+        "flutter": {
+          "transport": "bearer-secure-storage"
+        }
+      },
+      "sessions": "Backend owns User/AuthSession, per-installation token families, refresh rotation/replay detection, revocation and multi-device lifecycle.",
+      "multiDevice": {
+        "defaultMaxActiveSessions": 5,
+        "configurable": true,
+        "zeroMeansUnlimited": true,
+        "isolation": "A compromised/replayed refresh token revokes the affected session/token family by default, not every device."
+      },
+      "installationBinding": {
+        "invasiveHardwareFingerprinting": false,
+        "flutter": "Generate one random installation identifier on first launch, store it in OS-backed secure storage, and send X-Installation-Id on login/refresh and authenticated requests.",
+        "web": "Backend owns a persistent HttpOnly installation cookie separate from access/refresh cookies; normal logout does not delete it.",
+        "signals": [
+          "installation-id",
+          "session-id",
+          "token-family",
+          "ip-hmac",
+          "user-agent-hmac"
+        ],
+        "note": "IP/User-Agent changes are risk signals, not proof of identity or compromise."
+      },
+      "refreshSafety": {
+        "rotation": true,
+        "replayDetection": true,
+        "frontendRule": "Serialize refresh attempts per installation (single-flight/mutex). Never branch refresh-token chains client-side."
+      },
+      "social": {
+        "google": false,
+        "apple": false,
+        "accountLinking": "explicit-existing-account-proof",
+        "sameEmailBehavior": "LINK_REQUIRED",
+        "backendOwns": [
+          "Provider token verification and Fable session issuance.",
+          "Apple server credentials/private key when Apple is enabled."
+        ],
+        "clientMustDo": [
+          "Use the platform provider SDK/OAuth flow to obtain the Google ID token or Apple identity token + authorization code required by Fable.",
+          "Send provider credentials only to Fable social-auth endpoints; do not create a parallel Firebase Auth account authority."
+        ]
+      },
+      "frontendRules": [
+        "Never treat an email match from Google/Apple as permission to auto-link an existing Fable account.",
+        "If backend returns AUTH_SOCIAL_LINK_REQUIRED, prove ownership of the existing account, then call the explicit link flow.",
+        "Flutter must persist one random Installation ID in secure storage and send X-Installation-Id; do not use IMEI/MAC/serial-number fingerprinting.",
+        "Use a refresh mutex/single-flight per installation. A rotated refresh token must never be reused to mint a second branch."
+      ]
+    },
+    "financial": {
+      "architecture": "business-agnostic-financial-platform/server-authoritative-money",
+      "configured": false,
+      "methods": [],
+      "providers": [],
+      "connectionModes": {},
+      "cashModes": [],
+      "crypto": {
+        "enabled": false,
+        "assets": [],
+        "networks": []
+      },
+      "storeBilling": {
+        "apple": false,
+        "google": false
+      },
+      "distinctions": {
+        "applePay": "Wallet/payment method for ordinary merchant payments. It is not Apple App Store in-app billing.",
+        "appleAppStore": "Store billing for qualifying digital goods/subscriptions in iOS. Server verifies signed store data.",
+        "googlePay": "Wallet/payment method for ordinary merchant payments. It is not Google Play Billing.",
+        "googlePlay": "Store billing for qualifying digital goods/subscriptions in Android. Backend re-checks authoritative Play API state."
+      },
+      "backendOwns": [
+        "Final payable amount, currency and immutable financial snapshot. Client application never supplies an authoritative price.",
+        "Provider secrets, webhook/JWS verification, replay protection, ledger posting, reconciliation, refunds/approvals and financial audit.",
+        "Business-facing verified financial events. Provider adapters never call Orders/Bookings/Memberships directly."
+      ],
+      "clientMustDo": [
+        "Render methods returned by backend/configuration; do not hard-code enabled payment methods.",
+        "Never collect or forward raw PAN/CVV when a hosted/tokenized provider flow is available.",
+        "Treat redirect/success-screen/client callback as UI only; never unlock business value until backend reports verified financial state.",
+        "Cash/bank/exchange/manual flows remain pending until backend evidence/approval/reconciliation confirms collection.",
+        "For Apple Pay vs App Store and Google Pay vs Play Billing, use the correct flow described by the client contract instead of treating them as synonyms."
+      ],
+      "adminSurfaces": [
+        "Overview / financial summary / monthly-yearly trends / previous-period comparison",
+        "Transactions and immutable financial snapshots (original/discount/tax/fees/credits/payable/paid/remaining)",
+        "Provider accounts and connection mode (sandbox/live/deferred), health and secret rotation",
+        "Refunds, disputes/chargebacks and independent approvals",
+        "Settlements, provider fees, reconciliation and payout confirmation workflows",
+        "Cash accounts/collections, bank-transfer/exchange/manual evidence flows",
+        "Crypto payment evidence and store-billing verification",
+        "Ledger, Trial Balance, Profit & Loss, Balance Sheet, outstanding aging, inventory/valuation snapshots and period close",
+        "Risk/fraud review, webhook health, immutable financial audit and legal/compliance review status"
+      ],
+      "adminViews": {
+        "simple": "Business-friendly labels and operational actions.",
+        "advanced": "Accounting, reconciliation, settlement, risk and reporting.",
+        "technical": "Provider/webhook/health/configuration details without revealing saved secrets."
+      },
+      "runtimeContract": "GET /financial/client-contract"
+    },
+    "push": {
+      "provider": "firebase-cloud-messaging",
+      "backendOwns": [
+        "Firebase Admin SDK credentials (ADC/service account) — never send them to Web/Flutter.",
+        "Sending notifications, invalid-token cleanup, session-to-push binding and disabling registrations on logout/delete."
+      ],
+      "clientPublicConfigKeys": [
+        "PUSH_FIREBASE_PROJECT_ID",
+        "PUSH_FIREBASE_MESSAGING_SENDER_ID",
+        "PUSH_FIREBASE_WEB_APP_ID",
+        "PUSH_FIREBASE_WEB_API_KEY",
+        "PUSH_FIREBASE_WEB_VAPID_PUBLIC_KEY"
+      ],
+      "clientMustDo": [
+        "Initialize Firebase client SDK for FCM only; Fable remains the authentication authority.",
+        "Request notification permission when required by the OS/browser.",
+        "After a Fable AuthSession exists, obtain the FCM registration token and POST it to /push/devices.",
+        "On FCM token refresh, register the new token against the same active Fable session.",
+        "When logout response asks for DELETE_LOCAL_PUSH_TOKEN, delete the local FCM token."
+      ],
+      "flutter": {
+        "android": [
+          "Add google-services.json.",
+          "Request POST_NOTIFICATIONS on Android 13+."
+        ],
+        "ios": [
+          "Add GoogleService-Info.plist.",
+          "Configure APNs / Push Notifications capability.",
+          "Wait for APNs token before FCM calls when required."
+        ]
+      },
+      "web": [
+        "Use the public Firebase web config.",
+        "Pass the VAPID public key to getToken().",
+        "Configure a Firebase messaging service worker for background notifications."
+      ],
+      "runtimeContract": "GET /push/client-contract"
+    },
+    "media": {
+      "architecture": "secure-media-platform/backend-selects-upload-and-playback-strategy",
+      "backendOwns": [
+        "Storage driver selection (local/s3/hybrid), storage credentials, object keys and at-rest encryption policy.",
+        "Upload-session lifecycle, server-authoritative progress, resumable offsets, abandoned-upload cleanup, S3 multipart presigning/completion and private-access URLs.",
+        "Optimized-primary image storage: JPEG/PNG may be replaced by a smaller WebP primary only when the configured savings threshold is met; dimensions stay unchanged by default, and no original+optimized duplicate is stored.",
+        "Large uploads: prepare returns resumable strategy, maxParallelParts and progress; S3-compatible uploads use Presigned Multipart and the client acknowledges each part with ETag+sizeBytes. abortEndpoint cancels immediately; idle sessions are cleaned by bounded retention maintenance; Scheduled Tasks is primary when installed and HTTP is fallback.",
+        "Secure Media authorization: owning domain evaluates OWNER/ROLE/PERMISSION/MEMBERSHIP/SUBSCRIPTION/PURCHASE/INVITATION/CUSTOM policy, then issues a short-lived Authorization Grant.",
+        "Playback Session creation/revocation and Short-lived access/license tokens. Logout/session revocation invalidates playback sessions.",
+        "Multi-DRM orchestration for protected audio/video using CMAF + MPEG Common Encryption and an external DRM/KMS provider; content keys never go to frontend."
+      ],
+      "clientMustDo": [
+        "Call POST /media/uploads/prepare with kind, purpose, filename, MIME, size and PUBLIC/PRIVATE visibility. Never choose Local/S3 in frontend; follow upload.strategy.",
+        "For LOCAL_RESUMABLE render backend progress.percentage and resume from nextOffsetBytes. For S3_MULTIPART upload limited parallel parts and acknowledge ETag+sizeBytes per part.",
+        "If user cancels, call abortEndpoint immediately; idle abandoned sessions are cleaned by backend retention maintenance in bounded batches; Scheduled Tasks is primary when installed.",
+        "Do not expect stored thumbnail/optimized variants; Fable stores original media only.",
+        "Protected playback: obtain an Authorization Grant from the owning domain, POST /media/:id/playback, keep the returned Playback Session id, and refresh Short-lived access/license tokens through the session. Short-lived token does NOT mean the video expires.",
+        "Send media authorization in headers/signed cookies where supported. Query tokens are disabled by default because URLs leak into history/logs/referrers.",
+        "Web: do not claim screen-recording prevention. Use EME/Multi-DRM for encrypted video; UI anti-download controls are only friction.",
+        "Android: apply FLAG_SECURE/secure surface for protected screens. iOS: observe capture state and pause/cover content; use FairPlay for encrypted media.",
+        "Honor dynamic session watermark instructions without creating a stored duplicate of the media.",
+        "If the product domain later implements Stories/Reels or another sequential-media UX, keep its feed metadata in the normal client/project cache, prefetch the next playable item, reuse the player, and refresh playback authorization in the background. Fable does not generate a Stories feature here.",
+        "When Redis/Valkey is installed, Playback Session hot state is cached briefly and invalidated on revoke/logout to reduce repeated MySQL reads. Redis/Valkey is not a video buffer and Fable never caches raw media bytes there."
+      ],
+      "developerMustKnow": [
+        "Secure Media is generic and not tied to courses or purchases.",
+        "Never implement custom media cryptography. Use vetted DRM/KMS providers and standard CMAF/MPEG-CENC workflows.",
+        "Content keys, storage secrets and signing secrets are backend-only.",
+        "A camera pointed at a screen cannot be prevented by software; watermarking/detection is deterrence and traceability, not absolute prevention."
+      ],
+      "runtimeContract": "GET /media/client-contract"
+    }
+  },
+  "environments": {
+    "development": {
+      "webBaseUrl": "http://localhost:3000",
+      "apiBaseUrl": "http://localhost:3001"
+    },
+    "production": {
+      "webDomains": [],
+      "apiDomains": [],
+      "primaryWebBaseUrl": null,
+      "primaryApiBaseUrl": null
+    }
+  },
+  "operations": [],
+  "features": [],
+  "permissions": [],
+  "errors": [],
+  "success": [],
+  "messages": [],
+  "contractHash": "04a78abad83bc69a6b0eaefa9d44daa703efff19579f07e89c3a92ddb77bf42c"
+}

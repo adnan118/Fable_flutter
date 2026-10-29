@@ -1,0 +1,13 @@
+name: fable_video
+description: Lifecycle aware video player with native buffering; advanced HLS cache requires platform adapters.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  material_ui: ^1.0.0
+  flutter:
+    sdk: flutter
+  video_player: ^2.14.1
+  fable_smart_media:
+    path: ../fable_smart_media

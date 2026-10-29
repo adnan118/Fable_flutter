@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.mobile-project-features",
+  "app": "apps/ci_fable",
+  "features": []
+}

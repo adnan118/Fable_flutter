@@ -1,0 +1,18 @@
+name: fable_push_notifications
+description: Optional FCM/APNs device registration; install only after Wizard Firebase opt-in.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^5.0.0
+  firebase_messaging: ^17.0.0
+  fable_core:
+    path: ../../fable_core
+  fable_notifications:
+    path: ../fable_notifications
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

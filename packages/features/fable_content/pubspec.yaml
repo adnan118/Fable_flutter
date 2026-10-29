@@ -1,0 +1,20 @@
+name: fable_content
+description: Optional shared published-content widgets and screen. No domain-specific pages.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.0.0
+  fable_core:
+    path: ../../fable_core
+  fable_design_system:
+    path: ../../fable_design_system
+  fable_feature_contract:
+    path: ../../fable_feature_contract
+dev_dependencies:
+  dio: ^5.8.0
+  flutter_test:
+    sdk: flutter

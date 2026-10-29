@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.mobile-core-operations",
+  "backendContractHash": "04a78abad83bc69a6b0eaefa9d44daa703efff19579f07e89c3a92ddb77bf42c",
+  "operations": [
+    {
+      "operationId": "auth.login",
+      "method": "POST",
+      "path": "/auth/login",
+      "public": true,
+      "request": {
+        "required": [
+          "identifier",
+          "password"
+        ],
+        "optional": [
+          "installationId",
+          "clientType",
+          "deviceName",
+          "platform",
+          "appVersion"
+        ]
+      },
+      "outcomes": [
+        "session",
+        "requiresTwoFactor"
+      ]
+    },
+    {
+      "operationId": "auth.2fa.login.request",
+      "method": "POST",
+      "path": "/auth/2fa/login/request",
+      "public": true,
+      "request": {
+        "required": [
+          "twoFactorToken"
+        ],
+        "optional": [
+          "preferredChannel",
+          "installationId",
+          "clientType"
+        ]
+      },
+      "outcomes": [
+        "otpChallenge",
+        "unauthorized",
+        "rateLimited"
+      ]
+    },
+    {
+      "operationId": "auth.2fa.login.complete",
+      "method": "POST",
+      "path": "/auth/2fa/login/complete",
+      "public": true,
+      "request": {
+        "required": [
+          "twoFactorToken",
+          "challengeId",
+          "code"
+        ],
+        "optional": [
+          "installationId",
+          "clientType",
+          "platform",
+          "appVersion"
+        ]
+      },
+      "outcomes": [
+        "session",
+        "unauthorized",
+        "rateLimited"
+      ]
+    },
+    {
+      "operationId": "auth.refresh",
+      "method": "POST",
+      "path": "/auth/refresh",
+      "public": true,
+      "request": {
+        "required": [
+          "refreshToken"
+        ],
+        "optional": [
+          "installationId",
+          "clientType"
+        ]
+      },
+      "outcomes": [
+        "session",
+        "unauthorized"
+      ]
+    },
+    {
+      "operationId": "auth.logout",
+      "method": "POST",
+      "path": "/auth/logout",
+      "public": false,
+      "request": {
+        "required": [],
+        "optional": []
+      },
+      "outcomes": [
+        "revoked"
+      ]
+    },
+    {
+      "operationId": "account.displayName.update",
+      "method": "PATCH",
+      "path": "/auth/me/account",
+      "public": false,
+      "request": {
+        "required": [
+          "displayName"
+        ],
+        "optional": []
+      },
+      "outcomes": [
+        "account",
+        "unauthorized",
+        "validationError"
+      ]
+    },
+    {
+      "operationId": "account.me",
+      "method": "GET",
+      "path": "/auth/me/account",
+      "public": false,
+      "request": {
+        "required": [],
+        "optional": []
+      },
+      "outcomes": [
+        "account",
+        "unauthorized"
+      ]
+    },
+    {
+      "operationId": "auth.sessions",
+      "method": "GET",
+      "path": "/auth/sessions",
+      "public": false,
+      "request": {
+        "required": [],
+        "optional": []
+      },
+      "outcomes": [
+        "sessions"
+      ]
+    },
+    {
+      "operationId": "auth.logoutAll",
+      "method": "POST",
+      "path": "/auth/logout-all",
+      "public": false,
+      "request": {
+        "required": [],
+        "optional": [],
+        "headers": [
+          "X-Security-Challenge-Id"
+        ],
+        "sensitiveOperation": true
+      },
+      "outcomes": [
+        "revoked"
+      ]
+    }
+  ],
+  "operationsHash": "f2816a01fa381410ff192eeb6d04b47d4395be1170c1741c003755e6ac5e4ec7",
+  "generatedTransport": "Fable AuthController bearer-secure-storage",
+  "note": "Mobile auth transport only. Does not replace dynamic business feature operation contracts."
+}

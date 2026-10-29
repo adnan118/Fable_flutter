@@ -1,0 +1,56 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "fable-test Client Contract",
+    "version": "04a78abad83b"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001",
+      "description": "development"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "FableError": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "statusCode": {
+            "type": "integer"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {},
+          "requestId": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "statusCode",
+          "errorCode",
+          "message",
+          "requestId"
+        ]
+      }
+    }
+  },
+  "paths": {}
+}

@@ -1,0 +1,15 @@
+{
+  "kind": "fable.mobile-arb-manifest",
+  "schemaVersion": 1,
+  "generated": {
+    "en": {
+      "sha256": "8620de94ea5783ba187951e53d77bab53c65f4a055b24f9921da3be8108358d2",
+      "sources": {
+        "appTitle": "4d8e8e9e0401d112890ebfca462ee61358899c126d2918302d7c4a2fe33fb931",
+        "loading": "dfdbfeecfa84b8c28023ad575bdf50f931e3aff7a94e447c80c929a69901038d",
+        "networkError": "d9240120122d19f527f9d3cbedf547614b6ec8732b5eedc3b4cdfececf41ec09",
+        "emptyState": "2f1619ee6235f26de7dafd44003c6ef5d26144d921b46db389f79d57e17bb00a"
+      }
+    }
+  }
+}

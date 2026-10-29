@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.mobile-backend-configuration",
+  "backend": {
+    "kind": "fable",
+    "adapter": "fable-contract",
+    "status": "ready"
+  },
+  "contractImported": true
+}

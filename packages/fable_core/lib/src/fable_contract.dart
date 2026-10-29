@@ -1,0 +1,121 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
+
+abstract class OperationCatalog {
+  bool get sendsInstallationId;
+  bool supports(String operationId);
+  FableOperation require(String operationId);
+}
+
+class FableOperation {
+  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader});
+  final String id;
+  final String method;
+  final String path;
+  final String contractHash;
+  final bool requiresAuth;
+  final bool enforceAuth;
+  /// Set only for contract-declared non-Bearer credentials. The actual secret
+  /// is provided at runtime and must never be serialized in assets.
+  final String? credentialHeader;
+}
+
+/// Never guess routes. Every request must be found in the backend's actual export.
+class FableContract implements OperationCatalog {
+  @override bool get sendsInstallationId => true;
+  const FableContract({required this.contractHash, required this.operations,
+    required this.featureIds, required this.projectName, required this.selectionMode});
+  final String contractHash;
+  final Map<String, FableOperation> operations;
+  final Set<String> featureIds;
+  final String projectName;
+  final String selectionMode;
+
+  static FableContract fromMaps(Map<String, dynamic> handoff,
+      Map<String, dynamic> contract,
+      Map<String, dynamic> openApi, {Map<String, dynamic>? mobileCore}) {
+    if (handoff['kind'] != 'fable.flutter-handoff' || handoff['client'] != 'flutter' || handoff['schemaVersion'] != 1) {
+      throw const FormatException('Unsupported Flutter handoff');
+    }
+    final integrity = handoff['manifestHash'];
+    final unsigned = Map<String, dynamic>.of(handoff)..remove('manifestHash');
+    if (integrity is! String || sha256.convert(utf8.encode(jsonEncode(unsigned))).toString() != integrity) {
+      throw const FormatException('Handoff integrity mismatch');
+    }
+    final backend = handoff['backend'] as Map<String, dynamic>;
+    final digest = backend['contractHash'];
+    if (digest is! String || !RegExp(r'^[a-f0-9]{64}$').hasMatch(digest) || contract['contractHash'] != digest) {
+      throw const FormatException('Backend contract hash mismatch');
+    }
+    final ops = <String, FableOperation>{};
+    final paths = openApi['paths'];
+    if (paths is Map) {
+      for (final pair in paths.entries) {
+        if (pair.key is! String || pair.value is! Map) continue;
+        for (final route in (pair.value as Map).entries) {
+          if (!const {'get','post','put','delete','patch','head'}.contains(route.key)) continue;
+          if (route.value is! Map) continue;
+          final info = route.value as Map;
+          final id = info['operationId'];
+          if (id is! String || id.isEmpty || ops.containsKey(id)) throw const FormatException('Duplicate/missing operation ID');
+          final isPublic=info['x-fable-public'];
+          final actualHash=info['x-fable-contract-hash'];
+          if (isPublic is! bool || actualHash is! String || actualHash.isEmpty ||
+              (info['security'] is List &&
+               ((isPublic && (info['security'] as List).isNotEmpty) ||
+                (!isPublic && (info['security'] as List).isEmpty)))) {
+            throw const FormatException('Fable operation authorization metadata is missing or inconsistent');
+          }
+          ops[id] = FableOperation(id, (route.key as String).toUpperCase(), pair.key as String,
+            actualHash, requiresAuth:!isPublic,enforceAuth:true);
+        }
+      }
+    }
+
+    if (mobileCore != null) {
+      if(mobileCore['kind'] != 'fable.mobile-core-operations' || mobileCore['schemaVersion'] != 1 || mobileCore['backendContractHash'] != digest) {
+        throw const FormatException('Mobile core contract mismatch');
+      }
+      final extra = mobileCore['operations'];
+      if(extra is! List || sha256.convert(utf8.encode(jsonEncode(extra))).toString() != mobileCore['operationsHash']){
+        throw const FormatException('Mobile core operations integrity mismatch');
+      }
+      for(final operation in extra){
+        if(operation is! Map)throw const FormatException('Malformed mobile core operation');
+        final id=operation['operationId'],method=operation['method'],path=operation['path'];
+        if(id is! String || method is! String || path is! String || ops.containsKey(id) ||
+          !path.startsWith('/') || path.startsWith('//') || !const {'GET','POST','PATCH','DELETE','PUT','HEAD'}.contains(method)){
+          throw const FormatException('Invalid or duplicate mobile core operation');
+        }
+        ops[id]=FableOperation(id,method,path,mobileCore['operationsHash'] as String,
+          requiresAuth:operation['public'] != true,enforceAuth:true);
+      }
+    }
+    final mode = (handoff['selection'] as Map)['mode'] as String? ?? 'advisory';
+    final selection = (handoff['selection'] as Map)['features'];
+    return FableContract(contractHash:digest, operations:ops,
+      featureIds: selection is List ? selection.whereType<String>().toSet() : <String>{},
+      projectName: (backend['project'] as Map?)?['name']?.toString() ?? 'Fable', selectionMode:mode);
+  }
+
+  static Future<FableContract> fromAssets(AssetBundle bundle) async {
+    final parts = await Future.wait([
+      bundle.loadString('assets/contracts/flutter-handoff.json'),
+      bundle.loadString('assets/contracts/contract.json'),
+      bundle.loadString('assets/contracts/openapi.json'),
+    ]);
+    Map<String,dynamic>? core;
+    try {core=jsonDecode(await bundle.loadString('assets/contracts/mobile-core-operations.json')) as Map<String,dynamic>;}
+    on FlutterError {core=null;}
+    return fromMaps(jsonDecode(parts[0]) as Map<String,dynamic>,
+      jsonDecode(parts[1]) as Map<String,dynamic>, jsonDecode(parts[2]) as Map<String,dynamic>,mobileCore:core);
+  }
+
+  bool supports(String operationId) => operations.containsKey(operationId);
+  FableOperation require(String operationId) {
+    final op = operations[operationId];
+    if (op == null) throw StateError('Operation not in backend contract: $operationId');
+    return op;
+  }
+}

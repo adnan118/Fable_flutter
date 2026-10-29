@@ -1,0 +1,20 @@
+name: fable_profile
+description: Fable optional feature profile; contract-facing module.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  material_ui: ^1.0.0
+  flutter:
+    sdk: flutter
+  fable_feature_contract:
+    path: ../../fable_feature_contract
+  fable_core:
+    path: ../../fable_core
+  fable_design_system:
+    path: ../../fable_design_system
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  crypto: ^3.0.6

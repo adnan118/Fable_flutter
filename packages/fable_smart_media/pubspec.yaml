@@ -1,0 +1,20 @@
+name: fable_smart_media
+description: Safe type-aware Flutter media widget with BlurHash and caching.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  material_ui: ^1.0.0
+  flutter:
+    sdk: flutter
+  cached_network_image: ^4.0.4
+  flutter_blurhash: ^0.9.1
+  flutter_svg: ^2.3.0
+  lottie: ^3.6.1
+  flutter_cache_manager: ^3.4.5
+  image_picker: ^1.2.4
+  image_picker_android: ^0.8.13+23
+  image_picker_platform_interface: ^2.11.2
+  fable_design_system:
+    path: ../fable_design_system

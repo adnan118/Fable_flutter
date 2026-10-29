@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.generated-project-feature-files",
+  "app": "apps/ci_fable",
+  "features": [],
+  "sourceManifest": ".fable/project-features.json",
+  "generatedRegistry": "lib/src/generated/project_feature_registry.dart"
+}

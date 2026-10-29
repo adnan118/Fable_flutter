@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.mobile-agent-contract",
+  "contextFingerprint": "e3ae8e6e212dd0dc61dbe7a871870dd049d13f781dc00ee20c9253b63a2ea7f7",
+  "actor": "agent",
+  "profile": "integration",
+  "skills": [
+    {
+      "key": "core",
+      "path": ".fable/skills/software-engineering/SKILL.md",
+      "sha256": "65b3bf7d3a5ae75fbe9d1587ce9f33d5145f1ff099f8c2996ec51b061f13f4a5"
+    },
+    {
+      "key": "mobile",
+      "path": ".fable/skills/software-engineering/mobile-flutter/SKILL.md",
+      "sha256": "4cf39e2339d2101694d97be633d59fea66add97c850b12ef6e4d1627d9e7a66c"
+    },
+    {
+      "key": "tester",
+      "path": ".fable/skills/software-engineering/tester/SKILL.md",
+      "sha256": "f2dde7271d2922f954d736f147f5db8e035442ea659e3506f3cdb474bc8d2993"
+    },
+    {
+      "key": "quality",
+      "path": ".fable/skills/software-engineering/code-quality/SKILL.md",
+      "sha256": "b53636fedb208acf8b6e38484eb919404574ed033dff32e4f4a097f63b3d8bc3"
+    },
+    {
+      "key": "security",
+      "path": ".fable/skills/cybersecurity/SKILL.md",
+      "sha256": "b981b5579fcdb38a4c7ae03e41917b612510dca46e05e73f7e2f68652d41f267"
+    },
+    {
+      "key": "secureCoding",
+      "path": ".fable/skills/cybersecurity/secure-coding/SKILL.md",
+      "sha256": "ade0129f889e3bb013a479646bdeb92466eab921a163cee6758532cf26d93d4d"
+    }
+  ],
+  "workflow": [
+    "Read CONTRACT.md and context.md before changes",
+    "Read every assigned SKILL.md",
+    "Use verified operationIds and Wizard commands only",
+    "Never guess External Backend permissions or route names",
+    "Use preview before modifying generated output",
+    "Run agent verify after changes",
+    "Run native Flutter/Android/iOS and live tests before production"
+  ],
+  "mandatoryCheckParity": [
+    "source-audit",
+    "wizard-docs",
+    "node-tests",
+    "backend-policy-staleness"
+  ],
+  "generatedBy": "fable-mobile-agent"
+}
