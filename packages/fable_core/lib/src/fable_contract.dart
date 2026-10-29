@@ -82,15 +82,30 @@ class FableContract implements OperationCatalog {
       if(extra is! List || sha256.convert(utf8.encode(jsonEncode(extra))).toString() != mobileCore['operationsHash']){
         throw const FormatException('Mobile core operations integrity mismatch');
       }
+      final seenCoreOperations=<String>{};
       for(final operation in extra){
         if(operation is! Map)throw const FormatException('Malformed mobile core operation');
         final id=operation['operationId'],method=operation['method'],path=operation['path'];
-        if(id is! String || method is! String || path is! String || ops.containsKey(id) ||
-          !path.startsWith('/') || path.startsWith('//') || !const {'GET','POST','PATCH','DELETE','PUT','HEAD'}.contains(method)){
+        final isPublic=operation['public'];
+        if(id is! String || id.isEmpty || !seenCoreOperations.add(id) ||
+          method is! String || path is! String || isPublic is! bool ||
+          !path.startsWith('/') || path.startsWith('//') ||
+          !const {'GET','POST','PATCH','DELETE','PUT','HEAD'}.contains(method)){
           throw const FormatException('Invalid or duplicate mobile core operation');
         }
+        final existing=ops[id];
+        if(existing!=null){
+          // RC66 can export core Auth routes in both OpenAPI and mobile-core.
+          // Accept the same operation only when verb, URL and auth policy agree.
+          // Never replace the signed OpenAPI operation with conflicting metadata.
+          if(existing.method!=method || existing.path!=path ||
+              existing.requiresAuth==isPublic || !existing.enforceAuth){
+            throw const FormatException('Conflicting OpenAPI / mobile-core operation');
+          }
+          continue;
+        }
         ops[id]=FableOperation(id,method,path,mobileCore['operationsHash'] as String,
-          requiresAuth:operation['public'] != true,enforceAuth:true);
+          requiresAuth:!isPublic,enforceAuth:true);
       }
     }
     final mode = (handoff['selection'] as Map)['mode'] as String? ?? 'advisory';
