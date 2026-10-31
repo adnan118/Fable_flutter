@@ -14,3 +14,4 @@ export 'src/external_auth_gateway.dart';
 export 'src/fable_retry_policy.dart';
 export 'src/fable_financial_freshness.dart';
 export 'src/fable_immutable_payload.dart';
+export 'src/fable_remembered_identifier.dart';
