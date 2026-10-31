@@ -1,4 +1,5 @@
 import 'package:fable_core/fable_core.dart';
+import 'security_notice_actions.dart';
 
 final _uuid=RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
 final _safeId=RegExp(r'^[a-zA-Z0-9_-]{1,128}$');
@@ -6,10 +7,11 @@ final _safeId=RegExp(r'^[a-zA-Z0-9_-]{1,128}$');
 /// from a guessed route or expose admin broadcast operations to mobile clients.
 class FableInboxItem {
   const FableInboxItem({required this.id,required this.title,required this.body,
-      required this.publishedAt,this.readAt,this.data=const {}});
+      required this.publishedAt,this.readAt,this.data=const {},this.securityActions=const []});
   final String id,title,body;
   final DateTime? publishedAt,readAt;
   final Map<String,String> data;
+  final List<FableSecurityNoticeAction> securityActions;
   static FableInboxItem fromPayload(Object? value,{bool requireUuidIds=true}) {
     if(value is! Map)throw const FormatException('Invalid inbox item');
     final id=value['id'],title=value['title'],body=value['body'];
@@ -27,7 +29,10 @@ class FableInboxItem {
         if(v is String && v.length <= 2048)data[key]=v;
       }
     }
+    final securityActions=readFableSecurityActions(rawData,
+      notificationId:id,isFable:requireUuidIds);
     return FableInboxItem(id:id,title:title,body:body,data:Map.unmodifiable(data),
+      securityActions:securityActions,
       publishedAt:time(value['publishedAt']),readAt:time(value['readAt']));
   }
 }
