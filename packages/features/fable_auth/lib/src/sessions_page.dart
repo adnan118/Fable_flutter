@@ -18,12 +18,18 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
   List<FableActiveSession>? _sessions;
   FableSessionPolicy? _policy;
   bool _loading=false;
+  bool _actionBusy=false;
+  String? _pendingSensitiveChallenge;
+  String? _pendingSessionId;
+  bool _pendingLogoutAll=false;
+  final _otpController=TextEditingController();
   String? _error;
 
   @override void initState(){
     super.initState();
     _identityEvents=widget.gateway.session.identityEvents.listen((_){
       if(!mounted)return;
+      _clearSensitive();
       setState((){
         _sessions=null;_policy=null;_loading=false;
         _error='The authentication session changed. Sign in again to refresh devices.';
@@ -69,8 +75,128 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     }
   }
 
+  bool get _supportsSingleRevoke=>widget.contract.operations.values.any(
+    (op)=>op.path=='/auth/sessions/{id}/revoke' &&
+      op.method=='POST' && op.requiresAuth && op.credentialHeader==null);
+  bool get _supportsLogoutAll=>widget.contract.operations.values.any(
+    (op)=>op.path=='/auth/logout-all' && op.method=='POST' &&
+      op.requiresAuth && op.credentialHeader==null);
+
+  Future<void> _revoke(String? target,{bool logoutAll=false}) async {
+    if(_actionBusy||_loading)return;
+    if(logoutAll ? !_supportsLogoutAll : !_supportsSingleRevoke)return;
+    final ar=Localizations.localeOf(context).languageCode=='ar';
+    final accepted=await showDialog<bool>(context:context,builder:(ctx)=>
+      AlertDialog(
+        title:Text(logoutAll?(ar?'تسجيل الخروج من جميع الأجهزة؟':'Sign out on every device?')
+          :(ar?'إلغاء جلسة الجهاز؟':'Revoke this device session?')),
+        content:Text(ar
+          ?'سيطلب الخادم إثباتاً أمنياً إذا لم تكن المصادقة القوية حديثة.'
+          :'The server may require recent strong authentication.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:Text(ar?'إلغاء':'Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:Text(ar?'تأكيد':'Confirm')),
+        ],
+      ));
+    if(accepted!=true||!mounted)return;
+    final epoch=widget.gateway.session.identityRevision;
+    setState((){_actionBusy=true;_error=null;});
+    try{
+      if(logoutAll){
+        await widget.gateway.revokeAllSessions();
+      }else{
+        await widget.gateway.revokeOtherSession(target!);
+      }
+      if(!mounted||epoch!=widget.gateway.session.identityRevision && !logoutAll)return;
+      _clearSensitive();
+      if(logoutAll){
+        setState((){
+          _sessions=null;_policy=null;
+          _error=ar?'تم إلغاء الجلسات؛ سجّل الدخول مجدداً.':'Sessions revoked; sign in again.';
+        });
+      }else{
+        await _refreshAfterAction();
+      }
+    }on FableApiException catch(error){
+      if(!mounted||widget.gateway.session.identityRevision!=epoch)return;
+      if(error.code=='AUTH_RECENT_AUTH_REQUIRED'&&widget.gateway.canRequestSensitiveProof){
+        try{
+          final challenge=await widget.gateway.requestSensitiveActionOtp();
+          if(!mounted||widget.gateway.session.identityRevision!=epoch)return;
+          setState((){
+            _pendingSensitiveChallenge=challenge;
+            _pendingSessionId=target;_pendingLogoutAll=logoutAll;
+          });
+        }catch(_){
+          if(mounted)setState(()=>_error=ar
+            ?'تعذّر طلب رمز إثبات العملية الحساسة من الخادم.'
+            :'Could not request the server security challenge.');
+        }
+      }else{
+        setState(()=>_error=error.code=='AUTH_INDEPENDENT_FACTOR_REQUIRED'
+          ?(ar?'لا توجد وسيلة تحقق مستقلة متاحة؛ يلزم إعدادها على الخادم.'
+            :'An independent authentication factor is required.')
+          :(ar?'رفض الخادم إلغاء الجلسة.':'Backend rejected session revocation.'));
+      }
+    }catch(_){
+      if(mounted&&epoch==widget.gateway.session.identityRevision)
+        setState(()=>_error=ar?'تعذّر إلغاء الجلسة.':'Session revocation failed.');
+    }finally{
+      if(mounted)setState(()=>_actionBusy=false);
+    }
+  }
+
+  void _clearSensitive(){
+    _otpController.clear();
+    _pendingSensitiveChallenge=null;
+    _pendingSessionId=null;
+    _pendingLogoutAll=false;
+  }
+
+  Future<void> _refreshAfterAction() async {
+    if(!mounted)return;
+    setState(()=>_sessions=null);
+    await _refresh();
+  }
+
+  Future<void> _confirmOtp() async {
+    final challenge=_pendingSensitiveChallenge;
+    if(challenge==null||_actionBusy)return;
+    final target=_pendingSessionId;
+    final all=_pendingLogoutAll;
+    final epoch=widget.gateway.session.identityRevision;
+    final ar=Localizations.localeOf(context).languageCode=='ar';
+    setState((){_actionBusy=true;_error=null;});
+    try{
+      final proof=await widget.gateway.verifySensitiveActionOtp(
+        challenge,_otpController.text.trim());
+      if(widget.gateway.session.identityRevision!=epoch)throw StateError('Identity changed');
+      if(all)await widget.gateway.revokeAllSessions(proof:proof);
+      else await widget.gateway.revokeOtherSession(target!,proof:proof);
+      if(!mounted)return;
+      setState((){
+        _clearSensitive();
+        if(all){
+          _sessions=null;_policy=null;
+          _error=ar?'تم تسجيل الخروج من جميع الأجهزة.':'Signed out of all devices.';
+        }
+      });
+      if(!all)await _refreshAfterAction();
+    }catch(_){
+      if(mounted&&widget.gateway.session.identityRevision==epoch)
+        setState(()=>_error=ar
+          ?'لم يقبل الخادم إثبات العملية. تحقق من الرمز أو أعد طلبه.'
+          :'The server did not accept the security proof. Retry with a new challenge.');
+    }finally{
+      if(mounted)setState(()=>_actionBusy=false);
+    }
+  }
+
   @override void dispose(){
     unawaited(_identityEvents?.cancel());
+    _otpController.dispose();
     super.dispose();
   }
   @override Widget build(BuildContext context){
@@ -117,12 +243,35 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
             ].join(' · ')),
             trailing:session.isCurrent
               ?Chip(label:Text(ar?'الجهاز الحالي':'This device'))
-              :null,
+              :_supportsSingleRevoke
+                ?IconButton(
+                  tooltip:ar?'إلغاء جلسة الجهاز':'Revoke device session',
+                  onPressed:(_actionBusy||_loading)?null:()=>unawaited(_revoke(session.id)),
+                  icon:const Icon(Icons.phonelink_erase_outlined))
+                :null,
           )),
         const SizedBox(height:20),
+        if(_actionBusy)const LinearProgressIndicator(),
+        if(_supportsLogoutAll)
+          OutlinedButton.icon(
+            onPressed:_actionBusy||_loading?null:()=>unawaited(_revoke(null,logoutAll:true)),
+            icon:const Icon(Icons.logout),
+            label:Text(ar?'تسجيل الخروج من كل الأجهزة':'Sign out of all devices'),
+          ),
+        if(_pendingSensitiveChallenge!=null)...[
+          Text(ar?'أدخل رمز التحقق الحساس الذي أرسله الخادم'
+            :'Enter the sensitive-action code sent by the backend'),
+          TextField(controller:_otpController,keyboardType:TextInputType.number,
+            obscureText:true,maxLength:10,
+            decoration:InputDecoration(labelText:ar?'رمز OTP':'OTP code')),
+          FilledButton(onPressed:_actionBusy?null:()=>unawaited(_confirmOtp()),
+            child:Text(ar?'التحقق وإكمال الإلغاء':'Verify and revoke')),
+          TextButton(onPressed:_actionBusy?null:()=>setState(_clearSensitive),
+            child:Text(ar?'إلغاء التحقق':'Cancel verification')),
+        ],
         Text(ar
-          ?'إلغاء جلسات الأجهزة الأخرى محميّ بإثبات أمني إضافي. لن يعرض التطبيق زر إلغاء قبل إكمال عقد Step-up الآمن مع الباك.'
-          :'Revoking other devices requires a verified security challenge. Revocation remains unavailable until Step-up is integrated.',
+          ?'الإلغاء يتم من الخادم فقط، وقد يحتاج OTP لغرض SENSITIVE_ACTION. لا تُرسل العملية عند غياب مسار موثّق.'
+          :'Revocation is server-authoritative and may require SENSITIVE_ACTION OTP. No route is guessed.',
           textAlign:TextAlign.center),
       ])),
     );
