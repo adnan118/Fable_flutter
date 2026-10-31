@@ -7,9 +7,10 @@ class FableManagedAccount {
     required this.id,required this.type,required this.nameAr,
     required this.nameEn,required this.status,required this.visibility,
     required this.collaborationEnabled,required this.managersCanInvite,
-    this.isOwner=false,
+    this.isOwner=false,this.slug,
   });
   final String id,type,nameAr,nameEn,status,visibility;
+  final String? slug;
   final bool collaborationEnabled,managersCanInvite;
   final bool isOwner;
 
@@ -40,11 +41,16 @@ class FableManagedAccount {
       memberships.length<=100 &&
       memberships.any((membership)=>membership is Map &&
         membership['access']=='OWNER' && membership['active']==true);
+    final rawSlug=raw['slug'];
+    if(rawSlug!=null&&(rawSlug is! String||
+       !RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(rawSlug)))
+      throw const FormatException('Invalid managed entity slug');
     return FableManagedAccount(id:id,type:field('type',max:64),
       nameAr:field('nameAr'),nameEn:field('nameEn'),
       status:status,visibility:visibility,
       collaborationEnabled:raw['collaborationEnabled'] as bool,
-      managersCanInvite:raw['managersCanInvite'] as bool,isOwner:isOwner);
+      managersCanInvite:raw['managersCanInvite'] as bool,isOwner:isOwner,
+      slug:rawSlug as String?);
   }
 }
 
@@ -246,6 +252,66 @@ class FableManagedAccountsRepository {
       throw ArgumentError('Invalid invitee or delegated access level');
     await gateway.execute(_operation('/managed-entities/{id}/invitations','POST'),
       path:{'id':entityId},body:{'username':username,'access':access});
+  }
+
+  bool get canReadDetails=>can('/managed-entities/{id}','GET');
+  bool get canUpdateDetails=>can('/managed-entities/{id}','PATCH');
+
+  Future<FableManagedAccount> readDetails(FableManagedAccount entity)async{
+    if(entity.status!='ACTIVE'||!FableManagedAccount._uuid.hasMatch(entity.id))
+      throw StateError('Managed entity cannot be read in this state');
+    final revision=gateway.session.identityRevision;
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}','GET'),path:{'id':entity.id});
+    if(revision!=gateway.session.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final details=FableManagedAccount.fromPayload(_unwrap(response.data));
+    if(details.id!=entity.id||(entity.isOwner&&!details.isOwner))
+      throw const FormatException('Backend returned a different entity or identity');
+    return details;
+  }
+
+  /// Only patch changed values. Changing privacy/collaboration may remove
+  /// existing members and outstanding invitations on the server.
+  Future<void> updateDetails(FableManagedAccount entity,{
+    required String nameAr,required String nameEn,required String visibility,
+    required bool collaborationEnabled,required bool managersCanInvite,
+    String? slug,
+  })async{
+    if(!entity.isOwner||!const {'ACTIVE','DISABLED'}.contains(entity.status)||
+       !canUpdateDetails)throw StateError('Entity editing not authorized');
+    final ar=nameAr.trim(),en=nameEn.trim(),newSlug=slug?.trim();
+    if(ar.isEmpty||en.isEmpty||ar.length>191||en.length>191||
+       RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(ar)||
+       RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(en)||
+       !const {'PUBLIC','PRIVATE','INVITE_ONLY'}.contains(visibility))
+      throw ArgumentError('Invalid managed entity names or visibility');
+    if(newSlug!=null&&newSlug.isNotEmpty&&
+       !RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(newSlug))
+      throw ArgumentError('Invalid managed entity slug');
+    final collaboration=visibility=='PRIVATE'?false:collaborationEnabled;
+    final delegation=collaboration?managersCanInvite:false;
+    final body=<String,Object?>{};
+    if(ar!=entity.nameAr)body['nameAr']=ar;
+    if(en!=entity.nameEn)body['nameEn']=en;
+    if(visibility!=entity.visibility)body['visibility']=visibility;
+    if(collaboration!=entity.collaborationEnabled)body['collaborationEnabled']=collaboration;
+    if(delegation!=entity.managersCanInvite)body['managersCanInvite']=delegation;
+    if(newSlug!=null&&newSlug.isNotEmpty&&newSlug!=entity.slug)body['slug']=newSlug;
+    if(body.isEmpty)throw StateError('No entity changes to submit');
+    final revision=gateway.session.identityRevision;
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}','PATCH'),
+      path:{'id':entity.id},body:body);
+    if(revision!=gateway.session.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final result=_unwrap(response.data);
+    if(result is! Map||result['id']!=entity.id||
+       result['nameAr']!=ar||result['nameEn']!=en||
+       result['visibility']!=visibility||
+       result['collaborationEnabled']!=collaboration||
+       result['managersCanInvite']!=delegation)
+      throw const FormatException('Backend did not confirm managed entity changes');
   }
 
   bool get canListMembers=>can('/managed-entities/{id}/members','GET');

@@ -112,6 +112,96 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
     setState(()=>_busy=false);
     await _reload();
   }
+  Future<void> _details(FableManagedAccount entity)async{
+    if(_busy||!_repo.canReadDetails||entity.status!='ACTIVE')return;
+    final rev=widget.gateway.session.identityRevision;
+    setState((){_busy=true;_message=null;});
+    try{
+      final item=await _repo.readDetails(entity);
+      if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+      await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
+        title:Text(_ar?'تفاصيل الكيان':'Entity details'),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,
+          crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(item.nameAr),Text(item.nameEn),Text(item.type),
+          Text(item.status+' · '+item.visibility),
+          if(item.slug!=null)Text(item.slug!),
+          Text((_ar?'التعاون: ':'Collaboration: ')+item.collaborationEnabled.toString()),
+          Text((_ar?'دعوات المديرين: ':'Manager invites: ')+item.managersCanInvite.toString()),
+        ])),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx),
+          child:Text(_ar?'إغلاق':'Close'))]));
+    }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+      setState(()=>_message='Backend denied entity details.');}
+    finally{if(mounted&&rev==widget.gateway.session.identityRevision)
+      setState(()=>_busy=false);}
+  }
+
+  Future<void> _edit(FableManagedAccount entity)async{
+    if(_busy||!entity.isOwner||!_repo.canUpdateDetails||
+       !const {'ACTIVE','DISABLED'}.contains(entity.status))return;
+    final nameAr=TextEditingController(text:entity.nameAr),
+      nameEn=TextEditingController(text:entity.nameEn),
+      slug=TextEditingController(text:entity.slug??'');
+    var visibility=entity.visibility,collaboration=entity.collaborationEnabled,
+      managers=entity.managersCanInvite;
+    try{
+      final save=await showDialog<bool>(context:context,builder:(ctx)=>
+        StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
+          title:Text(_ar?'تعديل الكيان':'Edit entity'),
+          content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+            TextField(controller:nameAr,maxLength:191,
+              decoration:InputDecoration(labelText:_ar?'الاسم بالعربية':'Arabic name')),
+            TextField(controller:nameEn,maxLength:191,
+              decoration:InputDecoration(labelText:_ar?'الاسم بالإنجليزية':'English name')),
+            TextField(controller:slug,maxLength:191,
+              decoration:InputDecoration(labelText:_ar?'المعرّف العام (اختياري)':'Public slug (optional)',
+                helperText:_ar?'يمكن تغييره، وليس مسحه.':'Can change, but not clear.')),
+            DropdownButton<String>(value:visibility,items:const [
+              DropdownMenuItem(value:'PRIVATE',child:Text('Private')),
+              DropdownMenuItem(value:'INVITE_ONLY',child:Text('Invite only')),
+              DropdownMenuItem(value:'PUBLIC',child:Text('Public')),
+            ],onChanged:(v){if(v!=null)refresh(()=>visibility=v);}),
+            CheckboxListTile(value:visibility!='PRIVATE'&&collaboration,
+              onChanged:visibility=='PRIVATE'?null:(v)=>refresh(()=>collaboration=v??false),
+              title:Text(_ar?'تفعيل التعاون':'Enable collaboration')),
+            CheckboxListTile(value:visibility!='PRIVATE'&&collaboration&&managers,
+              onChanged:visibility=='PRIVATE'||!collaboration?null:
+                (v)=>refresh(()=>managers=v??false),
+              title:Text(_ar?'السماح بدعوات المديرين':'Manager invitations')),
+          ])),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(ctx,false),
+              child:Text(_ar?'إلغاء':'Cancel')),
+            FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+              child:Text(_ar?'حفظ':'Save')),
+          ])));
+      if(save!=true||!mounted)return;
+      final collab=visibility!='PRIVATE'&&collaboration,invite=collab&&managers;
+      final revokes=(visibility=='PRIVATE'&&entity.visibility!='PRIVATE')||
+        (entity.collaborationEnabled&&!collab)||
+        (entity.managersCanInvite&&!invite);
+      if(revokes&&!await _confirm(_ar
+        ?'قد يؤدي التغيير إلى إلغاء عضويات أو دعوات حالية. هل تتابع؟'
+        :'This may revoke members or pending invitations. Continue?'))return;
+      if(!mounted)return;
+      final rev=widget.gateway.session.identityRevision;
+      setState((){_busy=true;_message=null;});
+      try{
+        await _repo.updateDetails(entity,nameAr:nameAr.text,nameEn:nameEn.text,
+          visibility:visibility,collaborationEnabled:collab,
+          managersCanInvite:invite,slug:slug.text);
+        if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+        setState(()=>_selected=null);
+        await _reloadAfterMutation();
+      }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+        setState(()=>_message=_ar?'لم يؤكد الباك هذا التعديل؛ حدّث القائمة.':
+          'Backend did not confirm the update; refresh the list.');}
+      finally{if(mounted&&rev==widget.gateway.session.identityRevision)
+        setState(()=>_busy=false);}
+    }finally{nameAr.dispose();nameEn.dispose();slug.dispose();}
+  }
+
   Future<void> _invite(FableManagedAccount entity)async{
     final chosen=_selected;
     if(_busy||chosen?.id!=entity.id||!_repo.canInvite||
@@ -254,6 +344,15 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
                 MaterialPageRoute<void>(builder:(_)=>FableManagedMembersPage(
                   repo:_repo,entity:entity,selection:_selected!))),
               label:Text(ar?'الأعضاء والدعوات المرسلة':'Members and sent invitations')),
+          if(entity.status=='ACTIVE'&&_repo.canReadDetails)
+            TextButton.icon(icon:const Icon(Icons.info_outline),
+              onPressed:_busy?null:()=>unawaited(_details(entity)),
+              label:Text(ar?'التفاصيل':'Details')),
+          if(entity.isOwner&&const {'ACTIVE','DISABLED'}.contains(entity.status)&&
+             _repo.canUpdateDetails)
+            TextButton.icon(icon:const Icon(Icons.edit_outlined),
+              onPressed:_busy?null:()=>unawaited(_edit(entity)),
+              label:Text(ar?'تعديل الكيان':'Edit entity')),
           if(entity.isOwner)...[
             if(entity.status=='ACTIVE'&&_repo.canLifecycle('disable'))
               TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'disable')),
