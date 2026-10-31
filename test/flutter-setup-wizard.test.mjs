@@ -264,6 +264,7 @@ test('Backend re-import preserves independent frontend hybrid/local decisions',(
 test('Non-Fable choice without approval cannot retain an active Fable backend',async()=>{
   const f=fixture(),prompts=[];
   try{
+    mkdirSync(join(f.root,'assets/config'),{recursive:true});
     write(join(f.root,'assets/config/backend.json'),{
       schemaVersion:1,kind:'fable.mobile-backend-configuration',
       backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
