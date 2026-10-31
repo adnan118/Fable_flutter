@@ -186,8 +186,14 @@ class _FablePublishedContentPageState extends State<FablePublishedContentPage>
   });
   _identitySubscription=widget.identitySignals?.listen((_){
    if(!mounted)return;
-   // Do not reuse approval obtained under another user/session.
-   setState(()=>_accepted=false);
+   // Invalidate both pending reads and in-flight acceptance before a new
+   // account can view this page. A reply from the previous identity must
+   // never mark the current identity as having approved the old request.
+   _requestEpoch++;
+   setState((){
+    _accepted=false;_document=null;_updated=false;_error=null;
+    _loading=false;_refreshQueued=false;
+   });
    _requestRefresh();
   });
  }
