@@ -125,7 +125,7 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
     if(contract.contractHash!==snapshot.contractHash)throw Error('Source changed after validation');
     const to=resolve(project,'assets/contracts');
     mkdirSync(to,{recursive:true});
-    for(const file of CONTRACT_FILES)copyFileSync(join(dir,file),join(to,file));
+    for(const file of CONTRACT_FILES){const from=resolve(dir,file),dest=resolve(to,file);if(from!==dest)copyFileSync(from,dest);}
     outputFile(project,'assets/config/backend.json',{
       schemaVersion:1,kind:'fable.mobile-backend-configuration',
       backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
@@ -139,18 +139,41 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
 async function interactiveManual(){
   const cli=createInterface({input:process.stdin,output:process.stdout});
   try{
-    const projectId=(await cli.question('Project ID: ')).trim();
-    const title=(await cli.question('Project display title: ')).trim();
-    const locales=(await cli.question('Supported locales (ar,en): ')).trim().split(',').map(x=>x.trim()).filter(Boolean);
-    const access=await cli.question('Access mode (FREE/PAID/TRIAL): ');
+    const ask=async(label,def)=>{const answer=(await cli.question(label+' ['+def+']: ')).trim();return answer||def;};
+    const yn=async(label,def=false)=>(await ask(label+' (yes/no)',def?'yes':'no')).toLowerCase()==='yes';
+    const projectId=await ask('Project ID','my-app');
+    const title=await ask('Project display title',projectId);
+    const supportedLocales=(await ask('Supported locales, separated by comma','ar,en')).split(',').map(x=>x.trim()).filter(Boolean);
+    const defaultLocale=await ask('Fallback locale',supportedLocales[0]??'ar');
+    if(!supportedLocales.includes(defaultLocale))throw Error('Fallback locale must be supported');
+    const identityMode=await ask('Login identity (email/phone/username/email-or-phone/email-phone-username)','email');
+    if(!['email','phone','username','email-or-phone','email-phone-username'].includes(identityMode))throw Error('Unknown identity mode');
+    const google=await yn('Google login available on external Backend?');
+    const apple=await yn('Apple login available on external Backend?');
+    const passkeys=await yn('Passkeys available on external Backend?');
+    const sessions=await ask('Session mode (single/multi)','single');
+    if(!['single','multi'].includes(sessions))throw Error('Invalid session mode');
+    const maxActive=sessions==='single'?1:Number(await ask('Max active sessions (0=unlimited)','5'));
+    if(!Number.isInteger(maxActive)||maxActive<0||maxActive>100)throw Error('Invalid max sessions');
+    const identityModel=await ask('Account profiles (single/multi-profile)','single');
+    if(!['single','multi-profile'].includes(identityModel))throw Error('Invalid profile model');
+    const managedEnabled=await yn('Does an account manage related pages/stores/organizations?');
+    const capabilities=(await ask('Installed UI capabilities (comma separated)','')).split(',').map(x=>x.trim()).filter(Boolean);
+    const commercialMode=(await ask('Commercial access (FREE/PAID/TRIAL/FREEMIUM)','FREE')).toUpperCase();
+    if(!['FREE','PAID','TRIAL','FREEMIUM'].includes(commercialMode))throw Error('Invalid access mode');
+    const decisions={
+      project:{id:projectId,name:title,clients:['flutter'],capabilities},
+      localization:{defaultLocale,supportedLocales},
+      authentication:{identityMode,google,apple,passkeys,
+        sessions:{mode:sessions,maxActive,overflow:'revoke-oldest'}},
+      accounts:{identityModel,managedEntities:{enabled:managedEnabled}},
+      commercial:{mode:commercialMode},
+    };
     return {schemaVersion:1,kind:'manual.frontend-setup-decisions',projectId,
-      decisions:{project:{name:title},localization:{supportedLocales:locales},
-        commercial:{mode:access.trim().toUpperCase()}},
-      steps:[{id:'project-identity',status:'manual-review'},
-        {id:'localization',status:'manual-review'},
-        {id:'commercial',status:'manual-review'},
-        {id:'authentication',status:'requires-external-backend-contract'},
-        {id:'authorization',status:'requires-external-backend-contract'}]};
+      decisions,
+      steps:['identity','authentication','accounts','permissions','capabilities','commercial']
+        .map((id,index)=>({id,order:index+1,status:'manual-review',
+          frontendAction:'Connect this choice to a verified external Backend API before production'}))};
   }finally{cli.close();}
 }
 async function main(){
