@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import {auditBackendFeatureParity} from '../tools/audit-backend-feature-parity.mjs';
 
 test('Auth integration audit separates source wiring, missing flows and live verification',()=>{
@@ -36,4 +39,21 @@ test('Project binding cannot be asserted without independently trusted backend h
   assert.throws(()=>auditBackendFeatureParity(process.cwd(),{
     requireProjectBinding:true,expectedProjectId:'different',expectedContractHash:'0'.repeat(64)
   }),/Invalid imported Backend contract/);
+});
+
+test('External Backend audit must not read a stale Fable contract or infer its routes',()=>{
+  const root=mkdtempSync(join(tmpdir(),'fable-external-parity-'));
+  try{
+    mkdirSync(join(root,'assets/config'),{recursive:true});
+    writeFileSync(join(root,'assets/config/backend.json'),JSON.stringify({
+      schemaVersion:1,kind:'fable.mobile-backend-configuration',
+      backend:{kind:'other',adapter:'openapi',status:'ready'},contractImported:true,
+    }));
+    assert.throws(()=>auditBackendFeatureParity(root),/non-Fable Backend/);
+    writeFileSync(join(root,'assets/config/backend.json'),JSON.stringify({
+      schemaVersion:1,kind:'fable.mobile-backend-configuration',
+      backend:{kind:'fable',adapter:'fable-contract',status:'pending'},contractImported:false,
+    }));
+    assert.throws(()=>auditBackendFeatureParity(root),/unverified or non-Fable Backend/);
+  }finally{rmSync(root,{recursive:true,force:true});}
 });
