@@ -92,6 +92,31 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
     }
   }
   if(Array.isArray(contract.operations) && projectOperations!==contract.operations.length)fail('project_operation_count_mismatch');
+  // Surface backend session policy directly to the Flutter project wizard.
+  // Legacy exports remain unknown; never silently assume multi-device.
+  const declaredSessionPolicy=contract.core?.auth?.sessionPolicy;
+  let sessionPolicy=null;
+  if(declaredSessionPolicy!==undefined){
+    const p=declaredSessionPolicy;
+    if(!p || typeof p!=='object' || Array.isArray(p) ||
+       !['single','multi'].includes(p.mode) ||
+       !Number.isInteger(p.maxActive) || p.maxActive<0 || p.maxActive>100 ||
+       (p.mode==='single' && p.maxActive!==1) ||
+       !['revoke-oldest','reject-new'].includes(p.overflow) ||
+       p.runtimeEndpoint!=='/auth/session-policy' || p.runtimeAuthoritative!==true){
+      fail('invalid_session_policy_contract');
+    }else{
+      const allOps=[...(contract.operations??[]),...(core.operations??[])];
+      if(!allOps.some(o=>o.operationId==='auth.session-policy' && o.method==='GET' &&
+          o.path==='/auth/session-policy' && o.public===true)){
+        fail('session_policy_route_missing');
+      }else{
+        sessionPolicy={mode:p.mode,maxActive:p.maxActive,overflow:p.overflow,
+          runtimeEndpoint:p.runtimeEndpoint,runtimeAuthoritative:true,
+          allowsMultipleSessions:p.mode==='multi' && (p.maxActive===0 || p.maxActive>1)};
+      }
+    }
+  }
   const fixture=contract.project?.id==='test-project' || contract.project?.name==='fable-test';
   if(mode==='project') {
     if(!expectedProjectId || typeof expectedProjectId!=='string' || !expectedProjectId.trim()) fail('expected_project_id_required');
@@ -108,7 +133,7 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
   const result={ok:failures.length===0,mode,projectId:contract.project?.id||null,
     fixture,operationCount:projectOperations,mobileCoreOperations:Array.isArray(core.operations)?core.operations.length:0,
     contractHash:contract.contractHash,projectBound:mode==='project'&&failures.length===0,
-    productionReady:false,failures,messages};
+    productionReady:false,sessionPolicy,failures,messages};
   return result;
 }
 
