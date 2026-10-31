@@ -239,6 +239,90 @@ class FableAuthGateway implements BackendApiGateway {
     return List<FableActiveSession>.unmodifiable(parsed);
   }
 
+  static final _uuid=RegExp(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+    caseSensitive:false);
+
+  String _route(String path,String method) {
+    final matching=_contract.operations.values.where(
+      (op)=>op.path==path && op.method==method && op.requiresAuth &&
+        op.credentialHeader==null).toList();
+    if(matching.length!=1)throw StateError('Backend did not export a unique authorized $method $path operation');
+    return matching.single.id;
+  }
+  bool get canRevokeOtherSessions => _contract.operations.values.any(
+    (op)=>op.path=='/auth/sessions/{id}/revoke'&&op.method=='POST'&&op.requiresAuth);
+  bool get canRequestSensitiveProof => _contract.operations.values.any(
+    (op)=>op.path=='/auth/otp/request'&&op.method=='POST'&&op.requiresAuth) &&
+    _contract.operations.values.any(
+    (op)=>op.path=='/auth/otp/verify'&&op.method=='POST'&&op.requiresAuth);
+
+  Future<String> requestSensitiveActionOtp() async {
+    final rev=session.identityRevision;
+    final response=await _api.request(_route('/auth/otp/request','POST'),
+      body:{'purpose':'SENSITIVE_ACTION'});
+    if(session.identityRevision!=rev)throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data),id=data['challengeId'];
+    if(id is! String || !_uuid.hasMatch(id))
+      throw const FormatException('Backend returned an invalid sensitive-action OTP challenge');
+    return id;
+  }
+
+  /// The verified challenge is never a new login, nor a reusable local grant.
+  /// It is a short-lived proof consumed atomically by the protected backend operation.
+  Future<FableVerifiedSensitiveProof> verifySensitiveActionOtp(String challengeId,String code) async {
+    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
+      throw ArgumentError('Invalid OTP challenge or code');
+    final rev=session.identityRevision;
+    final response=await _api.request(_route('/auth/otp/verify','POST'),
+      body:{'challengeId':challengeId,'code':code});
+    if(session.identityRevision!=rev)throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data);
+    if(data['verified']!=true || data['challengeId']!=challengeId ||
+      data['purpose']!='SENSITIVE_ACTION')
+      throw const FormatException('Backend did not verify the expected sensitive-action proof');
+    return FableVerifiedSensitiveProof._(challengeId,rev);
+  }
+
+  Future<bool> revokeOtherSession(String sessionId,{FableVerifiedSensitiveProof? proof}) async {
+    if(!_uuid.hasMatch(sessionId))throw ArgumentError('Invalid session ID');
+    final rev=session.identityRevision;
+    if(proof!=null && proof._identityRevision!=rev)
+      throw StateError('Security proof belongs to another authenticated identity');
+    final response=await _api.request(
+      _route('/auth/sessions/{id}/revoke','POST'),
+      path:{'id':sessionId},securityChallengeId:proof?._challengeId);
+    if(session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data);
+    if(data['sessionId']!=sessionId || data['revoked'] is! bool)
+      throw const FormatException('Invalid Backend session revocation response');
+    // Never silently sign out a different local identity.
+    return data['revoked'] as bool;
+  }
+  Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
+    final rev=session.identityRevision;
+    if(proof!=null && proof._identityRevision!=rev)
+      throw StateError('Security proof belongs to another authenticated identity');
+    final response=await _api.request(_route('/auth/logout-all','POST'),
+      securityChallengeId:proof?._challengeId);
+    if(session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data),count=data['revoked'];
+    if(count is! int||count<0)throw const FormatException('Invalid logout-all response');
+    await session.clearSessionIfIdentity(rev);
+    return count;
+  }
+
+  /// Explicit Fable entity-context opt-in for a verified, protected project
+  /// operation. Never persist the entity header or propagate it across Backends.
+  Future<Response<dynamic>> executeInManagedEntity(String operationId,String managedEntityId,{
+    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body
+  }) {
+    if(!_uuid.hasMatch(managedEntityId))throw ArgumentError('Invalid managed entity ID');
+    return _api.request(operationId,path:path,query:query,body:body,
+      managedEntityId:managedEntityId);
+  }
+
   static Map<String, dynamic> _payload(Object? value) {
     final envelope = value is Map ? value : null;
     final candidate = envelope != null && envelope['data'] is Map
@@ -375,4 +459,14 @@ class FableActiveSession {
       clientType:optional('clientType',64),appVersion:optional('appVersion',64),
     );
   }
+}
+
+
+/// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
+/// Backend consumes the challenge on the first protected action if the session
+/// itself does not already satisfy the recent AAL2 policy.
+class FableVerifiedSensitiveProof {
+  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision);
+  final String _challengeId;
+  final int _identityRevision;
 }
