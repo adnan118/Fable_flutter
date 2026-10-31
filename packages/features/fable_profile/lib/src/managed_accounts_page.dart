@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'managed_accounts_repository.dart';
+import 'managed_members_page.dart';
 
 /// Available ONLY with explicit Fable managed-entities contract operations.
 /// Local selection cannot confer role, grant membership or synthesize a route.
@@ -242,6 +243,17 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
                   onPressed:_busy?null:()=>unawaited(_activate(entity)),
                   child:Text(ar?'اختيار':'Select'))
                 :null),
+          if(_selected?.id==entity.id&&(
+              entity.isOwner&&_repo.canListMembers ||
+              entity.collaborationEnabled&&_repo.canViewSentInvitations&&
+              (_selected!.access=='OWNER'||
+                _selected!.access=='MANAGER'&&entity.managersCanInvite)))
+            TextButton.icon(
+              icon:const Icon(Icons.groups_outlined),
+              onPressed:_busy?null:()=>Navigator.of(context).push(
+                MaterialPageRoute<void>(builder:(_)=>FableManagedMembersPage(
+                  repo:_repo,entity:entity,selection:_selected!))),
+              label:Text(ar?'الأعضاء والدعوات المرسلة':'Members and sent invitations')),
           if(entity.isOwner)...[
             if(entity.status=='ACTIVE'&&_repo.canLifecycle('disable'))
               TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'disable')),
