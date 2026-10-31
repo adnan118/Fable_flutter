@@ -11,6 +11,9 @@ test('Auth integration audit separates source wiring, missing flows and live ver
   const sessions=report.operations.find(x=>x.id==='auth.sessions');
   assert.equal(login?.status,'SOURCE_WIRED_NOT_LIVE_TESTED');
   assert.equal(sessions?.status,'SOURCE_WIRED_NOT_LIVE_TESTED');
+  assert.equal(sessions?.presentationEvidence,'SCREEN_WIRED_NOT_LIVE_TESTED');
+  assert.ok(sessions?.viewSource?.endsWith('sessions_page.dart'));
+  assert.equal(report.productionReady,false);
   assert.equal(report.projectBound,false);
   assert.ok(report.operations.some(x=>x.status==='NOT_MAPPED'));
 });
