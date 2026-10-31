@@ -16,6 +16,24 @@ class _ExternalLoginPageState extends State<ExternalLoginPage> {
   final _form = GlobalKey<FormState>();
   final _identifier = TextEditingController();
   final _password = TextEditingController();
+  FableRememberedIdentifier? _remembered;
+  bool _rememberIdentifier=false;
+  FableRememberedIdentifier get _credentialHints =>
+    _remembered ??= FableRememberedIdentifier(
+      backendScope:widget.catalog.baseUri.origin);
+  Future<void> _restoreIdentifier() async {
+    try {
+      final previous=await _credentialHints.load();
+      if(!mounted||previous==null)return;
+      setState((){_identifier.text=previous;_rememberIdentifier=true;});
+    }catch(_){/* No native key store available. */}
+  }
+  Future<void> _saveIdentifier() async {
+    try{
+      await _credentialHints.save(
+        identifier:_identifier.text,remember:_rememberIdentifier);
+    }catch(_){/* UX failure never changes the authenticated session. */}
+  }
   bool _busy = false;
   bool _authenticated = false;
   bool _savedSessionAvailable = false;
@@ -25,6 +43,7 @@ class _ExternalLoginPageState extends State<ExternalLoginPage> {
   @override
   void initState() {
     super.initState();
+    _restoreIdentifier();
     _readSavedSession();
   }
 
@@ -55,6 +74,8 @@ class _ExternalLoginPageState extends State<ExternalLoginPage> {
     setState(() { _busy = true; _message = null; });
     try {
       await _auth(config).login(identifier: _identifier.text, password: _password.text);
+      await _saveIdentifier();
+      TextInput.finishAutofillContext(shouldSave:true);
       _password.clear();
       if (mounted) setState(() { _authenticated = true; _savedSessionAvailable = false; _message = 'Signed in securely.'; });
     } on FableApiException catch (e) {
@@ -106,7 +127,7 @@ class _ExternalLoginPageState extends State<ExternalLoginPage> {
           ],
           if (_authenticated) FilledButton.tonal(
             onPressed: _busy ? null : () => _logout(config), child: const Text('Sign out')),
-          if (!_authenticated) Form(key: _form, child: Column(children: [
+          if (!_authenticated) AutofillGroup(child:Form(key: _form, child: Column(children: [
             TextFormField(controller: _identifier, maxLength: 191,
               autofillHints: const [AutofillHints.username],
               decoration: const InputDecoration(labelText: 'Username or email'),
@@ -116,10 +137,17 @@ class _ExternalLoginPageState extends State<ExternalLoginPage> {
               autofillHints: const [AutofillHints.password],
               decoration: const InputDecoration(labelText: 'Password'),
               validator: (value) => value == null || value.isEmpty ? 'Required' : null),
+            CheckboxListTile(
+              contentPadding:EdgeInsets.zero,
+              value:_rememberIdentifier,
+              onChanged:_busy?null:(value)=>setState(()=>_rememberIdentifier=value??false),
+              title:const Text('Remember my login identifier on this device'),
+              subtitle:const Text('Passwords are managed by the operating system.'),
+            ),
             const SizedBox(height: 12),
             FilledButton(onPressed: _busy ? null : () => _login(config),
                 child: Text(_busy ? 'Connecting…' : 'Sign in')),
-          ])),
+          ]))),
           if (_message != null) Padding(padding: const EdgeInsets.only(top: 20),
             child: Text(_message!, textAlign: TextAlign.center)),
         ])));
