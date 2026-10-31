@@ -25,6 +25,10 @@ test('Auth integration audit separates source wiring, missing flows and live ver
   assert.equal(report.auditScope.importedContractKind,'CI_STARTER_DEMO_CONTRACT');
   assert.equal(report.auditScope.backendFeatureInventoryPresent,false);
   assert.equal(report.auditScope.exhaustiveBackendFeatureAudit,false);
+  assert.ok(Array.isArray(report.auditScope.unclassifiedBackendOperationIds));
+  assert.ok(Array.isArray(report.auditScope.featuresWithoutNativeScreen));
+  assert.ok(report.auditScope.featuresWithoutNativeScreen.includes('payments'));
+  assert.ok(Array.isArray(report.auditScope.unimplementedOperationIds));
   assert.equal(report.auditScope.featureCount,17);
   assert.equal(report.featureMatrix.length,17);
   assert.equal(report.featureMatrix.filter(f=>f.liveVerified).length,0);
