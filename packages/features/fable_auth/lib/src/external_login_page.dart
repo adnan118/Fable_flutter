@@ -140,7 +140,12 @@ class _ExternalLoginPageState extends State<ExternalLoginPage> {
             CheckboxListTile(
               contentPadding:EdgeInsets.zero,
               value:_rememberIdentifier,
-              onChanged:_busy?null:(value)=>setState(()=>_rememberIdentifier=value??false),
+              onChanged:_busy?null:(value) async {
+                setState(()=>_rememberIdentifier=value??false);
+                if(!_rememberIdentifier){
+                  try{await _credentialHints.clear();}catch(_){}
+                }
+              },
               title:const Text('Remember my login identifier on this device'),
               subtitle:const Text('Passwords are managed by the operating system.'),
             ),
