@@ -8,14 +8,11 @@ import {existsSync,readFileSync,writeFileSync,mkdirSync,readdirSync,statSync,cpS
 import {resolve,join,dirname,relative,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {importBackendDecisions} from './flutter-setup-wizard.mjs';
+import {FEATURE_IDS,FEATURE_OWNERSHIP,REQUIRED_CORE,classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 
-const KNOWN=Object.freeze([
-  'auth','profile','notifications','media','localization','support','social',
-  'biometrics','realtime','deeplinks','messaging','location','payments',
-  'offline','analytics','content','access_control'
-]);
-const REQUIRED=new Set(['auth','access_control']);
-const KEEP_CLIENT_ONLY=new Set(['deeplinks','offline']);
+const KNOWN=FEATURE_IDS;
+const REQUIRED=new Set(REQUIRED_CORE);
+const KEEP_CLIENT_ONLY=new Set(FEATURE_IDS.filter(id=>FEATURE_OWNERSHIP[id]==='client'));
 const pathOf=id=>'packages/features/fable_'+id;
 const safeFile=(root,file)=>resolve(root,file);
 function json(path){return JSON.parse(readFileSync(path,'utf8'));}
@@ -55,40 +52,13 @@ export function planFeatureSync(root,verified,{prune=false}={}){
      throw Error('Verified Fable Backend project setup required for feature sync');
   const decisions=verified.decisionSnapshot?.decisions??{};
   const declared=decisions.frontendFeatures;
-  if(!declared || declared.schemaVersion!==1 ||
-     declared.source!=='backend-installed-capabilities' ||
-     !Array.isArray(declared.enabled)||!Array.isArray(declared.disabled)||
-     !Array.isArray(declared.clientOnlyReview))throw Error('Backend did not publish complete feature decisions');
-  const inventoryIds=[...declared.enabled,...declared.disabled,...declared.clientOnlyReview];
-  if(inventoryIds.length!==KNOWN.length ||
-     new Set(inventoryIds).size!==KNOWN.length ||
-     inventoryIds.some(id=>!KNOWN.includes(id))){
-    throw Error('Backend omitted, duplicated or invented a Flutter feature decision. Re-export a complete inventory.');
-  }
-  const selection=verified.frontendSelection??{mode:'advisory',features:null};
-  const requested=selection.mode==='explicit' ? new Set(selection.features??[]) : null;
-  if(requested && [...requested].some(id=>!KNOWN.includes(id)))
-    throw Error('Backend handoff selected an unknown Flutter feature');
-  if(requested && [...requested].some(id=>declared.disabled.includes(id)))
-    throw Error('Frontend feature selection requires a capability disabled in Backend');
-  const enabled=new Set(declared.enabled.filter(id=>!requested||REQUIRED.has(id)||requested.has(id)));
-  if(![...enabled].every(x=>KNOWN.includes(x)) ||
-     ![...REQUIRED].every(x=>enabled.has(x)) ||
-     new Set(declared.enabled).size!==declared.enabled.length ||
-     declared.disabled.some(x=>enabled.has(x)) ||
-     declared.clientOnlyReview.some(x=>enabled.has(x)) ||
-     !declared.disabled.every(x=>KNOWN.includes(x)) ||
-     !declared.clientOnlyReview.every(x=>KEEP_CLIENT_ONLY.has(x)) ||
-     declared.disabled.some(x=>declared.clientOnlyReview.includes(x)) ||
-     new Set(declared.clientOnlyReview).size!==declared.clientOnlyReview.length){
-    throw Error('Conflicting or unsupported Backend feature inventory');
-  }
-  const visible=KNOWN.filter(x=>enabled.has(x));
-  // Client-only capabilities (for example offline or deep links) are not
-  // evidence of a missing Backend feature. Keep their packages for review
-  // instead of irreversibly treating them as unused server functionality.
-  const review=new Set(declared.clientOnlyReview);
-  const disabled=KNOWN.filter(x=>!enabled.has(x)&&!review.has(x));
+  const ownership=classifyFeatureDecisions(declared,verified.frontendSelection);
+  // UI routes reflect Backend capability plus the explicit project selection.
+  // Package retention is a separate, Flutter-owned decision.
+  const visible=ownership.visibleBackendFeatures;
+  const retained=ownership.retainedPackages;
+  const disabled=ownership.backendPruneEligible;
+  const protectedFrontend=ownership.frontendDecisionsRequired;
   const rootDir=resolve(root);
   if(prune){
     const pubspec=join(rootDir,'pubspec.yaml');
@@ -110,11 +80,17 @@ export function planFeatureSync(root,verified,{prune=false}={}){
     kind:'fable.flutter-feature-prune-plan',schemaVersion:1,
     projectId:verified.projectId,contractHash:verified.contractHash,
     projectBound:verified.projectBound===true,
-    enabled:visible,disabled,clientOnlyReview:declared.clientOnlyReview,
+    enabled:visible,disabled,
+    retainedPackages:retained,
+    frontendDecisionsRequired:protectedFrontend,
+    hybridRetained:ownership.hybridRetained,
+    frontendOnly:ownership.frontendOnly,
+    ownership:ownership.decisions,
+    clientOnlyReview:declared.clientOnlyReview,
     protectedProjectFeatureCount:protectedProjectFeatures.length,
     requestedSource:local?.selectionSource??null,
     pruneAvailable:verified.projectBound===true,
-    note:'Backend feature registry is synced; client-only packages stay protected for developer review. Physical Backend feature pruning requires --prune and a pinned project contract.',
+    note:'Backend routes use enabled; hybrid and local Flutter packages are retained even if unsupported on the server; physical pruning is restricted to disabled server-only features.',
   };
 }
 function removePushSections(src){
@@ -185,13 +161,16 @@ function applyPrune(root,plan,{prune=false}={}){
   }
   const inventory={
     schemaVersion:2,kind:'fable.mobile-feature-selection',
-    capabilities:plan.enabled,features:plan.enabled,
+    capabilities:plan.retainedPackages,features:plan.retainedPackages,
+    backendVisible:plan.enabled,
+    featureOwnership:plan.ownership.map(({id,ownership,backendEnabled,retainPackage,defaultBackendUiVisible})=>
+      ({id,ownership,backendEnabled,retainPackage,defaultBackendUiVisible})),
     backendContractHash:plan.contractHash,
     selectionSource:'verified-backend-project:'+plan.projectId,
     disabled:plan.disabled,
     clientOnlyReview:plan.clientOnlyReview,
   };
-  writeFileSync(registryPath,registry(plan.enabled));
+  writeFileSync(registryPath,registry(plan.retainedPackages));
   writeJSON(inventoryPath,inventory);
   if(prune){
     writeFileSync(appPath,app);
@@ -202,11 +181,14 @@ function applyPrune(root,plan,{prune=false}={}){
     schemaVersion:1,kind:'fable.flutter-feature-sync',
     projectId:plan.projectId,contractHash:plan.contractHash,
     enabled:plan.enabled,disabled:plan.disabled,
+    retainedPackages:plan.retainedPackages,
+    frontendDecisionsRequired:plan.frontendDecisionsRequired,
+    hybridRetained:plan.hybridRetained,
     prunedPackages:toDelete,blocked,backup:relative(project,backup),
     projectFeatureCountPreserved:plan.protectedProjectFeatureCount,
   });
   return {applied:true,backup:relative(project,backup),
-    hidden:plan.disabled,prunedPackages:toDelete,blocked};
+    hidden:plan.disabled,retainedPackages:plan.retainedPackages,prunedPackages:toDelete,blocked};
 }
 export function syncProjectFeatures(root,verified,{apply=false,prune=false}={}){
   if(prune&&!apply)throw Error('--prune requires --apply');
