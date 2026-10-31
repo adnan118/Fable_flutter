@@ -201,7 +201,7 @@ async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={}){
   const hasFeatures=snapshot.backendAuthority && snapshot.decisionSnapshot?.decisions?.frontendFeatures;
   const sync=hasFeatures?await import('./sync-project-features.mjs'):null;
   // Preflight feature inventory before copying any project assets.
-  if(sync && snapshot.projectBound)sync.planFeatureSync(root,snapshot);
+  if(sync && snapshot.projectBound)sync.planFeatureSync(root,snapshot,{prune});
   const result=saveFrontendSetup(root,snapshot,{apply:true,sourceDir:source??null});
   if(sync){
     result.featureSync=sync.syncProjectFeatures(root,snapshot,{apply:snapshot.projectBound,prune});
