@@ -9,6 +9,8 @@ class FableNotificationNavigation {
   final navigatorKey = GlobalKey<NavigatorState>();
   Future<bool> Function(String destination, Map<String, String> data)? navigateCapability;
   Future<bool> Function(Uri url)? navigateVerifiedUrl;
+  /// Project must register the matching local route. No implicit route builder.
+  Future<bool> Function(String route)? navigateVerifiedAppRoute;
   Future<bool> Function()? isAuthenticated;
   Map<String,String>? _pending;
   int _revision = 0;
@@ -59,5 +61,15 @@ class FableNotificationNavigation {
       catch (_) { return false; }
     }
   }
-  void reset() { clearPending(); navigateCapability = null; navigateVerifiedUrl = null; isAuthenticated=null; }
+  Future<bool> openVerifiedInternalRoute(String route) async {
+    if(route.length>240||!RegExp(r'^/[a-zA-Z0-9_/-]+
+}
+).hasMatch(route)||
+       route.contains('//')||route.contains('..')||!route.contains('password'))
+      return false;
+    final handler=navigateVerifiedAppRoute;
+    if(handler==null)return false;
+    try {return await handler(route);} catch(_){return false;}
+  }
+  void reset() { clearPending(); navigateCapability = null; navigateVerifiedUrl = null; navigateVerifiedAppRoute=null; isAuthenticated=null; }
 }
