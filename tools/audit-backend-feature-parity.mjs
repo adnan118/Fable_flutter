@@ -102,7 +102,16 @@ function auditFeatureMatrix(root,operations,features,projectBound){
   });
 }
 export function auditBackendFeatureParity(root,{requireProjectBinding=false,expectedProjectId=null,expectedContractHash=null}={}){
-  const path=resolve(root),gate=verifyFableContract(path,{
+  const path=resolve(root);
+  const backendConfigPath=join(path,'assets/config/backend.json');
+  if(!existsSync(backendConfigPath))throw Error('Backend selection is required before a parity audit');
+  const backendConfig=JSON.parse(readFileSync(backendConfigPath,'utf8'));
+  if(backendConfig?.backend?.kind!=='fable' ||
+     backendConfig.backend?.adapter!=='fable-contract' ||
+     backendConfig.backend?.status!=='ready' ||
+     backendConfig.contractImported!==true)
+    throw Error('Fable parity audit refused for an unverified or non-Fable Backend; use the external adapter audit');
+  const gate=verifyFableContract(path,{
     mode:requireProjectBinding?'project':'source',
     expectedProjectId,expectedContractHash});
   if(!gate.ok)throw Error('Invalid imported Backend contract: '+gate.failures.join(','));
