@@ -6,6 +6,7 @@ import 'src/published_content_index.dart';
 import 'src/published_content_repository.dart';
 export 'src/published_content_repository.dart';
 export 'src/published_content_widgets.dart';
+export 'src/structured_content_text.dart';
 export 'src/published_content_index.dart';
 
 /// A real public-content index only for an explicitly exported Fable contract.
