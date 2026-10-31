@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,existsSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
+import {chooseFrontendFeature,reviewFrontendChoices} from '../tools/frontend-owned-features.mjs';
 import {tmpdir} from 'node:os';
 import {
   FEATURE_IDS,FEATURE_OWNERSHIP,classifyFeatureDecisions,
@@ -58,5 +59,27 @@ test('Independent Flutter choices survive imports with a matching project ID',()
     assert.throws(()=>readFrontendOwnedDecisions(root,'another-project'),/another project/);
     assert.throws(()=>updateFrontendOwnedChoice(root,'my-project','payments',true,{apply:true}),/Not a Flutter-owned feature/);
     assert.ok(existsSync(join(root,'.fable/frontend-owned-decisions.json')));
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('Flutter-only choices need explicit consent and never touch Backend fields',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'fable-native-settings-'));
+  try{
+    saveFrontendOwnedDecisions(root,frontendOwnedDefaults('project'),{apply:true});
+    let prompts=0;
+    const cancelled=await chooseFrontendFeature(root,'project',{
+      feature:'offline',state:'on',ask:async()=>{prompts++;return 'لا';},show:()=>{},
+    });
+    assert.equal(cancelled.applied,false);
+    assert.equal(readFrontendOwnedDecisions(root,'project').choices.offline.enabled,null);
+    const accepted=await chooseFrontendFeature(root,'project',{
+      feature:'offline',state:'on',ask:async()=>{prompts++;return 'اعتمد';},show:()=>{},
+    });
+    assert.equal(accepted.applied,true);
+    assert.equal(prompts,2);
+    assert.equal(reviewFrontendChoices(root,'project').rows.find(x=>x.id==='offline').decision,'ENABLED');
+    await assert.rejects(chooseFrontendFeature(root,'project',{
+      feature:'payments',state:'on',ask:async()=> 'اعتمد',
+    }),/Only frontend-only or hybrid/);
   }finally{rmSync(root,{recursive:true,force:true});}
 });
