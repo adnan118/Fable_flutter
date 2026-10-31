@@ -26,12 +26,31 @@ const WIRED=Object.freeze({
   'auth.social.unlink':'packages/features/fable_social/lib/src/social_auth_repository.dart',
   'passkeys.authentication.options':'packages/features/fable_biometrics/lib/src/biometrics_repository.dart',
   'passkeys.authentication.verify':'packages/features/fable_biometrics/lib/src/biometrics_repository.dart',
+  'content.page.read':'packages/features/fable_content/lib/src/published_content_repository.dart',
+  'content.page.accept':'packages/features/fable_content/lib/src/published_content_repository.dart',
+  'content.publicChanges':'packages/features/fable_content/lib/fable_content.dart',
+  'notifications.inbox':'packages/features/fable_notifications/lib/src/inbox_repository.dart',
+  'notifications.read':'packages/features/fable_notifications/lib/src/inbox_repository.dart',
+  'languages.list':'packages/features/fable_localization/lib/src/languages_repository.dart',
+  'languages.clientCopy':'packages/features/fable_localization/lib/src/client_copy_sync.dart',
+  'media.clientContract':'packages/features/fable_media/lib/src/media_read_repository.dart',
+  'media.metadata':'packages/features/fable_media/lib/src/media_read_repository.dart',
+  'media.upload.prepare':'packages/features/fable_media/lib/src/media_upload_repository.dart',
+  'media.upload.status':'packages/features/fable_media/lib/src/media_upload_repository.dart',
+  'media.upload.chunk':'packages/features/fable_media/lib/src/media_upload_repository.dart',
+  'media.upload.partUrl':'packages/features/fable_media/lib/src/media_upload_repository.dart',
+  'media.upload.partAck':'packages/features/fable_media/lib/src/media_upload_repository.dart',
+  'media.upload.complete':'packages/features/fable_media/lib/src/media_upload_repository.dart',
+  'media.upload.abort':'packages/features/fable_media/lib/src/media_upload_repository.dart',
 });
 // Screen evidence is separate from Gateway evidence; neither proves a live
 // Backend session. Keep Auth sessions as the first mapped workflow.
 const VIEW_SOURCES=Object.freeze({
   'auth.login':'packages/features/fable_auth/lib/src/login_page.dart',
   'auth.sessions':'packages/features/fable_auth/lib/src/sessions_page.dart',
+  'content.page.read':'packages/features/fable_content/lib/src/published_content_index.dart',
+  'notifications.inbox':'packages/features/fable_notifications/lib/src/inbox_page.dart',
+  'languages.list':'packages/features/fable_localization/lib/src/languages_page.dart',
 });
 const MOBILE_CORE='assets/contracts/mobile-core-operations.json';
 const isWebOnly=op=>op.id.startsWith('auth.web.')||op.path.startsWith('/auth/web/');
@@ -59,15 +78,31 @@ function load(root){
 }
 // The checked-in ci_fable starter contains a narrow demo contract. It is
 // not an exhaustive API surface for every project/capability in Backend.
-function featureOfOperation(op){
+export function featureOfOperation(op){
   const id=op.id;
   if(id.startsWith('auth.social.'))return 'social';
   if(id.startsWith('passkeys.'))return 'biometrics';
   if(id.startsWith('account.'))return 'profile';
+  if(id.startsWith('managed-entities.')||id.startsWith('managed-accounts.'))return 'profile';
   if(id.startsWith('auth.'))return 'auth';
   if(id.startsWith('push.'))return 'notifications';
+  if(id.startsWith('languages.'))return 'localization';
+  if(id.startsWith('permissions.')||id.startsWith('roles.')||
+     id.startsWith('access.'))return 'access_control';
+  if(id.startsWith('payment.'))return 'payments';
   const prefix=id.split('.')[0];
   return FEATURE_IDS.includes(prefix)?prefix:null;
+}
+function getNativeScreenEvidence(root,id){
+  const source=`packages/features/fable_${id}/lib/fable_${id}.dart`;
+  const file=join(root,source);
+  if(!existsSync(file))return {source:null,customFableScreen:false,customExternalScreen:false};
+  const code=readFileSync(file,'utf8');
+  // This detects an owned screen factory, not its business/UX completeness.
+  return {
+    source,customFableScreen:/@override\s+Widget\s+screen\s*\(/.test(code),
+    customExternalScreen:/@override\s+Widget\?\s+externalScreen\s*\(/.test(code),
+  };
 }
 function auditFeatureMatrix(root,operations,features,projectBound){
   const registryPath=join(root,'lib/src/generated/feature_registry.dart');
@@ -84,8 +119,17 @@ function auditFeatureMatrix(root,operations,features,projectBound){
       :'NO_BACKEND_FEATURE_INVENTORY';
     const packagePresent=existsSync(join(root,'packages/features/fable_'+id,'pubspec.yaml'));
     const registered=registry.includes("package:fable_"+id+"/");
+    const nativeScreen=getNativeScreenEvidence(root,id);
+    const missingOperationIds=featureOperations
+      .filter(o=>o.status==='NOT_MAPPED'||o.status==='MAPPING_STALE')
+      .map(o=>o.id);
     return {
       id,ownership:FEATURE_OWNERSHIP[id],packagePresent,registered,
+      nativeScreen,
+      missingOperationIds,
+      contractOperationCoverage:featureOperations.length===0?null:
+        {referenced:wired.length,total:featureOperations.length},
+      completeFeature:false, // requires per-operation UI, errors, permissions & live verification
       backendDecision:configured,operationCount:featureOperations.length,
       sourceWiredOperationCount:wired.length,screenWiredCount:screens.length,
       operationIds:featureOperations.map(o=>o.id),
@@ -133,6 +177,12 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
     const screenWired=viewSource!=null&&existsSync(join(path,viewSource))&&
       (op.id==='auth.sessions'
         ?readFileSync(join(path,viewSource),'utf8').includes('listActiveSessions')
+        :op.id==='content.page.read'
+          ?readFileSync(join(path,viewSource),'utf8').includes('FablePublishedContentPage')
+        :op.id==='notifications.inbox'
+          ?readFileSync(join(path,viewSource),'utf8').includes('FableInboxPage')
+        :op.id==='languages.list'
+          ?readFileSync(join(path,viewSource),'utf8').includes('FableLanguagesPage')
         :readFileSync(join(path,viewSource),'utf8').includes('auth.login'));
     return {...op,status:'SOURCE_WIRED_NOT_LIVE_TESTED',source,
       viewSource:screenWired?viewSource:null,
@@ -150,6 +200,13 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
     featureCount:FEATURE_IDS.length,
     featuresWithoutImportedOperations:featureMatrix
       .filter(f=>f.operationCount===0).map(f=>f.id),
+    unclassifiedBackendOperationIds:mapped.filter(o=>!featureOfOperation(o)&&!isWebOnly(o))
+      .map(o=>o.id),
+    featuresWithoutNativeScreen:featureMatrix
+      .filter(f=>f.ownership==='server'&&!f.nativeScreen.customFableScreen)
+      .map(f=>f.id),
+    unimplementedOperationIds:mapped.filter(o=>o.status==='NOT_MAPPED'||
+      o.status==='MAPPING_STALE').map(o=>o.id),
     exhaustiveBackendFeatureAudit:false,
     note:fixture
       ?'ci_fable includes only a demo subset of operations. Do not count packages as integrated Backend features.'
