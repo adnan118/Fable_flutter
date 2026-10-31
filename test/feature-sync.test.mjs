@@ -4,6 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from
 import {tmpdir} from 'node:os';
 import {resolve,join,dirname} from 'node:path';
 import {syncProjectFeatures,planFeatureSync} from '../tools/sync-project-features.mjs';
+import {classifyFeatureDecisions} from '../tools/frontend-feature-ownership.mjs';
 
 const hash='e'.repeat(64);
 const write=(root,path,content)=>{
@@ -57,14 +58,17 @@ test('Backend decisions hide inactive features, safely archive and prune unused 
   const f=fixture();try{
     const preview=syncProjectFeatures(f.root,f.verified);
     assert.equal(preview.applied,false);
-    assert.ok(preview.disabled.includes('notifications'));
+    assert.ok(!preview.disabled.includes('notifications'));
+    assert.ok(preview.hybridRetained.includes('notifications'));
+    assert.ok(preview.retainedPackages.includes('offline'));
+    assert.ok(preview.retainedPackages.includes('notifications'));
     assert.ok(preview.disabled.includes('support'));
     assert.equal(preview.protectedProjectFeatureCount,1);
     const applied=syncProjectFeatures(f.root,f.verified,{apply:true,prune:true});
     assert.equal(applied.applied,true);
-    assert.ok(applied.prunedPackages.includes('packages/features/fable_notifications'));
+    assert.ok(!applied.prunedPackages.includes('packages/features/fable_notifications'));
     assert.ok(applied.prunedPackages.includes('packages/features/fable_support'));
-    assert.equal(existsSync(join(f.root,'packages/features/fable_notifications')),false);
+    assert.equal(existsSync(join(f.root,'packages/features/fable_notifications')),true);
     assert.equal(existsSync(join(f.root,'packages/features/fable_support')),false);
     assert.ok(existsSync(join(f.root,applied.backup,'lib/src/app.dart')));
     assert.ok(existsSync(join(f.root,'packages/features/fable_auth')));
@@ -73,10 +77,10 @@ test('Backend decisions hide inactive features, safely archive and prune unused 
     assert.ok(readFileSync(join(f.root,'pubspec.yaml'),'utf8').includes('fable_offline:'));
     assert.ok(existsSync(join(f.root,'packages/features/fable_access_control')));
     assert.ok(readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8').includes('authFeature'));
-    assert.ok(!readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8').includes('notificationsFeature'));
-    assert.ok(!readFileSync(join(f.root,'lib/src/app.dart'),'utf8').includes('package:fable_notifications'));
+    assert.ok(readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8').includes('notificationsFeature'));
+    assert.ok(readFileSync(join(f.root,'lib/src/app.dart'),'utf8').includes('package:fable_notifications'));
     assert.ok(readFileSync(join(f.root,'pubspec.yaml'),'utf8').includes('fable_auth:'));
-    assert.ok(!readFileSync(join(f.root,'pubspec.yaml'),'utf8').includes('fable_notifications:'));
+    assert.ok(readFileSync(join(f.root,'pubspec.yaml'),'utf8').includes('fable_notifications:'));
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
 test('Referenced feature source is retained instead of deleted',()=>{
@@ -94,7 +98,7 @@ test('No feature pruning from unbound or inconsistent backend project',()=>{
     assert.throws(()=>syncProjectFeatures(f.root,f.verified,{apply:true}),/independently pinned/);
     f.verified.projectBound=true;
     f.verified.decisionSnapshot.decisions.frontendFeatures.enabled=['auth'];
-    assert.throws(()=>planFeatureSync(f.root,f.verified),/Conflicting/);
+    assert.throws(()=>planFeatureSync(f.root,f.verified),/Incomplete|Conflicting/);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
 
@@ -107,5 +111,45 @@ test('Reusable ci_fable template never has its feature packages physically prune
     assert.throws(()=>syncProjectFeatures(f.root,f.verified,{apply:true,prune:true}),
       /Refusing to prune the reusable ci_fable starter/);
     assert.ok(existsSync(join(f.root,'packages/features/fable_support')));
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('Client-only and hybrid features survive missing backend support without granting server operations',()=>{
+  const f=fixture();try{
+    const manifest=f.verified.decisionSnapshot.decisions.frontendFeatures;
+    const policy=classifyFeatureDecisions(manifest);
+    for(const id of ['notifications','media','profile','localization','biometrics','location','analytics','access_control']){
+      assert.equal(policy.byId[id].ownership,'hybrid');
+      assert.equal(policy.byId[id].retainPackage,true);
+      assert.equal(policy.byId[id].backendPruneEligible,false);
+    }
+    for(const id of ['deeplinks','offline']){
+      assert.equal(policy.byId[id].ownership,'client');
+      assert.equal(policy.byId[id].retainPackage,true);
+      assert.equal(policy.byId[id].backendPruneEligible,false);
+    }
+    assert.equal(policy.byId.support.backendPruneEligible,true);
+    assert.equal(policy.byId.support.retainPackage,false);
+    assert.equal(policy.byId.notifications.defaultBackendUiVisible,false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Backend cannot relabel Flutter-owned decisions as disabled',()=>{
+  const f=fixture();try{
+    const manifest=f.verified.decisionSnapshot.decisions.frontendFeatures;
+    manifest.clientOnlyReview=['deeplinks'];
+    manifest.disabled.push('offline');
+    assert.throws(()=>classifyFeatureDecisions(manifest),
+      /Backend cannot disable a frontend-owned feature/);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Explicit selection cannot activate an unavailable server operation, but may retain native UI',()=>{
+  const f=fixture();try{
+    const manifest=f.verified.decisionSnapshot.decisions.frontendFeatures;
+    assert.throws(()=>classifyFeatureDecisions(manifest,{mode:'explicit',features:['support']}),
+      /does not support requested server-only/);
+    const plan=classifyFeatureDecisions(manifest,{mode:'explicit',features:['notifications','offline']});
+    assert.equal(plan.byId.notifications.retainPackage,true);
+    assert.equal(plan.byId.notifications.defaultBackendUiVisible,false);
+    assert.equal(plan.byId.offline.retainPackage,true);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
