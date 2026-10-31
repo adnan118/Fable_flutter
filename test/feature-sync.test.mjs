@@ -97,3 +97,15 @@ test('No feature pruning from unbound or inconsistent backend project',()=>{
     assert.throws(()=>planFeatureSync(f.root,f.verified),/Conflicting/);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+test('Reusable ci_fable template never has its feature packages physically pruned',()=>{
+  const f=fixture();
+  try{
+    const pubspec=join(f.root,'pubspec.yaml');
+    writeFileSync(pubspec,'name: ci_fable\n'+readFileSync(pubspec,'utf8'));
+    write(f.root,'.fable/project-features.json',{schemaVersion:1,app:'apps/ci_fable',features:[]});
+    assert.throws(()=>syncProjectFeatures(f.root,f.verified,{apply:true,prune:true}),
+      /Refusing to prune the reusable ci_fable starter/);
+    assert.ok(existsSync(join(f.root,'packages/features/fable_support')));
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
