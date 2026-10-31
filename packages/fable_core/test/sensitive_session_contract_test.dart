@@ -16,8 +16,7 @@ class MemorySession extends FableSecureSession {
     access=null;identityRevision++;return true;
   }
 }
-FableContract contract({bool otp=true,bool revoke=true})=>{
-  FableContract(contractHash:'hash',projectName:'test',selectionMode:'advisory',
+FableContract contract({bool otp=true,bool revoke=true})=>FableContract(contractHash:'hash',projectName:'test',selectionMode:'advisory',
     featureIds:const <String>{},operations:{
       if(revoke)'sessions.remove':const FableOperation('sessions.remove','POST',
         '/auth/sessions/{id}/revoke','hash',requiresAuth:true,enforceAuth:true),
@@ -28,7 +27,6 @@ FableContract contract({bool otp=true,bool revoke=true})=>{
       if(otp)'sensitive.verify':const FableOperation('sensitive.verify','POST',
         '/auth/otp/verify','hash',requiresAuth:true,enforceAuth:true),
     });
-}
 Dio intercepted(Future<Response<dynamic>> Function(RequestOptions) reply){
   final dio=Dio();
   dio.interceptors.add(InterceptorsWrapper(onRequest:(options,handler)async{
