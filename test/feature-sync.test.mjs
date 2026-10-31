@@ -24,6 +24,8 @@ dependencies:
     path: packages/features/fable_notifications
   fable_support:
     path: packages/features/fable_support
+  fable_offline:
+    path: packages/features/fable_offline
   fable_access_control:
     path: packages/features/fable_access_control
 `);
@@ -38,7 +40,7 @@ void pushNotificationOnly() {}
 navigatorKey: someValue,
 // FABLE_PUSH_NAV_END
 `);
-  for(const id of ['auth','notifications','support','access_control']){
+  for(const id of ['auth','notifications','support','offline','access_control']){
     write(root,`packages/features/fable_${id}/lib/fable_${id}.dart`,'// package stub\n');
   }
   const verified={kind:'fable.flutter-frontend-setup',source:'backend-contract-export',
@@ -66,6 +68,9 @@ test('Backend decisions hide inactive features, safely archive and prune unused 
     assert.equal(existsSync(join(f.root,'packages/features/fable_support')),false);
     assert.ok(existsSync(join(f.root,applied.backup,'lib/src/app.dart')));
     assert.ok(existsSync(join(f.root,'packages/features/fable_auth')));
+    assert.ok(existsSync(join(f.root,'packages/features/fable_offline')));
+    assert.ok(!applied.prunedPackages.includes('packages/features/fable_offline'));
+    assert.ok(readFileSync(join(f.root,'pubspec.yaml'),'utf8').includes('fable_offline:'));
     assert.ok(existsSync(join(f.root,'packages/features/fable_access_control')));
     assert.ok(readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8').includes('authFeature'));
     assert.ok(!readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8').includes('notificationsFeature'));
