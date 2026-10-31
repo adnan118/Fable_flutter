@@ -68,7 +68,8 @@ void main(){
     final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
       contract:catalog(),secureSession:session,client:dio((req)async{
         seen.add(req);
-        if(req.path=='/managed-entities')return ok(req,[entity()]);
+        if(req.path=='/managed-entities')return ok(req,[{
+          ...entity(),'memberships':[{'access':'OWNER','active':true}]}]);
         if(req.path=='/managed-entities/'+entityId+'/activate')return ok(req,{
           'managedEntityId':entityId,'access':'OWNER',
           'header':{'name':'X-Fable-Managed-Entity-Id','value':entityId},
