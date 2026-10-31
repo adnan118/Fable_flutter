@@ -27,9 +27,23 @@ function fixture(){
   const frontendSetup={
     schemaVersion:1,kind:'fable.frontend-setup-decisions',source:'backend-project-manifest',
     projectId:contract.project.id,
-    decisions:{project:{id:contract.project.id,name:'demo'},
-      authentication:{sessions:session},accounts:{identityModel:'multi-profile'}},
-    steps:[{id:'authentication',frontendAction:'Sync auth from Backend',status:'required-review'}],
+    decisions:{
+      project:{id:contract.project.id,name:'demo',clients:['flutter'],capabilities:['auth']},
+      localization:{defaultLocale:'ar',supportedLocales:['ar','en'],rtlLocales:['ar']},
+      authentication:{sessions:session,identityMode:'email'},
+      accounts:{identityModel:'multi-profile'},
+      experience:{notifications:false,media:false},
+      commercial:{mode:'FREE'},
+      frontendFeatures:{schemaVersion:1,source:'backend-installed-capabilities',
+        enabled:['auth','profile','localization','access_control'],
+        disabled:['notifications','media','support','social','biometrics','realtime',
+          'messaging','location','payments','analytics','content'],
+        clientOnlyReview:['deeplinks','offline']},
+      permissions:{source:'backend-contract-and-runtime',rolesFromRuntime:true},
+    },
+    steps:['identity','authentication','accounts','permissions','capabilities','commercial']
+      .map((id,order)=>({id,order:order+1,frontendAction:'Sync '+id,
+        status:'required-review'})),
     authority:{backend:true}
   };
   contract.core.auth.sessionPolicy=session;
