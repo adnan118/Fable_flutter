@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {auditBackendFeatureParity} from '../tools/audit-backend-feature-parity.mjs';
+import {auditBackendFeatureParity,featureOfOperation} from '../tools/audit-backend-feature-parity.mjs';
 
 test('Auth integration audit separates source wiring, missing flows and live verification',()=>{
   const report=auditBackendFeatureParity(process.cwd());
@@ -56,4 +56,41 @@ test('External Backend audit must not read a stale Fable contract or infer its r
     }));
     assert.throws(()=>auditBackendFeatureParity(root),/unverified or non-Fable Backend/);
   }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('Feature ownership maps real optional Backend operation families, not just UI packages',()=>{
+  for(const [id,feature] of Object.entries({
+    'languages.clientCopy':'localization',
+    'content.page.accept':'content',
+    'managed-entities.list':'profile',
+    'managed-accounts.create':'profile',
+    'permissions.me':'access_control',
+    'auth.social.apple':'social',
+    'passkeys.authentication.verify':'biometrics',
+    'media.upload.prepare':'media',
+    'notifications.read':'notifications',
+  })){
+    assert.equal(featureOfOperation({id}),feature);
+  }
+  assert.equal(featureOfOperation({id:'unknown.private'}),null);
+});
+
+test('Feature audit cannot mistake an installed package for a complete native workflow',()=>{
+  const report=auditBackendFeatureParity(process.cwd());
+  assert.equal(report.featureMatrix.length,17);
+  const auth=report.featureMatrix.find(f=>f.id==='auth');
+  const content=report.featureMatrix.find(f=>f.id==='content');
+  const payments=report.featureMatrix.find(f=>f.id==='payments');
+  assert.equal(auth.nativeScreen.customFableScreen,true);
+  assert.equal(content.nativeScreen.customFableScreen,true);
+  assert.equal(payments.nativeScreen.customFableScreen,false);
+  for(const feature of report.featureMatrix){
+    assert.equal(feature.completeFeature,false);
+    assert.equal(feature.liveVerified,false);
+    assert.ok(Array.isArray(feature.missingOperationIds));
+    assert.ok(feature.nativeScreen.source);
+  }
+  assert.equal(auth.contractOperationCoverage.total,report.operations
+    .filter(op=>op.id.startsWith('auth.')&&!op.id.startsWith('auth.social.')).length);
+  assert.equal(payments.contractOperationCoverage,null);
 });
