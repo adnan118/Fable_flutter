@@ -72,24 +72,31 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
   Future<void> _create()async{
     if(_busy||!_repo.canCreate)return;
     final type=TextEditingController(),ar=TextEditingController(),en=TextEditingController();
+    var visibility='PRIVATE';
     try{
-      final form=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      final form=await showDialog<bool>(context:context,builder:(ctx)=>
+        StatefulBuilder(builder:(ctx,rebuild)=>AlertDialog(
         title:Text(_ar?'إنشاء كيان':'Create entity'),
         content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
           TextField(controller:type,maxLength:64,decoration:const InputDecoration(labelText:'Backend-enabled type')),
           TextField(controller:ar,maxLength:191,decoration:const InputDecoration(labelText:'Arabic name')),
           TextField(controller:en,maxLength:191,decoration:const InputDecoration(labelText:'English name')),
+          DropdownButton<String>(value:visibility,items:const [
+            DropdownMenuItem(value:'PRIVATE',child:Text('Private (no invitations)')),
+            DropdownMenuItem(value:'INVITE_ONLY',child:Text('Invite only')),
+            DropdownMenuItem(value:'PUBLIC',child:Text('Public')),
+          ],onChanged:(choice)=>rebuild(()=>visibility=choice??'PRIVATE')),
         ])),
         actions:[
           TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
-          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Create private entity')),
-        ]));
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Create entity')),
+        ])));
       if(form!=true||!mounted)return;
       final rev=widget.gateway.session.identityRevision;
       setState((){_busy=true;_message=null;});
       try{
-        // Private by default. Visibility changes require a separate reviewed UI.
-        await _repo.create(type:type.text,nameAr:ar.text,nameEn:en.text,visibility:'PRIVATE');
+        await _repo.create(type:type.text,nameAr:ar.text,nameEn:en.text,
+          visibility:visibility);
         if(mounted&&rev==widget.gateway.session.identityRevision)await _reloadAfterMutation();
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message='Backend rejected entity creation (type, quota or authorization).');}
