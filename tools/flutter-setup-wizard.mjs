@@ -356,9 +356,13 @@ export async function runGuidedFlutterSetup({
   }
   let selectedSource=source;
   if(!selectedSource){
-    const first=resolve(project,'../Fable-Backend-RC66/dist/client-contract');
-    const second=resolve(project,'../backend/dist/client-contract');
-    const suggestion=existsSync(join(first,'contract.json'))?first:second;
+    const suggestions=[
+      resolve(project,'../Fable/Fable-Backend-RC66/dist/client-contract'),
+      resolve(project,'../Fable-Backend-RC66/dist/client-contract'),
+      resolve(project,'../backend/dist/client-contract'),
+    ];
+    const suggestion=suggestions.find(path=>existsSync(join(path,'contract.json')))
+      ??suggestions[2];
     const answer=(await ask('مسار ملف قرارات الباك (مجلد dist/client-contract) ['+suggestion+']: ')).trim();
     selectedSource=answer||suggestion;
   }
