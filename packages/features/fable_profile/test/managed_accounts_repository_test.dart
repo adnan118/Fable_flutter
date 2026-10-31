@@ -39,6 +39,14 @@ FableContract catalog({bool installed=true})=>FableContract(
     'entity.enable':const FableOperation('entity.enable','POST','/managed-entities/{id}/enable','hash',enforceAuth:true),
     'entity.delete.request':const FableOperation('entity.delete.request','POST','/managed-entities/{id}/delete-request','hash',enforceAuth:true),
     'entity.restore':const FableOperation('entity.restore','POST','/managed-entities/{id}/restore','hash',enforceAuth:true),
+    'entity.members':const FableOperation('entity.members','GET',
+      '/managed-entities/{id}/members','hash',enforceAuth:true),
+    'entity.member.remove':const FableOperation('entity.member.remove','DELETE',
+      '/managed-entities/{id}/members/{userId}','hash',enforceAuth:true),
+    'entity.sent.invites':const FableOperation('entity.sent.invites','GET',
+      '/managed-entities/{id}/invitations','hash',enforceAuth:true),
+    'entity.invite.revoke':const FableOperation('entity.invite.revoke','DELETE',
+      '/managed-entities/{id}/invitations/{invitationId}','hash',enforceAuth:true),
     'business.op':const FableOperation('business.op','GET','/business/me','hash',enforceAuth:true),
   }:const <String,FableOperation>{});
 Map<String,Object?> entity()=>{
@@ -194,6 +202,69 @@ void main(){
     final forged=FableManagedAccount.fromPayload({
       ...entity(),'memberships':[{'access':'MANAGER','active':true}]});
     expect(forged.isOwner,false);
+  });
+
+
+  test('Owner can page real members, remove nonowner and revoke sent invitations',()async{
+    final seen=<RequestOptions>[];
+    final session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        seen.add(req);
+        if(req.path=='/managed-entities/'+entityId+'/activate')return ok(req,{
+          'managedEntityId':entityId,'access':'OWNER',
+          'header':{'name':'X-Fable-Managed-Entity-Id','value':entityId}});
+        if(req.path=='/managed-entities/'+entityId+'/members')return ok(req,{
+          'items':[{'userId':entityId,'access':'OWNER','isOwner':true,
+              'username':'owner','joinedAt':'2026-09-01T00:00:00Z'},
+            {'userId':inviteId,'access':'VIEWER','isOwner':false,
+              'username':'viewer','joinedAt':'2026-09-02T00:00:00Z'}],
+          'nextCursor':null});
+        if(req.path=='/managed-entities/'+entityId+'/members/'+inviteId)
+          return ok(req,{'removed':true});
+        if(req.path=='/managed-entities/'+entityId+'/invitations')
+          return ok(req,{'items':[{
+            'id':inviteId,'access':'VIEWER','username':'invitee',
+            'expiresAt':'2026-11-30T00:00:00Z',
+          }],'nextCursor':null});
+        return ok(req,{'data':null,'code':'MANAGED_ENTITY_INVITATION_REVOKED'});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final owner=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'OWNER','active':true}]});
+    final selected=await repo.activate(owner);
+    final page=await repo.members(owner,selected);
+    expect(page.items.length,2);
+    expect(page.items.first.isOwner,true);
+    await expectLater(repo.removeMember(owner,selected,page.items.first),throwsStateError);
+    expect(await repo.removeMember(owner,selected,page.items.last),true);
+    final sent=await repo.sentInvitations(owner,selected);
+    expect(sent.items.single.username,'invitee');
+    await repo.revokeSentInvitation(owner,selected,sent.items.single);
+    expect(seen.any((x)=>x.method=='DELETE'&&
+      x.path=='/managed-entities/'+entityId+'/members/'+inviteId),true);
+    expect(seen.any((x)=>x.method=='DELETE'&&
+      x.path=='/managed-entities/'+entityId+'/invitations/'+inviteId),true);
+    session.identityRevision++;
+    await expectLater(repo.members(owner,selected),throwsStateError);
+  });
+  test('Membership and invitation pagination fails closed for forged access or cursor',()async{
+    final session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async=>
+        ok(req,{'items':[],'nextCursor':'https://attacker.test'})));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final entityOwner=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'OWNER','active':true}]});
+    final selected=FableManagedAccountSelection(id:entityId,access:'OWNER',
+      nameAr:'نادي الشاطئ',nameEn:'Beach Club',identityRevision:session.identityRevision);
+    await expectLater(repo.members(entityOwner,selected),throwsFormatException);
+    await expectLater(repo.members(entityOwner,selected,after:'bad'),throwsArgumentError);
+    final fake=FableManagedAccount.fromPayload(entity());
+    await expectLater(repo.members(fake,selected),throwsStateError);
+    await expectLater(repo.sentInvitations(fake,selected),throwsStateError);
   });
 
 }
