@@ -31,6 +31,17 @@ class FablePushDeviceRegistration {
       : _messaging=messaging??FirebaseMessaging.instance {
     bindings.verify(catalog);
     if(!const {'ios','android'}.contains(platform))throw ArgumentError('Use an Android or iOS mobile platform');
+    // Fable secure-session events are emitted after a committed login/logout.
+    // A device token must not remain attached to an earlier account locally.
+    if(gateway is FableAuthGateway){
+      _identityEvents=gateway.session.identityEvents.listen((event){
+        if(_registeredIdentityRevision!=null &&
+           _registeredIdentityRevision!=event.revision){
+          _registeredIdentityRevision=null;
+          _identityCleanup=_forgetAfterIdentityChange();
+        }
+      });
+    }
   }
   final BackendApiGateway gateway;
   final PushDeviceBindings bindings;
@@ -40,10 +51,14 @@ class FablePushDeviceRegistration {
   final FirebaseMessaging _messaging;
   StreamSubscription<String>? _tokens;
   StreamSubscription<RemoteMessage>? _foreground;
+  StreamSubscription<FableIdentityEvent>? _identityEvents;
+  Future<void>? _identityCleanup;
+  int? _registeredIdentityRevision;
   bool _disposed=false;
   bool get configured=>_tokens!=null;
 
   Future<bool> requestPermissionAndRegister({void Function()? onForegroundHint})async{
+    await _identityCleanup;
     if(_disposed||!isSessionCurrent())throw StateError('Verified authenticated session required');
     // User action must invoke this method; never prompt during app bootstrap.
     final p=await _messaging.requestPermission(alert:true,badge:true,sound:true,
@@ -78,6 +93,7 @@ class FablePushDeviceRegistration {
   /// Call when the app becomes active again after permissions/APNs registration
   /// or a transient network error. Does not display the OS permission dialog.
   Future<bool> retryRegistrationOnResume()async{
+    await _identityCleanup;
     if(_disposed||!isSessionCurrent())return false;
     final settings=await _messaging.getNotificationSettings();
     if(settings.authorizationStatus!=AuthorizationStatus.authorized&&
@@ -92,21 +108,44 @@ class FablePushDeviceRegistration {
   Future<void> _register(String token)async{
     if(_disposed||!isSessionCurrent())return;
     if(token.length<20||token.length>4096)throw StateError('Invalid FCM token');
+    final fable=gateway is FableAuthGateway?gateway as FableAuthGateway:null;
+    final identity=fable?.session.identityRevision;
     await gateway.execute(bindings.register,body:{'token':token,'platform':platform,
       if(deviceId!=null)'deviceId':deviceId,
       if(appKey!=null)'appKey':appKey,
       if(channel!=null)'channel':channel,
       'clientPlatform':platform=='ios'?'IOS':'ANDROID'});
+    if(_disposed || !isSessionCurrent() ||
+       (identity!=null && fable!.session.identityRevision!=identity)){
+      // A late successful registration belongs to a revoked/replaced login.
+      _registeredIdentityRevision=null;
+      _identityCleanup=_forgetAfterIdentityChange();
+      await _identityCleanup;
+      return;
+    }
+    _registeredIdentityRevision=identity;
+  }
+  Future<void> _forgetAfterIdentityChange()async{
+    // Do not make a privileged unregister request using a replaced identity.
+    // Backend session-revocation events delete server token associations.
+    await _tokens?.cancel();_tokens=null;
+    await _foreground?.cancel();_foreground=null;
+    if(!_disposed)await _messaging.deleteToken();
   }
   /// Logout calls this BEFORE revoking the session if online; the backend
   /// also revokes push device associations on session logout independently.
   Future<void> unregisterCurrent()async{
+    await _identityCleanup;
+    _registeredIdentityRevision=null;
     await _tokens?.cancel();_tokens=null;
     await _foreground?.cancel();_foreground=null;
     if(isSessionCurrent())await gateway.execute(bindings.unregister);
     await _messaging.deleteToken();
   }
   Future<void> dispose()async{
-    _disposed=true;await _tokens?.cancel();await _foreground?.cancel();
+    _disposed=true;
+    await _identityEvents?.cancel();
+    await _identityCleanup;
+    await _tokens?.cancel();await _foreground?.cancel();
   }
 }
