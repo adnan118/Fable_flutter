@@ -49,7 +49,7 @@ function registry(features) {
     "\nconst List<FableFeature> installedFeatures = <FableFeature>[\n"+
     descriptors+"\n];\n";
 }
-export function planFeatureSync(root,verified){
+export function planFeatureSync(root,verified,{prune=false}={}){
   if(verified?.kind!=='fable.flutter-frontend-setup'||verified.backendAuthority!==true||
      verified.source!=='backend-contract-export'||typeof verified.contractHash!=='string')
      throw Error('Verified Fable Backend project setup required for feature sync');
@@ -84,6 +84,14 @@ export function planFeatureSync(root,verified){
   const review=new Set(declared.clientOnlyReview);
   const disabled=KNOWN.filter(x=>!enabled.has(x)&&!review.has(x));
   const rootDir=resolve(root);
+  if(prune){
+    const pubspec=join(rootDir,'pubspec.yaml');
+    const featuresPath=join(rootDir,'.fable/project-features.json');
+    if(existsSync(pubspec)&&existsSync(featuresPath)&&
+      /^name:\\s*ci_fable\\s*$/m.test(readFileSync(pubspec,'utf8'))&&
+      json(featuresPath).app==='apps/ci_fable')
+      throw Error('Refusing to prune the reusable ci_fable starter. Generate and identify a real Flutter project first.');
+  }
   const local=existsSync(join(rootDir,'.fable','mobile-features.json'))?
     json(join(rootDir,'.fable','mobile-features.json')):null;
   const externalProjectFeatures=existsSync(join(rootDir,'.fable','project-features.json'))?
@@ -196,7 +204,7 @@ function applyPrune(root,plan,{prune=false}={}){
 }
 export function syncProjectFeatures(root,verified,{apply=false,prune=false}={}){
   if(prune&&!apply)throw Error('--prune requires --apply');
-  const plan=planFeatureSync(root,verified);
+  const plan=planFeatureSync(root,verified,{prune});
   if(!apply)return {applied:false,...plan};
   return {...plan,...applyPrune(root,plan,{prune})};
 }
