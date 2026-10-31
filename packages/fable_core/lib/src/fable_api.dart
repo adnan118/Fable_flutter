@@ -72,7 +72,8 @@ class UnifiedApiClient implements BackendApiGateway {
   Future<bool>? _refreshing;
   int? _refreshingIdentity;
   Future<Response<dynamic>> request(String operationId,{Map<String,dynamic>? path,
-    Map<String,dynamic>? query,Object? body,bool? authorized,CancelToken? cancelToken,String? ifMatch}) async {
+    Map<String,dynamic>? query,Object? body,bool? authorized,CancelToken? cancelToken,
+    String? ifMatch,String? securityChallengeId,String? managedEntityId}) async {
     final op=contract.require(operationId);
     // A quote revision must come from an immediately preceding authoritative
     // server GET; never let shared cache/ARB supply a payment precondition.
@@ -111,6 +112,29 @@ class UnifiedApiClient implements BackendApiGateway {
     }
     final headers=await adapter.headersFor(op,session);
     if (ifMatch != null) headers['If-Match']='"$ifMatch"';
+    if(securityChallengeId!=null){
+      const eligiblePaths={'/auth/sessions/revoke-selected','/auth/logout-all',
+        '/auth/sessions/{id}/revoke'};
+      final uuid=RegExp(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+        caseSensitive:false);
+      if(contract is! FableContract || adapter is! FableTransportAdapter ||
+         !op.requiresAuth || op.credentialHeader!=null ||
+         op.method!='POST'||!eligiblePaths.contains(op.path)||
+         !uuid.hasMatch(securityChallengeId)){
+        throw ArgumentError('Security challenge is not authorized for this verified Fable operation');
+      }
+      headers['X-Security-Challenge-Id']=securityChallengeId;
+    }
+    if(managedEntityId!=null){
+      final uuid=RegExp(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+        caseSensitive:false);
+      if(contract is! FableContract || adapter is! FableTransportAdapter ||
+         !op.requiresAuth || op.credentialHeader!=null ||
+         op.path.startsWith('/auth/') || !uuid.hasMatch(managedEntityId)){
+        throw ArgumentError('Managed entity context cannot be used for this operation');
+      }
+      headers['X-Fable-Managed-Entity-Id']=managedEntityId;
+    }
     // Authentication is controlled by the verified operation contract,
     // never by an untrusted header map or a feature-level guess.
     if (headers.keys.any((key) => const <String>{

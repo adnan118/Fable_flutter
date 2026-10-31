@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'package:fable_design_system/fable_design_system.dart';
+import 'managed_accounts_repository.dart';
+import 'managed_accounts_page.dart';
 
 /// Safe Fable core account view. A project-specific Profile remains a separate
 /// capability and needs its own declared contract and screens.
@@ -135,6 +137,16 @@ class _FableAccountPageState extends State<FableAccountPage> {
         if(_supported) FilledButton(onPressed:_busy?null:_read,
           child:Text(ar?'تحميل بيانات الحساب':'Load account')),
         const SizedBox(height:20),
+        if(_supported && FableManagedAccountsRepository(
+          _gateway ??= FableAuthGateway(baseUri:Uri.parse(_url),
+            contract:widget.contract,allowHttpForLocalDevelopment:kDebugMode),
+          widget.contract).canList)
+          FilledButton.tonal(
+            onPressed:_busy?null:()=>Navigator.of(context).push(
+              MaterialPageRoute<void>(builder:(_)=>FableManagedAccountsPage(
+                gateway:_gateway!,contract:widget.contract))),
+            child:Text(ar?'إدارة الكيانات التابعة لي':'My managed entities')),
+        const SizedBox(height:12),
         Text(ar?'هذا عرض الحساب الأساسي فقط. بيانات الملف الشخصي الخاصة بالمشروع تتطلب عقد Profile منفصلًا.'
           :'This is the core account only. Project-specific Profile fields require a separate backend contract.',
           textAlign:TextAlign.center),
