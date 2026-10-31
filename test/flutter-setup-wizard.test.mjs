@@ -54,6 +54,9 @@ function fixture(){
   handoff.backend.contractHash=contract.contractHash;
   handoff.backend.project={id:contract.project.id,name:contract.project.name};
   handoff.frontendSetup=frontendSetup;
+  // The sample Flutter starter ships with an explicit all-features selection.
+  // A new Backend project has not authorized remote capabilities it lacks.
+  handoff.selection={...handoff.selection,mode:'advisory',features:null};
   delete handoff.manifestHash;
   handoff.manifestHash=digest(handoff);
   write(join(dir,'flutter-handoff.json'),handoff);
