@@ -73,6 +73,7 @@ class _AppState extends State<FableStarterApp> {
     final nav=FableNotificationNavigation.instance.navigatorKey.currentState;
     if(nav==null)return false;
     for(final feature in installedFeatures){
+      if(snapshot.fableContract!=null && !snapshot.fableContract!.isFeatureAvailable(feature.id))continue;
       if(feature.id!=target)continue;
       Widget? page;
       if(snapshot.fableContract!=null){page=feature.screen(snapshot.fableContract!);}
@@ -162,6 +163,8 @@ class _AppState extends State<FableStarterApp> {
         final backend=connection.backend;
         final label=backend.isFable?'Fable Backend':backend.adapter=='openapi'?'Other Backend · OpenAPI':'Other Backend · Custom API';
         final ready=connection.fableContract!=null || connection.externalContract!=null;
+        final availableFeatures=installedFeatures.where((feature)=>
+          connection.fableContract?.isFeatureAvailable(feature.id) ?? true).toList(growable:false);
         return LayoutBuilder(builder:(context,constraints){
           final columns=constraints.maxWidth>900?4:constraints.maxWidth>580?3:2;
           return CustomScrollView(slivers:[
@@ -179,10 +182,10 @@ class _AppState extends State<FableStarterApp> {
                       :'Local capabilities can be explored. Network operations remain disabled until a matching backend adapter and contract are configured.')),
               ]))),
             SliverPadding(padding:const EdgeInsets.all(12),sliver:SliverGrid.builder(
-              itemCount:installedFeatures.length,
+              itemCount:availableFeatures.length,
               gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:columns,childAspectRatio:1.5,
                 mainAxisSpacing:10,crossAxisSpacing:10),
-              itemBuilder:(context,index){final feature=installedFeatures[index];
+              itemBuilder:(context,index){final feature=availableFeatures[index];
                 return Card(child:InkWell(borderRadius:BorderRadius.circular(18),onTap:(){
                   if(connection.fableContract!=null){Navigator.of(context).push(MaterialPageRoute<void>(
                     builder:(_)=>feature.screen(connection.fableContract!)));
