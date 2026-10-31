@@ -299,6 +299,38 @@ class FableAuthGateway implements BackendApiGateway {
     // Never silently sign out a different local identity.
     return data['revoked'] as bool;
   }
+  bool get canRevokeSelectedSessions => _contract.operations.values.any(
+    (op)=>op.path=='/auth/sessions/revoke-selected' && op.method=='POST' &&
+      op.requiresAuth && op.credentialHeader==null);
+
+  /// Server-owned bulk revocation. Never loop revoke-one calls (each may
+  /// require a distinct consumed step-up proof).
+  Future<List<String>> revokeSelectedSessions(List<String> ids,{
+    FableVerifiedSensitiveProof? proof,
+  })async {
+    final selected=ids.toSet().toList(growable:false);
+    if(selected.isEmpty||selected.length>100||selected.any((id)=>!_uuid.hasMatch(id)))
+      throw ArgumentError('Select 1-100 distinct, valid active session IDs');
+    final revision=session.identityRevision;
+    if(proof!=null&&proof._identityRevision!=revision)
+      throw StateError('Security proof belongs to another identity');
+    final response=await _api.request(
+      _route('/auth/sessions/revoke-selected','POST'),
+      body:{'sessionIds':selected},securityChallengeId:proof?._challengeId);
+    if(session.identityRevision!=revision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data);
+    final revoked=data['sessionIds'],current=data['currentSessionRevoked'];
+    if(revoked is! List||revoked.any((id)=>id is! String||
+        !selected.contains(id)) ||
+       revoked.length!=revoked.toSet().length||
+       data['revoked'] is! int||data['revoked']!=revoked.length||
+       current is! bool)
+      throw const FormatException('Backend returned an invalid selected-session revocation');
+    if(current)await session.clearSessionIfIdentity(revision);
+    return List<String>.unmodifiable(revoked.cast<String>());
+  }
+
   Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
     final rev=session.identityRevision;
     if(proof!=null && proof._identityRevision!=rev)
