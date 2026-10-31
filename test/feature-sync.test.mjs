@@ -70,7 +70,9 @@ test('Backend decisions hide inactive features, safely archive and prune unused 
     assert.ok(applied.prunedPackages.includes('packages/features/fable_support'));
     assert.equal(existsSync(join(f.root,'packages/features/fable_notifications')),true);
     assert.equal(existsSync(join(f.root,'packages/features/fable_support')),false);
-    assert.ok(existsSync(join(f.root,applied.backup,'lib/src/app.dart')));
+    assert.ok(existsSync(join(f.root,applied.backup,'pubspec.yaml')));
+    // Native/hybrid notifications are protected, so app.dart need not change or be archived.
+    assert.ok(existsSync(join(f.root,'lib/src/app.dart')));
     assert.ok(existsSync(join(f.root,'packages/features/fable_auth')));
     assert.ok(existsSync(join(f.root,'packages/features/fable_offline')));
     assert.ok(!applied.prunedPackages.includes('packages/features/fable_offline'));
