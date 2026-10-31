@@ -33,8 +33,9 @@ class FablePushDeviceRegistration {
     if(!const {'ios','android'}.contains(platform))throw ArgumentError('Use an Android or iOS mobile platform');
     // Fable secure-session events are emitted after a committed login/logout.
     // A device token must not remain attached to an earlier account locally.
-    if(gateway is FableAuthGateway){
-      _identityEvents=gateway.session.identityEvents.listen((event){
+    final fableGateway=gateway is FableAuthGateway?gateway as FableAuthGateway:null;
+    if(fableGateway!=null){
+      _identityEvents=fableGateway.session.identityEvents.listen((event){
         if(_registeredIdentityRevision!=null &&
            _registeredIdentityRevision!=event.revision){
           _registeredIdentityRevision=null;
