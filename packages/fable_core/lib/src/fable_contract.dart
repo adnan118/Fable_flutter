@@ -77,7 +77,12 @@ class FableContract implements OperationCatalog {
     if(features is! Map)return null;
     final ids=features['enabled'];
     if(ids is! List)return null;
-    return Set<String>.unmodifiable(ids.whereType<String>());
+    final supported=ids.whereType<String>();
+    if(selectionMode!='explicit')return Set<String>.unmodifiable(supported);
+    const requiredCore=<String>{'auth','access_control'};
+    return Set<String>.unmodifiable(supported.where(
+      (id)=>requiredCore.contains(id)||featureIds.contains(id)));
+
   }
   bool isFeatureAvailable(String featureId) =>
     backendVisibleFeatureIds?.contains(featureId) ?? true;
