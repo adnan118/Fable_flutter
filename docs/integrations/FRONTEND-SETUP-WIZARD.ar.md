@@ -107,6 +107,50 @@ node tools/flutter-setup-wizard.mjs --mode manual --source ../backend/dist/clien
 
 **التسليم التنفيذي:** Backend PR #8، Flutter PR #5. لا تعتبر ملفات البداية Fixture إقراراً بالجاهزية للإنتاج.
 
+## التمييز الإلزامي بين قدرة الباك وقرار Flutter
+
+تعتمد أداة المزامنة الآن على **تصنيف ثابت مملوك لـFlutter** وليس على استنتاج أسماء الميزات من Backend:
+
+| النوع | الميزات | قرار الحذف |
+|---|---|---|
+| Backend-only (خادم) | auth, support, social, realtime, messaging, payments, content | يمكن إزالة الحزمة اختيارياً **فقط** عند غياب قدرة الباك، وبعد فحص استيراداتها واستثناء Auth الأساسية |
+| Frontend-only (محلي) | deeplinks, offline | لا يحذفها الباك مطلقاً؛ قرارها محلي في Flutter |
+| Hybrid (مشترك) | profile, notifications, media, localization, biometrics, location, analytics, access_control | تحافظ المزامنة على حزمها حتى لو لم يفعّل الباك الـAPI المقابل؛ تُخفى العمليات البعيدة غير المدعومة |
+
+**القاعدة:** `Backend disabled` لا يعني `Flutter package unused`. مثال: يظل الوصول إلى الصور المحلية صالحاً ولو كان رفع الوسائط إلى الخادم معطّلاً. وكذلك الإشعارات المحلية والخرائط على الجهاز والـOffline وDeep Links.
+
+يُسجَّل القرار المحلي بصورة مستقلة في:
+- `.fable/frontend-owned-decisions.json`
+- `assets/config/frontend-owned-decisions.json`
+
+هذا الملف لا يحتوي مفاتيح سرية ولا يمنح صلاحيات على Backend، ولا يعيد استيراد الباك كتابته فوق اختيارات المستخدم.
+
+قراءة قرارات Flutter الخاصة:
+
+```bash
+pnpm wizard:frontend
+```
+
+لتفعيل Offline محلياً مع المعاينة وطلب كتابة «اعتمد»:
+
+```bash
+pnpm wizard:frontend offline on
+```
+
+لإيقافها من الواجهة دون حذف الحزمة:
+
+```bash
+pnpm wizard:frontend offline off
+```
+
+ولإرجاع القرار إلى حالة المراجعة:
+
+```bash
+pnpm wizard:frontend offline review
+```
+
+القيم `on/off/review` تخص الواجهة **فقط**؛ لا تفعّل Backend Sync ولا تتجاوز أذونات الخادم. ولا تُظهر الأداة واجهة تعتمد على API غائب. كل Hybrid تحتاج ربطاً مستقلاً لمساراتها المحلية والخلفية مع اختبارات حقيقية.
+
 ## مطابقة الميزات وإخفاؤها ثم حذف غير المستخدم
 
 ينشر الباك قائمة `decisions.frontendFeatures.enabled` المبنية على الـCapabilities المثبتة. لا يختلق الفرونت قوائم مستقلة؛ الشاشة الرئيسية ومسارات الإشعارات لا تعرض ولا تفتح الميزات الموجودة خارج القائمة.
