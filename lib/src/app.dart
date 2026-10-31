@@ -23,11 +23,12 @@ class FableStarterApp extends StatefulWidget {
 }
 
 class _Bootstrap {
-  const _Bootstrap(this.backend,this.fableContract,this.externalContract,this.externalBindings);
+  const _Bootstrap(this.backend,this.fableContract,this.externalContract,this.externalBindings,this.externalAuthBinding);
   final BackendSelection backend;
   final FableContract? fableContract;
   final ExternalOperationCatalog? externalContract;
   final ExternalFeatureBindings? externalBindings;
+  final ExternalAuthBinding? externalAuthBinding;
 }
 
 class _AppState extends State<FableStarterApp> {
@@ -45,7 +46,9 @@ class _AppState extends State<FableStarterApp> {
           credentials=auth.session;
           auth.dispose();
         }
-      } else if(snapshot.externalContract!=null){
+      } else if(snapshot.externalContract!=null && snapshot.externalAuthBinding!=null){
+        // An external catalog without a verified Auth binding is NOT evidence
+        // of authentication. Never unlock push navigation from stale credentials.
         credentials=ExternalAuthGateway.secureSessionFor(snapshot.externalContract!);
       }
       if(!mounted||credentials==null)return;
@@ -73,10 +76,12 @@ class _AppState extends State<FableStarterApp> {
     final nav=FableNotificationNavigation.instance.navigatorKey.currentState;
     if(nav==null)return false;
     for(final feature in installedFeatures){
+      if(snapshot.fableContract!=null && !snapshot.fableContract!.isFeatureAvailable(feature.id))continue;
       if(feature.id!=target)continue;
       Widget? page;
       if(snapshot.fableContract!=null){page=feature.screen(snapshot.fableContract!);}
       else if(snapshot.externalContract!=null){
+        if(feature.id=='auth'&&snapshot.externalAuthBinding==null)return false;
         page=feature.externalScreen(snapshot.externalContract!,
           snapshot.externalBindings??ExternalFeatureBindings.empty());
       }
@@ -104,12 +109,15 @@ class _AppState extends State<FableStarterApp> {
       final catalog=await ExternalOperationCatalog.fromAssets(rootBundle);
       if (catalog.adapter!=backend.adapter)throw const FormatException('Backend adapter mismatch');
       final bindings=await ExternalFeatureBindings.loadOptional(rootBundle,catalog);
-      return _Bootstrap(backend,null,catalog,bindings);
+      // A non-Fable login screen is unavailable until its explicit credential
+      // projections and operation IDs match this external API catalog.
+      final authBinding=await ExternalAuthBinding.loadOptional(rootBundle,catalog);
+      return _Bootstrap(backend,null,catalog,bindings,authBinding);
     }
-    if (!backend.canUseFableContract) return _Bootstrap(backend,null,null,null);
-    // Fail closed on mismatched / tampered contract. No guessed API paths.
+    if (!backend.canUseFableContract) return _Bootstrap(backend,null,null,null,null);
+    // Fable-specific contracts are never loaded for an external Backend.
     final contract=await FableContract.fromAssets(rootBundle);
-    return _Bootstrap(backend,contract,null,null);
+    return _Bootstrap(backend,contract,null,null,null);
   }
 
   @override Widget build(BuildContext context) => MaterialApp(
@@ -162,27 +170,42 @@ class _AppState extends State<FableStarterApp> {
         final backend=connection.backend;
         final label=backend.isFable?'Fable Backend':backend.adapter=='openapi'?'Other Backend · OpenAPI':'Other Backend · Custom API';
         final ready=connection.fableContract!=null || connection.externalContract!=null;
+        final availableFeatures=installedFeatures.where((feature){
+          final fable=connection.fableContract;
+          if(fable!=null)return fable.isFeatureAvailable(feature.id);
+          final external=connection.externalContract;
+          if(external==null)return false; // No verified contract: no invented UI.
+          if(feature.id=='auth')return connection.externalAuthBinding!=null;
+          final bindings=connection.externalBindings??ExternalFeatureBindings.empty();
+          if(feature.externalScreen(external,bindings)!=null)return true;
+          // Only an explicit, parameter-free GET mapping is a debug preview.
+          if(!kDebugMode)return false;
+          final readOperation=bindings.operation(feature.id,'read');
+          if(readOperation==null||!external.supports(readOperation))return false;
+          final op=external.require(readOperation);
+          return op.method=='GET'&&!op.path.contains('{');
+        }).toList(growable:false);
         return LayoutBuilder(builder:(context,constraints){
           final columns=constraints.maxWidth>900?4:constraints.maxWidth>580?3:2;
           return CustomScrollView(slivers:[
             SliverPadding(padding:const EdgeInsets.all(18),sliver:SliverToBoxAdapter(
               child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Text(isAr?'الميزات المتاحة':'Installed capabilities',style:Theme.of(context).textTheme.headlineMedium),
+                Text(isAr?'الواجهات المدعومة بعقد الباك المختار':'Contract-bound screens',style:Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height:8),Text(label,style:Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height:4),
                 Text(ready
                   ? (isAr?'عقد Backend مستورد محليًا؛ لم يتم اختبار اتصال الخادم بعد':'Backend catalog imported locally; live server connectivity not verified')
-                  : (isAr?'بانتظار تهيئة الاتصال لهذا الـBackend':'Backend integration pending configuration'),
+                  : (isAr?'بانتظار استيراد عقد موثّق للباك المختار؛ لا توجد واجهات شبكة مفعلة':'Waiting for a verified contract for the selected Backend; no network screens are enabled'),
                   style:Theme.of(context).textTheme.bodySmall),
                 if(!ready) Padding(padding:const EdgeInsets.only(top:8),child:Text(
-                  isAr?'الميزات المحلية قابلة للعرض. عمليات الشبكة لا تعمل حتى إعداد Adapter والعقود الخاصة بالخادم المختار.'
-                      :'Local capabilities can be explored. Network operations remain disabled until a matching backend adapter and contract are configured.')),
+                  isAr?'تبقى الميزات المحلية محفوظة، ولا تظهر هنا شاشات أو مسارات باك غير موثّقة.'
+                      :'Local features stay installed; unverified Backend screens and routes remain hidden.')),
               ]))),
             SliverPadding(padding:const EdgeInsets.all(12),sliver:SliverGrid.builder(
-              itemCount:installedFeatures.length,
+              itemCount:availableFeatures.length,
               gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:columns,childAspectRatio:1.5,
                 mainAxisSpacing:10,crossAxisSpacing:10),
-              itemBuilder:(context,index){final feature=installedFeatures[index];
+              itemBuilder:(context,index){final feature=availableFeatures[index];
                 return Card(child:InkWell(borderRadius:BorderRadius.circular(18),onTap:(){
                   if(connection.fableContract!=null){Navigator.of(context).push(MaterialPageRoute<void>(
                     builder:(_)=>feature.screen(connection.fableContract!)));
