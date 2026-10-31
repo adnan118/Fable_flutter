@@ -1,0 +1,13 @@
+{
+  "name": "fable-flutter-wizard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.10.1",
+  "scripts": {
+    "wizard": "node tools/flutter-setup-wizard.mjs",
+    "wizard:review": "node tools/flutter-setup-wizard.mjs --mode guided",
+    "wizard:verify": "node tools/verify-fable-contract.mjs --mode source",
+    "test:wizard": "node --test test/flutter-setup-wizard.test.mjs test/feature-sync.test.mjs test/backend-feature-parity-audit.test.mjs"
+  }
+}
