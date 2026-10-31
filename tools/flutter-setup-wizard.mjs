@@ -117,6 +117,30 @@ export function manualFrontendDecisions(input) {
       instructions:'Explicitly integrate and verify an external Backend. Manual declarations never authorize or enforce operations.'},
   };
 }
+// Manual review with a Fable Backend still uses the signed Backend as authority.
+// Only supplied fields are compared, and client-only UI preferences can differ.
+export function reconcileManualWithBackend(manual,verified) {
+  if(manual?.projectId!==verified?.projectId)throw Error('Manual project ID does not match verified Backend');
+  const authoritative=verified.decisionSnapshot?.decisions;
+  if(!authoritative)throw Error('Verified backend decisions unavailable');
+  function assertSubset(candidate,original,path='decisions'){
+    if(candidate===null || typeof candidate!=='object'||Array.isArray(candidate)){
+      if(JSON.stringify(candidate)!==JSON.stringify(original))throw Error('Manual choice conflicts with Backend: '+path);
+      return;
+    }
+    if(!original||typeof original!=='object')throw Error('Unknown backend choice: '+path);
+    for(const [key,value] of Object.entries(candidate)){
+      if(!(key in original))throw Error('Unknown backend choice: '+path+'.'+key);
+      assertSubset(value,original[key],path+'.'+key);
+    }
+  }
+  assertSubset(manual.decisions,authoritative);
+  return {...verified,mode:'manual-review',
+    uiPreferences:{...verified.uiPreferences,navigation:'developer-reviewed'},
+    implementation:{...verified.implementation,
+      instructions:'Manual choices were checked against the verified Fable Backend; build and runtime authorization remain backend-owned.'}};
+}
+
 export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={}){
   const project=resolve(root);
   if(snapshot?.kind!=='fable.flutter-frontend-setup')throw Error('Refusing unsupported frontend setup');
@@ -128,7 +152,7 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
     output:[OUTPUT_PATH,PROJECT_PATH],
   };
   if(!apply)return summary;
-  if(snapshot.mode==='import'){
+  if(snapshot.backendAuthority===true){
     if(!sourceDir)throw Error('Cannot apply imported backend setup without source directory');
     const dir=sourceFiles(sourceDir);
     const contract=asJson(join(dir,'contract.json'));
@@ -191,13 +215,23 @@ async function main(){
   const opt=explicitKeys(process.argv.slice(2));
   if(!['import','manual'].includes(opt.mode))throw Error('Use --mode import|manual');
   const root=resolve(opt.out??process.cwd());
-  const input=opt.mode==='import'?
-    importBackendDecisions(opt.source??root,{
+  const imported=opt.source?importBackendDecisions(opt.source,{
+    expectedProjectId:opt['expected-project-id']??null,
+    expectedContractHash:opt['expected-contract-hash']??null,
+  }):null;
+  const input=opt.mode==='import'
+    ? (imported??importBackendDecisions(root,{
       expectedProjectId:opt['expected-project-id']??null,
       expectedContractHash:opt['expected-contract-hash']??null,
-    }):manualFrontendDecisions(opt.interactive?
-      await interactiveManual():asJson(resolve(opt.file??'')));
-  const result=saveFrontendSetup(root,input,{apply:!!opt.apply,sourceDir:opt.mode==='import'?(opt.source??root):null});
+    }))
+    : (()=>{
+        if(!opt.interactive && !opt.file)throw Error('Manual mode requires --file or --interactive');
+        return null;
+      })();
+  const snapshot=opt.mode==='manual'?
+    manualFrontendDecisions(opt.interactive?await interactiveManual():asJson(resolve(opt.file))):input;
+  const effective=(opt.mode==='manual' && imported)?reconcileManualWithBackend(snapshot.decisionSnapshot,imported):snapshot;
+  const result=saveFrontendSetup(root,effective,{apply:!!opt.apply,sourceDir:opt.mode==='import'?(opt.source??root):opt.source??null});
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
