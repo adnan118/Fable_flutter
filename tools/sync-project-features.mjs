@@ -59,6 +59,12 @@ export function planFeatureSync(root,verified,{prune=false}={}){
      declared.source!=='backend-installed-capabilities' ||
      !Array.isArray(declared.enabled)||!Array.isArray(declared.disabled)||
      !Array.isArray(declared.clientOnlyReview))throw Error('Backend did not publish complete feature decisions');
+  const inventoryIds=[...declared.enabled,...declared.disabled,...declared.clientOnlyReview];
+  if(inventoryIds.length!==KNOWN.length ||
+     new Set(inventoryIds).size!==KNOWN.length ||
+     inventoryIds.some(id=>!KNOWN.includes(id))){
+    throw Error('Backend omitted, duplicated or invented a Flutter feature decision. Re-export a complete inventory.');
+  }
   const selection=verified.frontendSelection??{mode:'advisory',features:null};
   const requested=selection.mode==='explicit' ? new Set(selection.features??[]) : null;
   if(requested && [...requested].some(id=>!KNOWN.includes(id)))
