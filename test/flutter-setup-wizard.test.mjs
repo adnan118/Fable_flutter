@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,copyFileSync,rmSync,exi
 import {resolve,join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
-import {importBackendDecisions,manualFrontendDecisions,saveFrontendSetup} from '../tools/flutter-setup-wizard.mjs';
+import {importBackendDecisions,manualFrontendDecisions,reconcileManualWithBackend,saveFrontendSetup} from '../tools/flutter-setup-wizard.mjs';
 
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?
@@ -90,4 +90,22 @@ test('Manual mode produces a clearly unverified frontend draft only',()=>{
   assert.equal(manual.projectBound,false);
   assert.equal(manual.implementation.status,'unverified-backend-bindings');
   assert.throws(()=>manualFrontendDecisions({projectId:'a',decisions:{},steps:[]}));
+});
+
+test('Manually entered Fable decisions must exactly match the imported Backend choices',()=>{
+  const f=fixture();
+  try{
+    const verified=importBackendDecisions(f.dir);
+    const accepted=manualFrontendDecisions({schemaVersion:1,
+      kind:'manual.frontend-setup-decisions',projectId:f.contract.project.id,
+      decisions:{authentication:{sessions:{mode:'multi',maxActive:0}}},
+      steps:[{id:'authentication'}]});
+    const result=reconcileManualWithBackend(accepted.decisionSnapshot,verified);
+    assert.equal(result.backendAuthority,true);
+    assert.equal(result.mode,'manual-review');
+    const conflicting=manualFrontendDecisions({schemaVersion:1,
+      kind:'manual.frontend-setup-decisions',projectId:f.contract.project.id,
+      decisions:{authentication:{sessions:{mode:'single'}}},steps:[]});
+    assert.throws(()=>reconcileManualWithBackend(conflicting.decisionSnapshot,verified),/conflicts/);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
 });
