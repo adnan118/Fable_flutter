@@ -31,7 +31,7 @@ void main(){
   expect(()=>FableStructuredText.parse({'type':'script','text':'evil'}),
     throwsFormatException);
   expect(()=>FableStructuredText.parse({'type':'doc','content':[
-   {'type':'paragraph','content':[{'type':'text','text':'a'*20001}]}
+   {'type':'paragraph','content':[{'type':'text','text':List.filled(20001,'a').join()}]}
   ]}),throwsFormatException);
   final nested={'type':'doc','content':[
    {'type':'paragraph','content':[{'type':'text','text':'tiny'}]}
