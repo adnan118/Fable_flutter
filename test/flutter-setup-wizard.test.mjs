@@ -190,11 +190,12 @@ test('Guided Flutter wizard starts by asking whether to import Backend decisions
       root:f.root,source:f.dir,
       ask:async prompt=>{
         prompts.push(prompt);
-        return prompts.length===1?'نعم':'لا';
+        return prompts.length<=2?'نعم':'لا';
       },show:line=>shown.push(line),
     });
-    assert.match(prompts[0],/هل تريد استيراد قرارات Fable Backend/);
-    assert.match(prompts[1],/اعتمد/);
+    assert.match(prompts[0],/هل الباك المستخدم لهذا المشروع هو Fable/);
+    assert.match(prompts[1],/هل تريد استيراد قرارات Fable Backend/);
+    assert.match(prompts[2],/اعتمد/);
     assert.equal(result.cancelled,true);
     assert.ok(shown[0].includes('قرارات الباك الكاملة'));
     assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
@@ -212,9 +213,15 @@ test('Declining backend import allows separate manual wizard after independent r
         return '';
       },show:()=>{},
     });
-    assert.match(prompts[0],/هل تريد استيراد قرارات Fable Backend/);
+    assert.match(prompts[0],/هل الباك المستخدم لهذا المشروع هو Fable/);
+    assert.match(prompts[1],/نوع عقد الباك الآخر/);
     assert.equal(result.applied,true);
     assert.equal(read(join(f.root,'assets/config/frontend-setup.json')).backendAuthority,false);
+    const backend=read(join(f.root,'assets/config/backend.json'));
+    assert.equal(backend.backend.kind,'other');
+    assert.equal(backend.backend.adapter,'openapi');
+    assert.equal(backend.backend.status,'pending');
+    assert.equal(backend.contractImported,false);
     assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
@@ -251,5 +258,64 @@ test('Backend re-import preserves independent frontend hybrid/local decisions',(
     assert.equal(local.choices.deeplinks.enabled,null);
     assert.ok(formatFrontendSetupReview(snapshot,{root:f.root}).includes('محلية بالكامل'));
     assert.ok(formatFrontendSetupReview(snapshot,{root:f.root}).includes('مشتركة'));
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('Non-Fable choice without approval cannot retain an active Fable backend',async()=>{
+  const f=fixture(),prompts=[];
+  try{
+    write(join(f.root,'assets/config/backend.json'),{
+      schemaVersion:1,kind:'fable.mobile-backend-configuration',
+      backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
+      contractImported:true,
+    });
+    const result=await runGuidedFlutterSetup({
+      root:f.root,ask:async prompt=>{
+        prompts.push(prompt);
+        if(prompts.length===1)return 'لا';
+        if(prompts.length===2)return 'custom';
+        if(prompt.includes('اكتب «اعتمد»'))return 'APPROVE';
+        return '';
+      },show:()=>{},
+    });
+    assert.equal(result.applied,true);
+    const config=read(join(f.root,'assets/config/backend.json'));
+    assert.equal(config.backend.kind,'other');
+    assert.equal(config.backend.adapter,'custom');
+    assert.equal(config.backend.status,'pending');
+    assert.equal(config.contractImported,false);
+    assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
+    const setup=read(join(f.root,'assets/config/frontend-setup.json'));
+    assert.equal(setup.backendAuthority,false);
+    assert.equal(setup.decisionSnapshot.decisions.authentication.status,'unverified-external-contract');
+    assert.equal(setup.decisionSnapshot.decisions.authentication.sessions,null);
+    assert.equal(setup.decisionSnapshot.decisions.accounts.managedEntities,null);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Non-Fable selection refuses backend-based feature deletion before any file changes',async()=>{
+  const f=fixture();try{
+    const prompts=[];
+    await assert.rejects(runGuidedFlutterSetup({
+      root:f.root,prune:true,
+      ask:async msg=>{prompts.push(msg);return 'لا';},show:()=>{},
+    }),/Cannot prune based on Fable capabilities/);
+    assert.equal(prompts.length,1);
+    assert.equal(existsSync(join(f.root,'assets/config/backend.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Fable selection must separately approve importing its published decisions',async()=>{
+  const f=fixture(),prompts=[];
+  try{
+    const result=await runGuidedFlutterSetup({
+      root:f.root,source:f.dir,
+      ask:async question=>{
+        prompts.push(question);
+        return prompts.length===1?'نعم':'لا';
+      },show:()=>{},
+    });
+    assert.equal(result.applied,false);
+    assert.equal(result.reason,'handoff-not-imported');
+    assert.equal(prompts.length,2);
+    assert.equal(existsSync(join(f.root,'assets/config/backend.json')),false);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
