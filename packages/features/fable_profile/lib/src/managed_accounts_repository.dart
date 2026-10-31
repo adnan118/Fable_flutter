@@ -7,9 +7,11 @@ class FableManagedAccount {
     required this.id,required this.type,required this.nameAr,
     required this.nameEn,required this.status,required this.visibility,
     required this.collaborationEnabled,required this.managersCanInvite,
+    this.isOwner=false,
   });
   final String id,type,nameAr,nameEn,status,visibility;
   final bool collaborationEnabled,managersCanInvite;
+  final bool isOwner;
 
   static final _uuid=RegExp(
     r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
@@ -31,11 +33,18 @@ class FableManagedAccount {
       throw const FormatException('Invalid managed entity status or visibility');
     if(raw['collaborationEnabled'] is! bool||raw['managersCanInvite'] is! bool)
       throw const FormatException('Invalid managed entity collaboration settings');
+    // listMine only returns the requester's memberships. Never infer OWNER
+    // from a visible entity or from the owner's public identifier.
+    final memberships=raw['memberships'];
+    final isOwner=memberships is List &&
+      memberships.length<=100 &&
+      memberships.any((membership)=>membership is Map &&
+        membership['access']=='OWNER' && membership['active']==true);
     return FableManagedAccount(id:id,type:field('type',max:64),
       nameAr:field('nameAr'),nameEn:field('nameEn'),
       status:status,visibility:visibility,
       collaborationEnabled:raw['collaborationEnabled'] as bool,
-      managersCanInvite:raw['managersCanInvite'] as bool);
+      managersCanInvite:raw['managersCanInvite'] as bool,isOwner:isOwner);
   }
 }
 
@@ -192,6 +201,7 @@ class FableManagedAccountsRepository {
 
   Future<FableManagedLifecycleChallenge> requestLifecycleChallenge(
       FableManagedAccount entity,String action)async{
+    if(!entity.isOwner)throw StateError('Only a Backend-listed owner may request entity lifecycle actions');
     if(!canLifecycle(action)||!FableManagedAccount._uuid.hasMatch(entity.id))
       throw StateError('Backend has not exported this verified lifecycle/OTP workflow');
     if(action=='disable'&&entity.status!='ACTIVE' ||
