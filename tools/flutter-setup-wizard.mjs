@@ -9,6 +9,8 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {verifyFableContract} from './verify-fable-contract.mjs';
 import {validateSessionPolicyForWizard} from './read-session-policy.mjs';
+import {classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
+import {readFrontendOwnedDecisions,saveFrontendOwnedDecisions} from './frontend-owned-decisions.mjs';
 
 const CONTRACT_FILES=['contract.json','flutter-handoff.json','openapi.json','mobile-core-operations.json'];
 const OUTPUT_PATH='assets/config/frontend-setup.json';
@@ -201,10 +203,21 @@ export function formatFrontendSetupReview(snapshot,{root=null}={}){
     '',
   ];
   if(features){
-    lines.push('── الميزات ──',
-      'المتاحة: '+(features.enabled??[]).join(', '),
-      'غير المفعلة: '+(features.disabled??[]).join(', '),
-      'تحتاج مراجعة قرار Frontend محلي: '+(features.clientOnlyReview??[]).join(', '),'');
+    const policy=classifyFeatureDecisions(features,snapshot.frontendSelection);
+    const local=root?readFrontendOwnedDecisions(root,snapshot.projectId):null;
+    lines.push('── قدرات الخادم: Backend هو المرجع ──',
+      'المسارات المتاحة: '+policy.visibleBackendFeatures.join(', '),
+      'ميزات خادم غير متاحة ويمكن مراجعة حذف حزمها: '+policy.backendPruneEligible.join(', '),
+      '',
+      '── قرارات خاصة بFlutter: لا يحذفها غيابها بالباك ──',
+      'محلية بالكامل: '+policy.frontendOnly.join(', '),
+      'مشتركة (محلي + Backend): '+policy.hybridRetained.join(', '),
+      'حزم محمية من الحذف التلقائي: '+policy.frontendDecisionsRequired.join(', '),
+      'القرار المحلي (true/false/null=مراجعة): '+
+        (local?JSON.stringify(Object.fromEntries(Object.entries(local.choices).map(([id,v])=>[id,v.enabled])))
+          :'لم تتم تهيئته بعد'),
+      'ظهور واجهة تعتمد API لا يعني تفعيل عملية محظورة من الباك.',
+      '');
   }
   if(current)lines.push(
     '── الفروقات عن القرارات المستوردة سابقاً ──',
@@ -281,6 +294,7 @@ export function reconcileManualWithBackend(manual,verified) {
 export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={}){
   const project=resolve(root);
   if(snapshot?.kind!=='fable.flutter-frontend-setup')throw Error('Refusing unsupported frontend setup');
+  const frontendOwned=readFrontendOwnedDecisions(project,snapshot.projectId);
   const summary={
     applied:Boolean(apply),projectId:snapshot.projectId,
     mode:snapshot.mode,projectBound:snapshot.projectBound,
@@ -317,6 +331,8 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
   }
   outputFile(project,OUTPUT_PATH,snapshot);
   outputFile(project,PROJECT_PATH,snapshot);
+  saveFrontendOwnedDecisions(project,frontendOwned,{apply:true});
+  summary.frontendOwnedChoicesPreserved=true;
   return summary;
 }
 async function interactiveManual(question=null){
