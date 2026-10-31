@@ -49,6 +49,16 @@ node tools/flutter-setup-wizard.mjs --mode manual --interactive --out . --apply
 node tools/flutter-setup-wizard.mjs --mode manual --file my-choices.json --out . --apply
 ```
 
+### إدخال يدوي مع Fable Backend نفسه
+
+في حال أراد المطور كتابة اختياراته يدوياً مع الاحتفاظ بتطابقها مع Fable Backend، يمرر كذلك مسار الحزمة:
+
+```bash
+node tools/flutter-setup-wizard.mjs --mode manual --source ../backend/dist/client-contract --file my-choices.json --out . --apply
+```
+
+يقارن الـWizard كل اختيار يدوي قدمه المطور بما صرّح به عقد الباك الموثق. أي اختلاف في سياسة الجلسات، أنواع الحسابات، طرق الدخول، اللغات أو الاشتراكات يؤدي إلى رفض التطبيق **بدلاً من السماح بإعداد فرونت مختلف عن الباك**. عند عدم تقديم خيار يدوي، يرثه من العقد. القرارات الخاصة بعرض الواجهة لا تمنح أي صلاحيات إضافية.
+
 ## ما الذي يحدث فعلياً؟
 
 - الباك يحدد السياسة والحقيقة، وFlutter يبني **ملف قرارات/خطة تكامل** ويستورد العقود المطلوبة؛ لا يولّد تلقائياً جميع صفحات أو مكونات المنتج من مجرد ملف إعداد.
