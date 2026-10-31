@@ -89,6 +89,10 @@ export function importBackendDecisions(source,{expectedProjectId=null,expectedCo
       contractHash:contract.contractHash,projectBound:hasPin,
       mode:'import',backendAuthority:true,
       decisionSnapshot:decisions,
+      frontendSelection:{
+        mode:handoff.selection?.mode??'advisory',
+        features:handoff.selection?.features??null,
+      },
       uiPreferences:{navigation:'auto-by-roles',theme:'project-default'},
       implementation:{status:'requires-feature-binding-review',
         instructions:'Use installed operations, verified permissions and runtime contracts; do not create unrelated features.'},
