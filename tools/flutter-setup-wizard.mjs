@@ -62,6 +62,32 @@ function assertMatchingSetup(contract,handoff){
     decision.decisions.authentication?.sessions?.runtimeEndpoint!=='/auth/session-policy') {
     throw Error('Missing, invalid or conflicting backend frontend wizard decisions. Re-export from Fable Backend.');
   }
+  const required=['project','localization','authentication','accounts',
+    'experience','commercial','frontendFeatures','permissions'];
+  for(const name of required){
+    const section=decision.decisions[name];
+    if(!section || typeof section!=='object' || Array.isArray(section))
+      throw Error('Missing Backend wizard decision section: '+name+'. Re-export from the latest Fable Backend.');
+  }
+  const declared=decision.decisions.frontendFeatures;
+  if(declared.schemaVersion!==1||declared.source!=='backend-installed-capabilities'||
+     !Array.isArray(declared.enabled)||!Array.isArray(declared.disabled)||
+     !Array.isArray(declared.clientOnlyReview))
+    throw Error('Backend feature inventory is incomplete. Re-export from the latest Fable Backend.');
+  const available=new Set(declared.enabled),disabled=new Set(declared.disabled);
+  const local=new Set(declared.clientOnlyReview);
+  if([...available,...disabled,...local].some(id=>typeof id!=='string'||!id)||
+     available.size!==declared.enabled.length ||
+     disabled.size!==declared.disabled.length ||
+     local.size!==declared.clientOnlyReview.length ||
+     [...available].some(id=>disabled.has(id)||local.has(id)) ||
+     [...disabled].some(id=>local.has(id)))
+    throw Error('Backend feature inventory conflicts across enabled, disabled and frontend-review.');
+  const requiredSteps=new Set(['identity','authentication','accounts','permissions','capabilities','commercial']);
+  if(requiredSteps.size!==decision.steps.length ||
+     !decision.steps.every(step=>requiredSteps.delete(step.id)) ||
+     requiredSteps.size!==0)
+    throw Error('Backend wizard handoff is missing required setup steps.');
   validateSessionPolicyForWizard(decision.decisions.authentication.sessions);
   if(JSON.stringify(decision).length>256000)throw Error('Frontend setup decisions exceed safe limit');
   return decision;
