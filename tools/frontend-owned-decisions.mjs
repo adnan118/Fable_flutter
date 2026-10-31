@@ -40,7 +40,18 @@ export function readFrontendOwnedDecisions(root,projectId){
   return current;
 }
 export function saveFrontendOwnedDecisions(root,config,{apply=false}={}){
-  if(config?.kind!=='fable.flutter-owned-decisions')throw Error('Invalid Flutter decisions');
+  if(config?.kind!=='fable.flutter-owned-decisions' || config.schemaVersion!==1 ||
+    config.authority!=='frontend-only' || config.backendSecurityOverride!==false)
+    throw Error('Invalid Flutter decisions');
+  const baseline=frontendOwnedDefaults(config.projectId);
+  if(!config.choices||typeof config.choices!=='object' ||
+    Object.keys(config.choices).length!==Object.keys(baseline.choices).length)
+    throw Error('Incomplete Flutter-owned choices');
+  for(const [id,choice] of Object.entries(baseline.choices)){
+    if(config.choices[id]?.ownership!==choice.ownership)
+      throw Error('Invalid Flutter ownership: '+id);
+    assertChoice(config.choices[id].enabled,id);
+  }
   const path=resolve(root,OWNED_CONFIG_PATH);
   // Ensure a previously recorded local choice is not replaced by an unrelated project.
   if(existsSync(path))readFrontendOwnedDecisions(root,config.projectId);
