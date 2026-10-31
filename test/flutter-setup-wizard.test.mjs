@@ -5,6 +5,7 @@ import {resolve,join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {importBackendDecisions,manualFrontendDecisions,reconcileManualWithBackend,saveFrontendSetup,formatFrontendSetupReview,isExplicitFrontendApproval,reviewedBackendImport,runGuidedFlutterSetup} from '../tools/flutter-setup-wizard.mjs';
+import {updateFrontendOwnedChoice,readFrontendOwnedDecisions} from '../tools/frontend-owned-decisions.mjs';
 
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?
@@ -234,5 +235,21 @@ test('Approval applies only the exact Backend export that was displayed in the t
     assert.ok(shown[0].includes('قرارات الباك الكاملة'));
     assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
     assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('Backend re-import preserves independent frontend hybrid/local decisions',()=>{
+  const f=fixture();try{
+    const snapshot=importBackendDecisions(f.dir);
+    saveFrontendSetup(f.root,snapshot,{apply:true,sourceDir:f.dir});
+    updateFrontendOwnedChoice(f.root,snapshot.projectId,'offline',true,{apply:true});
+    updateFrontendOwnedChoice(f.root,snapshot.projectId,'notifications',false,{apply:true});
+    saveFrontendSetup(f.root,snapshot,{apply:true,sourceDir:f.dir});
+    const local=readFrontendOwnedDecisions(f.root,snapshot.projectId);
+    assert.equal(local.choices.offline.enabled,true);
+    assert.equal(local.choices.notifications.enabled,false);
+    assert.equal(local.choices.deeplinks.enabled,null);
+    assert.ok(formatFrontendSetupReview(snapshot,{root:f.root}).includes('محلية بالكامل'));
+    assert.ok(formatFrontendSetupReview(snapshot,{root:f.root}).includes('مشتركة'));
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
