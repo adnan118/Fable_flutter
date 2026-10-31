@@ -94,6 +94,19 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
   if(Array.isArray(contract.operations) && projectOperations!==contract.operations.length)fail('project_operation_count_mismatch');
   // Surface backend session policy directly to the Flutter project wizard.
   // Legacy exports remain unknown; never silently assume multi-device.
+  // Ensure frontend wizard choices came from this exact signed backend contract.
+  const setup=contract.core?.frontendSetup;
+  const handoffSetup=handoff.frontendSetup;
+  if(setup!==undefined || handoffSetup!==undefined){
+    if(!setup || !handoffSetup || setup.kind!=='fable.frontend-setup-decisions' ||
+       setup.schemaVersion!==1 || setup.projectId!==contract.project?.id ||
+       !Array.isArray(setup.steps) || !setup.decisions ||
+       JSON.stringify(setup)!==JSON.stringify(handoffSetup) ||
+       setup.decisions.authentication?.sessions?.mode!==contract.core?.auth?.sessionPolicy?.mode ||
+       setup.decisions.authentication?.sessions?.maxActive!==contract.core?.auth?.sessionPolicy?.maxActive){
+       fail('frontend_setup_handoff_mismatch');
+    }
+  }
   const declaredSessionPolicy=contract.core?.auth?.sessionPolicy;
   let sessionPolicy=null;
   if(declaredSessionPolicy!==undefined){
