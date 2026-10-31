@@ -73,6 +73,16 @@ export function importBackendDecisions(source,{expectedProjectId=null,expectedCo
     const contract=asJson(join(dir,'contract.json'));
     const handoff=asJson(join(dir,'flutter-handoff.json'));
     const decisions=assertMatchingSetup(contract,handoff);
+    const standalone=join(dir,'frontend-setup.json');
+    if(existsSync(standalone)){
+      const payload=asJson(standalone);
+      if(payload.kind!=='fable.frontend-setup-handoff' || payload.schemaVersion!==1 ||
+        payload.backendContractHash!==contract.contractHash ||
+        payload.project?.id!==contract.project.id ||
+        JSON.stringify(payload.setup)!==JSON.stringify(decisions)){
+        throw Error('Standalone frontend-setup.json does not match signed backend export');
+      }
+    }
     return {
       schemaVersion:1,kind:'fable.flutter-frontend-setup',
       source:'backend-contract-export',projectId:contract.project.id,
@@ -126,6 +136,7 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
     const to=resolve(project,'assets/contracts');
     mkdirSync(to,{recursive:true});
     for(const file of CONTRACT_FILES){const from=resolve(dir,file),dest=resolve(to,file);if(from!==dest)copyFileSync(from,dest);}
+    if(existsSync(join(dir,'frontend-setup.json'))){const from=resolve(dir,'frontend-setup.json'),dest=resolve(to,'frontend-setup.json');if(from!==dest)copyFileSync(from,dest);}
     outputFile(project,'assets/config/backend.json',{
       schemaVersion:1,kind:'fable.mobile-backend-configuration',
       backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
