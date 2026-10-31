@@ -24,6 +24,10 @@ FableContract catalog({bool installed=true})=>FableContract(
     'entity.activate':const FableOperation('entity.activate','POST',
       '/managed-entities/{id}/activate','hash',enforceAuth:true),
     'entity.create':const FableOperation('entity.create','POST','/managed-entities','hash',enforceAuth:true),
+    'entity.details':const FableOperation('entity.details','GET',
+      '/managed-entities/{id}','hash',enforceAuth:true),
+    'entity.update':const FableOperation('entity.update','PATCH',
+      '/managed-entities/{id}','hash',enforceAuth:true),
     'entity.invites':const FableOperation('entity.invites','GET',
       '/managed-entities/invitations/me','hash',enforceAuth:true),
     'entity.accept':const FableOperation('entity.accept','POST',
@@ -268,4 +272,72 @@ void main(){
     await expectLater(repo.sentInvitations(fake,selected),throwsStateError);
   });
 
+
+  test('Managed detail read and owner patch use only exported routes and changed flags',()async{
+    final session=_Session(),seen=<RequestOptions>[];
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        seen.add(req);
+        if(req.method=='GET'&&req.path=='/managed-entities/'+entityId)
+          return ok(req,{...entity(),'slug':'beach-club',
+            'memberships':[{'access':'OWNER','active':true}]});
+        if(req.method=='PATCH'&&req.path=='/managed-entities/'+entityId)
+          return ok(req,{'data':{
+            ...entity(),'slug':'beach-club','nameEn':'Updated Club',
+            'visibility':'PRIVATE','collaborationEnabled':false,
+            'managersCanInvite':false,
+          }});
+        return ok(req,{});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final owner=FableManagedAccount.fromPayload({...entity(),'slug':'beach-club',
+      'memberships':[{'access':'OWNER','active':true}]});
+    expect(repo.canReadDetails,true);
+    expect(repo.canUpdateDetails,true);
+    final details=await repo.readDetails(owner);
+    expect(details.slug,'beach-club');
+    await repo.updateDetails(owner,nameAr:'نادي الشاطئ',nameEn:'Updated Club',
+      visibility:'PRIVATE',collaborationEnabled:true,managersCanInvite:true,
+      slug:'beach-club');
+    final patch=seen.last;
+    expect(patch.method,'PATCH');
+    expect(patch.path,'/managed-entities/'+entityId);
+    expect(patch.data,{
+      'nameEn':'Updated Club','visibility':'PRIVATE','collaborationEnabled':false,
+    });
+    expect(seen.every((r)=>r.headers.containsKey('X-Fable-Managed-Entity-Id')==false),true);
+  });
+
+  test('Editing fails closed on missing operations, nonowner, invalid slug and stale identity',()async{
+    final missingGateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(installed:false),secureSession:_Session());
+    addTearDown(missingGateway.dispose);
+    final missing=FableManagedAccountsRepository(missingGateway,catalog(installed:false));
+    expect(missing.canUpdateDetails,false);
+    expect(missing.canReadDetails,false);
+    final owner=FableManagedAccount.fromPayload({...entity(),
+      'memberships':[{'access':'OWNER','active':true}]});
+    await expectLater(missing.updateDetails(owner,nameAr:'One',nameEn:'Two',
+      visibility:'PUBLIC',collaborationEnabled:true,managersCanInvite:false),
+      throwsStateError);
+    final session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        session.identityRevision++;
+        return ok(req,{...entity(),
+          'memberships':[{'access':'OWNER','active':true}]});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    await expectLater(repo.updateDetails(FableManagedAccount.fromPayload(entity()),
+      nameAr:'A',nameEn:'B',visibility:'PUBLIC',
+      collaborationEnabled:true,managersCanInvite:false),throwsStateError);
+    await expectLater(repo.updateDetails(owner,nameAr:'A',nameEn:'B',
+      visibility:'PUBLIC',collaborationEnabled:true,managersCanInvite:false,
+      slug:'bad slug'),throwsArgumentError);
+    await expectLater(repo.readDetails(owner),throwsA(isA<FableApiException>()));
+    expect(()=>FableManagedAccount.fromPayload({...entity(),'slug':'invalid slug'}),
+      throwsFormatException);
+  });
 }
