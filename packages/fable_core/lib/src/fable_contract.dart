@@ -56,7 +56,7 @@ class FableContract implements OperationCatalog {
   @override bool get sendsInstallationId => true;
   const FableContract({required this.contractHash, required this.operations,
     required this.featureIds, required this.projectName, required this.selectionMode,
-    this.sessionPolicy});
+    this.sessionPolicy,this.frontendSetup});
   final String contractHash;
   final Map<String, FableOperation> operations;
   final Set<String> featureIds;
@@ -64,6 +64,8 @@ class FableContract implements OperationCatalog {
   final String selectionMode;
   /// Null on legacy exports: never interpret missing policy as multi-device.
   final FableSessionPolicy? sessionPolicy;
+  /// Read-only, signed frontend-setup decisions from Fable Backend.
+  final Map<String,dynamic>? frontendSetup;
 
   static FableContract fromMaps(Map<String, dynamic> handoff,
       Map<String, dynamic> contract,
@@ -140,6 +142,27 @@ class FableContract implements OperationCatalog {
           requiresAuth:!isPublic,enforceAuth:true);
       }
     }
+    final exportedSetup=(contract['core'] is Map)
+      ? (contract['core'] as Map)['frontendSetup']:null;
+    final handoffSetup=handoff['frontendSetup'];
+    if((exportedSetup==null)!=(handoffSetup==null)) {
+      throw const FormatException('Frontend decisions handoff missing or stale');
+    }
+    Map<String,dynamic>? frontendSetup;
+    if(exportedSetup!=null){
+      if(exportedSetup is! Map || handoffSetup is! Map ||
+        jsonEncode(exportedSetup)!=jsonEncode(handoffSetup)) {
+        throw const FormatException('Frontend decisions conflict with backend contract');
+      }
+      final parsed=Map<String,dynamic>.from(exportedSetup);
+      final project=contract['project'] as Map?;
+      if(parsed['kind']!='fable.frontend-setup-decisions' ||
+        parsed['schemaVersion']!=1 || parsed['projectId']!=project?['id'] ||
+        parsed['steps'] is! List || parsed['decisions'] is! Map){
+        throw const FormatException('Invalid backend frontend-setup decisions');
+      }
+      frontendSetup=Map<String,dynamic>.unmodifiable(parsed);
+    }
     final coreConfig=contract['core'];
     final authConfig=coreConfig is Map ? coreConfig['auth'] : null;
     final declaredPolicy=authConfig is Map ? authConfig['sessionPolicy'] : null;
@@ -153,7 +176,8 @@ class FableContract implements OperationCatalog {
     return FableContract(contractHash:digest, operations:ops,
       featureIds: selection is List ? selection.whereType<String>().toSet() : <String>{},
       projectName: (backend['project'] as Map?)?['name']?.toString() ?? 'Fable',
-      selectionMode:mode,sessionPolicy:sessionPolicy);
+      selectionMode:mode,sessionPolicy:sessionPolicy,
+      frontendSetup:frontendSetup);
   }
 
   static Future<FableContract> fromAssets(AssetBundle bundle) async {
