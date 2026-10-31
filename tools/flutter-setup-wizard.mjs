@@ -157,6 +157,8 @@ export function manualFrontendDecisions(input) {
     schemaVersion:1,kind:'fable.flutter-frontend-setup',
     source:'developer-manual',projectId:input.projectId,
     contractHash:null,projectBound:false,mode:'manual',
+    backendKind:'other',
+    backendAdapter:['openapi','custom'].includes(input.backendAdapter)?input.backendAdapter:'custom',
     backendAuthority:false,
     decisionSnapshot:{schemaVersion:1,kind:input.kind,
       projectId:input.projectId,decisions:input.decisions,
@@ -328,6 +330,17 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
       backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
       contractImported:true,
     });
+  }else{
+    // A non-Fable project must not inherit a stale fable-contract selection.
+    // External operations remain unavailable until a separately verified
+    // OpenAPI/custom catalog and its semantic feature bindings are imported.
+    if(snapshot.backendKind!=='other'||!['openapi','custom'].includes(snapshot.backendAdapter))
+      throw Error('Manual setup requires an explicit non-Fable backend adapter');
+    outputFile(project,'assets/config/backend.json',{
+      schemaVersion:1,kind:'fable.mobile-backend-configuration',
+      backend:{kind:'other',adapter:snapshot.backendAdapter,status:'pending'},
+      contractImported:false,
+    });
   }
   outputFile(project,OUTPUT_PATH,snapshot);
   outputFile(project,PROJECT_PATH,snapshot);
@@ -335,7 +348,7 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
   summary.frontendOwnedChoicesPreserved=true;
   return summary;
 }
-async function interactiveManual(question=null){
+async function interactiveManual(question=null,{backendAdapter='custom'}={}){
   const cli=question?null:createInterface({input:process.stdin,output:process.stdout});
   try{
     const ask=async(label,def)=>{const answer=(await (question?question(label+' ['+def+']: '):cli.question(label+' ['+def+']: '))).trim();return answer||def;};
@@ -345,30 +358,22 @@ async function interactiveManual(question=null){
     const supportedLocales=(await ask('Supported locales, separated by comma','ar,en')).split(',').map(x=>x.trim()).filter(Boolean);
     const defaultLocale=await ask('Fallback locale',supportedLocales[0]??'ar');
     if(!supportedLocales.includes(defaultLocale))throw Error('Fallback locale must be supported');
-    const identityMode=await ask('Login identity (email/phone/username/email-or-phone/email-phone-username)','email');
-    if(!['email','phone','username','email-or-phone','email-phone-username'].includes(identityMode))throw Error('Unknown identity mode');
-    const google=await yn('Google login available on external Backend?');
-    const apple=await yn('Apple login available on external Backend?');
-    const passkeys=await yn('Passkeys available on external Backend?');
-    const sessions=await ask('Session mode (single/multi)','single');
-    if(!['single','multi'].includes(sessions))throw Error('Invalid session mode');
-    const maxActive=sessions==='single'?1:Number(await ask('Max active sessions (0=unlimited)','5'));
-    if(!Number.isInteger(maxActive)||maxActive<0||maxActive>100)throw Error('Invalid max sessions');
-    const identityModel=await ask('Account profiles (single/multi-profile)','single');
-    if(!['single','multi-profile'].includes(identityModel))throw Error('Invalid profile model');
-    const managedEnabled=await yn('Does an account manage related pages/stores/organizations?');
-    const capabilities=(await ask('Installed UI capabilities (comma separated)','')).split(',').map(x=>x.trim()).filter(Boolean);
-    const commercialMode=(await ask('Commercial access (FREE/PAID/TRIAL/FREEMIUM)','FREE')).toUpperCase();
-    if(!['FREE','PAID','TRIAL','FREEMIUM'].includes(commercialMode))throw Error('Invalid access mode');
+    // External servers own all security, login, profile and subscription
+    // policies. Until a verified external contract is imported, keep unknown.
+    // Do not ask people to invent auth methods or session limits in Flutter.
+    const capabilities=(await ask('Flutter-only UI capabilities (comma separated; not server permissions)','')).split(',').map(x=>x.trim()).filter(Boolean);
     const decisions={
       project:{id:projectId,name:title,clients:['flutter'],capabilities},
       localization:{defaultLocale,supportedLocales},
-      authentication:{identityMode,google,apple,passkeys,
-        sessions:{mode:sessions,maxActive,overflow:'revoke-oldest'}},
-      accounts:{identityModel,managedEntities:{enabled:managedEnabled}},
-      commercial:{mode:commercialMode},
+      authentication:{status:'unverified-external-contract',methods:null,
+        sessions:null,operations:null},
+      accounts:{status:'unverified-external-contract',identityModel:null,
+        managedEntities:null},
+      permissions:{status:'unverified-external-contract'},
+      commercial:{status:'unverified-external-contract'},
     };
     return {schemaVersion:1,kind:'manual.frontend-setup-decisions',projectId,
+      backendAdapter,
       decisions,
       steps:['identity','authentication','accounts','permissions','capabilities','commercial']
         .map((id,index)=>({id,order:index+1,status:'manual-review',
@@ -379,22 +384,47 @@ export async function runGuidedFlutterSetup({
   root=process.cwd(),source=null,expectedProjectId=null,expectedContractHash=null,
   prune=false,ask,show=console.log,askToImport=true,
 }={}){
-  if(typeof ask!=='function')throw Error('The guided frontend wizard requires a terminal question callback');
+  if(typeof ask!=='function')throw Error('The guided frontend wizard requires an interactive terminal');
   const project=resolve(root);
+  let isFable=true;
   if(askToImport){
-    const answer=(await ask('هل تريد استيراد قرارات Fable Backend الآن؟ (نعم/لا) [نعم]: ')).trim().toLowerCase();
-    if(['لا','n','no','0'].includes(answer)){
-      const draft=manualFrontendDecisions(await interactiveManual(ask));
-      show(formatFrontendSetupReview(draft,{root:project}));
-      const approve=await ask('اكتب «اعتمد» أو APPROVE لحفظ إعداد Flutter اليدوي: ');
-      if(!isExplicitFrontendApproval(approve)){
-        show('تم الإلغاء؛ لا توجد تغييرات.');
-        return {applied:false,cancelled:true,mode:'manual'};
-      }
-      const result=saveFrontendSetup(project,draft,{apply:true});
-      show('✓ تم حفظ إعداد Flutter اليدوي بعد الموافقة.');
-      return result;
+    const answer=String(await ask('هل الباك المستخدم لهذا المشروع هو Fable؟ (نعم/لا): ')).trim().toLowerCase();
+    if(['لا','no','n','0'].includes(answer))isFable=false;
+    else if(!['نعم','yes','y','1'].includes(answer))
+      throw Error('Choose yes or no for the Backend type. No type is inferred.');
+  }
+  if(!isFable){
+    if(prune)throw Error('Cannot prune based on Fable capabilities for a non-Fable Backend');
+    const adapter=String(await ask('نوع عقد الباك الآخر (openapi/custom) [openapi]: ')).trim().toLowerCase()||'openapi';
+    if(!['openapi','custom'].includes(adapter))throw Error('External adapter must be openapi or custom');
+    const manual=manualFrontendDecisions(await interactiveManual(ask,{backendAdapter:adapter}));
+    show([
+      '── External Backend (not Fable) ──',
+      'Adapter: '+adapter,
+      'Project: '+manual.projectId,
+      'Backend API/authorization/roles/features: NOT VERIFIED, unavailable until external contract binding',
+      'No Fable routes, login methods, UI or Backend privileges will be selected.',
+      'Frontend-only choices: '+JSON.stringify(manual.decisionSnapshot.decisions.project.capabilities),
+      'Proposed: '+JSON.stringify(manual.decisionSnapshot.decisions,null,2),
+      'لم يتم تغيير أي ملف.',
+    ].join('\n'));
+    const answer=await ask('اكتب «اعتمد» أو APPROVE لحفظ إعداد باك خارجي بانتظار عقده: ');
+    if(!isExplicitFrontendApproval(answer)){
+      show('تم إلغاء اختيار الباك الآخر؛ لم يتغير أي ملف.');
+      return {applied:false,cancelled:true,backendKind:'other'};
     }
+    const result=saveFrontendSetup(project,manual,{apply:true});
+    show('✓ External Backend selected (pending verified operations). Fable-specific paths disabled.');
+    return result;
+  }
+  if(askToImport){
+    const answer=String(await ask('هل تريد استيراد قرارات Fable Backend المصدّرة؟ (نعم/لا): ')).trim().toLowerCase();
+    if(['لا','no','n','0'].includes(answer)){
+      show('لم يتم استيراد عقد Fable. إعدادات Fable الأمنية ستبقى غير مفعلة حتى وجود عقد مُوثّق.');
+      return {applied:false,cancelled:true,backendKind:'fable',reason:'handoff-not-imported'};
+    }
+    if(!['نعم','yes','y','1'].includes(answer))
+      throw Error('Choose yes or no for importing Fable decisions');
   }
   let selectedSource=source;
   if(!selectedSource){
@@ -405,7 +435,7 @@ export async function runGuidedFlutterSetup({
     ];
     const suggestion=suggestions.find(path=>existsSync(join(path,'contract.json')))
       ??suggestions[2];
-    const answer=(await ask('مسار ملف قرارات الباك (مجلد dist/client-contract) ['+suggestion+']: ')).trim();
+    const answer=String(await ask('مسار حزمة قرارات Fable (dist/client-contract) ['+suggestion+']: ')).trim();
     selectedSource=answer||suggestion;
   }
   return reviewedBackendImport({
