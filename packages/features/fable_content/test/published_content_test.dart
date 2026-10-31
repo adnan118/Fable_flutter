@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
@@ -61,6 +61,21 @@ class _MutablePublishedGateway implements BackendApiGateway {
    return Response(requestOptions:RequestOptions(path:'/verified'),data:{});
   }
   throw StateError('Unexported operation: $operationId');
+ }
+ @override void dispose(){}
+}
+
+class _PublishedIndexGateway implements BackendApiGateway {
+ Object? reply;
+ String? lastId;
+ int calls=0;
+ _PublishedIndexGateway(this.reply);
+ @override Future<Response<dynamic>> execute(String operationId,{
+  Map<String,dynamic>? path,Map<String,dynamic>? query,
+  Object? body,CancelToken? cancelToken,String? ifMatch,
+ })async{
+  calls++;lastId=operationId;
+  return Response(requestOptions:RequestOptions(path:'/verified'),data:reply);
  }
  @override void dispose(){}
 }
@@ -157,6 +172,41 @@ void main() {
     expect(find.text('Version v2'),findsOneWidget);
     expect(tester.widget<FilledButton>(find.widgetWithText(
       FilledButton,'Accept published version')).onPressed,isNotNull);
+  });
+
+  test('published index is opt-in and preserves contract-bound operation ID',()async{
+    final entry={'slug':'privacy-policy',
+      'revision':'550e8400-e29b-41d4-a716-446655440001','version':2};
+    final api=_PublishedIndexGateway({
+      'revision':List.filled(64,'a').join(),
+      'unchanged':false,'resetRequired':false,'entries':[entry],
+    });
+    final missing=FablePublishedContentRepository(api);
+    await expectLater(missing.publishedIndex(),throwsStateError);
+    expect(api.calls,0);
+    final mapped=FablePublishedContentRepository(api,indexOperationId:'document.published');
+    final entries=await mapped.publishedIndex();
+    expect(api.lastId,'document.published');
+    expect(entries.single.slug,'privacy-policy');
+    expect(entries.single.version,2);
+    expect(entries.single.versionId,entry['revision']);
+  });
+  test('published index rejects unrelated admin, duplicate and invalid manifests',()async{
+    final api=_PublishedIndexGateway({'entries':[]});
+    final repo=FablePublishedContentRepository(api,indexOperationId:'content.publicChanges');
+    await expectLater(repo.publishedIndex(),throwsFormatException);
+    final one={'slug':'privacy-policy',
+      'revision':'550e8400-e29b-41d4-a716-446655440001','version':2};
+    api.reply={'revision':List.filled(64,'a').join(),'unchanged':false,
+      'resetRequired':false,'entries':[one,one]};
+    await expectLater(repo.publishedIndex(),throwsFormatException);
+    api.reply={'revision':List.filled(64,'a').join(),'unchanged':false,
+      'resetRequired':false,'entries':[{'slug':'../admin',
+       'revision':'550e8400-e29b-41d4-a716-446655440001','version':3}]};
+    await expectLater(repo.publishedIndex(),throwsFormatException);
+    api.reply={'revision':List.filled(64,'a').join(),'unchanged':true,
+      'resetRequired':false};
+    await expectLater(repo.publishedIndex(),throwsFormatException);
   });
 
 }
