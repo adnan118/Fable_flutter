@@ -100,8 +100,8 @@ function getNativeScreenEvidence(root,id){
   const code=readFileSync(file,'utf8');
   // This detects an owned screen factory, not its business/UX completeness.
   return {
-    source,customFableScreen:/@override\\s+Widget\\s+screen\\s*\\(/.test(code),
-    customExternalScreen:/@override\\s+Widget\\?\\s+externalScreen\\s*\\(/.test(code),
+    source,customFableScreen:/@override\s+Widget\s+screen\s*\(/.test(code),
+    customExternalScreen:/@override\s+Widget\?\s+externalScreen\s*\(/.test(code),
   };
 }
 function auditFeatureMatrix(root,operations,features,projectBound){
