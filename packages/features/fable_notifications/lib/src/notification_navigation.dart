@@ -62,7 +62,7 @@ class FableNotificationNavigation {
     }
   }
   Future<bool> openVerifiedInternalRoute(String route) async {
-    if(route.length>240||!RegExp(r'^/[a-zA-Z0-9_/-]+\$').hasMatch(route)||
+    if(route.length>240||!RegExp(r'^/[a-zA-Z0-9_/-]+$').hasMatch(route)||
        route.contains('//')||route.contains('..')||!route.contains('password'))
       return false;
     final handler=navigateVerifiedAppRoute;
