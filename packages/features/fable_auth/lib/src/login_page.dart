@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
+import 'sessions_page.dart';
 
 /// Concrete R2 mobile auth contract consumer, including installation binding.
 /// Requires a real reachable generated Fable backend at FABLE_API_BASE_URL.
@@ -194,6 +195,15 @@ class _FableLoginPageState extends State<FableLoginPage> {
         Text(enabled?'Fable account':'Login contract missing',style:Theme.of(context).textTheme.headlineSmall),
         if (_signedIn) Padding(padding: const EdgeInsets.symmetric(vertical: 16),
           child: FilledButton.tonal(onPressed:_busy?null:_logout,child:const Text('Sign out'))),
+        if(_signedIn && widget.contract.supports('auth.sessions'))
+          Padding(padding:const EdgeInsets.only(bottom:12),
+            child:OutlinedButton.icon(
+              onPressed:_busy?null:()=>Navigator.of(context).push(
+                MaterialPageRoute<void>(builder:(_)=>FableSessionsPage(
+                  gateway:_client(),contract:widget.contract))),
+              icon:const Icon(Icons.devices_other),
+              label:const Text('My active devices & sessions'),
+            )),
         if (_savedSessionAvailable && !_signedIn) ...[
           const SizedBox(height: 12),
           const Text('A stored session has not yet been verified.', textAlign: TextAlign.center),
