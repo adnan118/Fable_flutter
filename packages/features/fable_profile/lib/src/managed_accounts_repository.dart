@@ -203,6 +203,7 @@ class FableManagedAccountsRepository {
     final payload=_unwrap(response.data);
     if(payload is! Map || payload['managedEntityId']!=entity.id||
       !const {'OWNER','MANAGER','VIEWER'}.contains(payload['access']) ||
+      (payload['access']=='OWNER'&&!entity.isOwner) ||
       payload['header'] is! Map ||
       (payload['header'] as Map)['name']!='X-Fable-Managed-Entity-Id'||
       (payload['header'] as Map)['value']!=entity.id)
@@ -257,6 +258,7 @@ class FableManagedAccountsRepository {
   }){
     if(selected.id!=entity.id||
        selected.identityRevision!=gateway.session.identityRevision||
+       (selected.access=='OWNER'&&!entity.isOwner) ||
        (ownerOnly && (!entity.isOwner||selected.access!='OWNER')))
       throw StateError('No verified identity, owner rights or active entity context');
     if(entity.status!='ACTIVE'&&entity.status!='DISABLED')
