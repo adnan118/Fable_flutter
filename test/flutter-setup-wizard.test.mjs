@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,copyFileSync,rmSync,exi
 import {resolve,join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
-import {importBackendDecisions,manualFrontendDecisions,reconcileManualWithBackend,saveFrontendSetup} from '../tools/flutter-setup-wizard.mjs';
+import {importBackendDecisions,manualFrontendDecisions,reconcileManualWithBackend,saveFrontendSetup,formatFrontendSetupReview,isExplicitFrontendApproval,reviewedBackendImport} from '../tools/flutter-setup-wizard.mjs';
 
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?
@@ -107,5 +107,60 @@ test('Manually entered Fable decisions must exactly match the imported Backend c
       kind:'manual.frontend-setup-decisions',projectId:f.contract.project.id,
       decisions:{authentication:{sessions:{mode:'single'}}},steps:[]});
     assert.throws(()=>reconcileManualWithBackend(conflicting.decisionSnapshot,verified),/conflicts/);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('Terminal preview includes all Backend decisions, feature selection and contract hash',()=>{
+  const f=fixture();
+  try{
+    const snapshot=importBackendDecisions(f.dir);
+    const message=formatFrontendSetupReview(snapshot,{root:f.root});
+    assert.match(message,/real-project-demo/);
+    assert.ok(message.includes(f.contract.contractHash));
+    assert.match(message,/"identityModel": "multi-profile"/);
+    assert.match(message,/"maxActive": 0/);
+    assert.match(message,/لم يتم تغيير أي ملف بعد/);
+    assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Wizard requires an unambiguous approval, not an empty answer or a casual yes',()=>{
+  for(const value of ['',null,'نعم','yes','Y','لا','approve'])assert.equal(isExplicitFrontendApproval(value),false);
+  assert.equal(isExplicitFrontendApproval('اعتمد'),true);
+  assert.equal(isExplicitFrontendApproval('APPROVE'),true);
+});
+test('Refusal after reading imported decisions leaves Flutter entirely untouched',async()=>{
+  const f=fixture(),shown=[];
+  try{
+    const result=await reviewedBackendImport({root:f.root,source:f.dir,
+      ask:async()=> 'لا',show:line=>shown.push(line)});
+    assert.equal(result.applied,false);
+    assert.equal(result.cancelled,true);
+    assert.ok(shown[0].includes(f.contract.contractHash));
+    assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
+    assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
+    assert.equal(existsSync(join(f.root,'.fable/frontend-setup.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Only explicit approval applies validated imported Backend decisions',async()=>{
+  const f=fixture(),shown=[];
+  try{
+    const result=await reviewedBackendImport({root:f.root,source:f.dir,
+      ask:async()=> 'اعتمد',show:line=>shown.push(line)});
+    assert.equal(result.applied,true);
+    assert.ok(shown[0].includes('قرارات الباك الكاملة'));
+    assert.equal(read(join(f.root,'assets/contracts/contract.json')).contractHash,
+      f.contract.contractHash);
+    assert.deepEqual(read(join(f.root,'assets/config/frontend-setup.json')).decisionSnapshot,
+      importBackendDecisions(f.dir).decisionSnapshot);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Deletion is rejected before any prompts or files without an independently pinned project',async()=>{
+  const f=fixture();
+  let prompted=false;
+  try{
+    await assert.rejects(reviewedBackendImport({root:f.root,source:f.dir,
+      prune:true,ask:async()=>{prompted=true;return 'اعتمد';},show:()=>{}}),/pinned/);
+    assert.equal(prompted,false);
+    assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
