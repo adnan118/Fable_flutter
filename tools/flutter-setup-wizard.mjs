@@ -6,6 +6,7 @@ import {resolve,join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createInterface} from 'node:readline/promises';
 import {pathToFileURL} from 'node:url';
+import {createHash} from 'node:crypto';
 import {verifyFableContract} from './verify-fable-contract.mjs';
 import {validateSessionPolicyForWizard} from './read-session-policy.mjs';
 
@@ -35,6 +36,21 @@ function sourceFiles(source){
   const dir=existsSync(join(candidate,'contract.json'))?candidate:resolve(candidate,'assets/contracts');
   for(const file of CONTRACT_FILES)if(!existsSync(join(dir,file)))throw Error('Missing backend export: '+file);
   return dir;
+}
+// Fingerprint the exact review bundle, not just its advertised contractHash.
+// A changed handoff, OpenAPI file, or standalone decision record must not be
+// applied after the developer has approved a different version.
+function bundleFingerprint(dir){
+  const parts=CONTRACT_FILES.concat(existsSync(join(dir,'frontend-setup.json'))
+    ?['frontend-setup.json']:[]);
+  const hash=createHash('sha256');
+  for(const file of parts){
+    hash.update(file+'\0');
+    const buffer=readFileSync(join(dir,file));
+    hash.update(String(buffer.length)+':');
+    hash.update(buffer);
+  }
+  return hash.digest('hex');
 }
 function assertMatchingSetup(contract,handoff){
   const decision=contract.core?.frontendSetup;
@@ -87,6 +103,7 @@ export function importBackendDecisions(source,{expectedProjectId=null,expectedCo
       schemaVersion:1,kind:'fable.flutter-frontend-setup',
       source:'backend-contract-export',projectId:contract.project.id,
       contractHash:contract.contractHash,projectBound:hasPin,
+      reviewedBundleFingerprint:bundleFingerprint(dir),
       mode:'import',backendAuthority:true,
       decisionSnapshot:decisions,
       frontendSelection:{
@@ -250,7 +267,18 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
     if(!sourceDir)throw Error('Cannot apply imported backend setup without source directory');
     const dir=sourceFiles(sourceDir);
     const contract=asJson(join(dir,'contract.json'));
-    if(contract.contractHash!==snapshot.contractHash)throw Error('Source changed after validation');
+    if(contract.contractHash!==snapshot.contractHash ||
+      (snapshot.reviewedBundleFingerprint && bundleFingerprint(dir)!==snapshot.reviewedBundleFingerprint))
+      throw Error('Backend contract source changed since the terminal review. Re-import and approve the new decisions.');
+    // Verify again immediately before applying. The original preview is not
+    // authorization to accept a replaced manifest with the same advertised hash.
+    const latest=importBackendDecisions(dir,{
+      expectedProjectId:snapshot.projectBound?snapshot.projectId:null,
+      expectedContractHash:snapshot.projectBound?snapshot.contractHash:null,
+    });
+    if(JSON.stringify(latest.decisionSnapshot)!==JSON.stringify(snapshot.decisionSnapshot) ||
+       JSON.stringify(latest.frontendSelection)!==JSON.stringify(snapshot.frontendSelection))
+      throw Error('Backend decisions changed since the terminal review');
     const to=resolve(project,'assets/contracts');
     mkdirSync(to,{recursive:true});
     for(const file of CONTRACT_FILES){const from=resolve(dir,file),dest=resolve(to,file);if(from!==dest)copyFileSync(from,dest);}
