@@ -5,7 +5,7 @@ class FablePublishedIndexEntry {
  const FablePublishedIndexEntry(this.slug,this.versionId,this.version);
  final String slug,versionId;
  final int version;
- static final _slugPattern=RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$');
+ static final _slugPattern=RegExp(r'^[\p{L}\p{N}][\p{L}\p{N}_-]{0,189}$',unicode:true);
  static final _uuid=RegExp(r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$');
  factory FablePublishedIndexEntry.fromPayload(Object? raw){
   if(raw is! Map||raw['slug'] is! String||raw['revision'] is! String||
@@ -79,7 +79,7 @@ class FablePublishedContentRepository {
   final String? localeQueryParameter;
   /// A project can explicitly decode its *verified* external public schema.
   final FablePublishedContentDecoder decoder;
-  static final _slug=RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$');
+  static final _slug=RegExp(r'^[\p{L}\p{N}][\p{L}\p{N}_-]{0,189}$',unicode:true);
   Future<List<FablePublishedIndexEntry>> publishedIndex()async{
     final operation=indexOperationId;
     if(operation==null)throw StateError('No verified published-content index operation');
