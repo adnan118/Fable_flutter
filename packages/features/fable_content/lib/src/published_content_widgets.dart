@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_design_system/fable_design_system.dart';
 import 'published_content_repository.dart';
@@ -66,61 +67,158 @@ class FablePublishedBlockView extends StatelessWidget {
  }
 }
 
-/// Optional complete screen *built from shared widgets*. It is not forced into
-/// generated routes; parent chooses slug and a backend-verified repository.
+/// Optional complete screen *built from shared widgets*. It is not forced
+/// into generated routes. The parent supplies a verified Backend repository.
+///
+/// Content and account events can be connected through [refreshSignals] and
+/// [identitySignals]. No Firebase or Fable-only route is assumed.
 class FablePublishedContentPage extends StatefulWidget {
  const FablePublishedContentPage({super.key,required this.slug,required this.repository,
-  this.locale,this.customRenderer,this.onAccepted});
+  this.locale,this.customRenderer,this.onAccepted,this.refreshSignals,
+  this.identitySignals});
  final String slug;
  final FablePublishedContentRepository repository;
  final String? locale;
  final FableCustomBlockRenderer? customRenderer;
  final VoidCallback? onAccepted;
+ /// Optional published-content hint stream. Resume also revalidates the page.
+ final Stream<Object?>? refreshSignals;
+ /// Optional account/session change stream; prior acceptance is never reused
+ /// across identities. Backend still validates every version acceptance.
+ final Stream<Object?>? identitySignals;
  @override State<FablePublishedContentPage> createState()=>_FablePublishedContentPageState();
 }
-class _FablePublishedContentPageState extends State<FablePublishedContentPage>{
+class _FablePublishedContentPageState extends State<FablePublishedContentPage>
+    with WidgetsBindingObserver {
  FablePublishedDocument? _document;
- bool _loading=false,_accepted=false,_accepting=false;
+ StreamSubscription<Object?>? _refreshSubscription,_identitySubscription;
+ bool _loading=false,_accepted=false,_accepting=false,_refreshQueued=false,_updated=false;
  int _requestEpoch=0;
  String? _error;
- @override void initState(){super.initState();_load();}
+
+ @override void initState(){
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+  _subscribe();
+  _requestRefresh();
+ }
+ void _subscribe(){
+  _refreshSubscription=widget.refreshSignals?.listen((_){
+   if(mounted)_requestRefresh();
+  });
+  _identitySubscription=widget.identitySignals?.listen((_){
+   if(!mounted)return;
+   // Do not reuse approval obtained under another user/session.
+   setState(()=>_accepted=false);
+   _requestRefresh();
+  });
+ }
+ @override void didChangeAppLifecycleState(AppLifecycleState state){
+  if(state==AppLifecycleState.resumed)_requestRefresh();
+ }
  @override void didUpdateWidget(covariant FablePublishedContentPage old){
   super.didUpdateWidget(old);
-  if(old.slug!=widget.slug||old.locale!=widget.locale||!identical(old.repository,widget.repository)){
-   _requestEpoch++;_loading=false;_document=null;_accepted=false;_load();
+  if(!identical(old.refreshSignals,widget.refreshSignals)||
+     !identical(old.identitySignals,widget.identitySignals)){
+   unawaited(_refreshSubscription?.cancel());
+   unawaited(_identitySubscription?.cancel());
+   _subscribe();
   }
+  if(old.slug!=widget.slug||old.locale!=widget.locale||
+     !identical(old.repository,widget.repository)){
+   _requestEpoch++;
+   _loading=false;_refreshQueued=false;_document=null;
+   _accepted=false;_updated=false;_error=null;
+   _requestRefresh();
+  }
+ }
+ void _requestRefresh(){
+  if(!mounted)return;
+  if(_loading){_refreshQueued=true;return;}
+  unawaited(_load());
  }
  Future<void> _load()async{
   if(_loading)return;
   final epoch=++_requestEpoch;
   setState((){_loading=true;_error=null;});
-  final slug=widget.slug,locale=widget.locale;
+  final slug=widget.slug,locale=widget.locale,repository=widget.repository;
   try{
-   final document=await widget.repository.read(slug,locale:locale);
-   if(mounted && epoch==_requestEpoch && slug==widget.slug&&locale==widget.locale)setState(()=>_document=document);
-  }catch(_){if(mounted&&epoch==_requestEpoch&&slug==widget.slug)setState(()=>_error='Content unavailable. Check connection and contract.');}
-  finally{if(mounted&&epoch==_requestEpoch)setState(()=>_loading=false);}
+   final document=await repository.read(slug,locale:locale);
+   if(!mounted||epoch!=_requestEpoch||slug!=widget.slug||
+      locale!=widget.locale||!identical(repository,widget.repository))return;
+   setState((){
+    final old=_document;
+    final changed=old!=null &&
+      (old.id!=document.id||old.versionId!=document.versionId);
+    if(changed){_accepted=false;_updated=true;}
+    _document=document;
+   });
+  }catch(_){
+   if(mounted&&epoch==_requestEpoch&&slug==widget.slug&&
+      identical(repository,widget.repository)){
+    setState(()=>_error='Could not verify the latest published version.');
+   }
+  }finally{
+   if(mounted&&epoch==_requestEpoch){
+    setState(()=>_loading=false);
+    if(_refreshQueued){
+     _refreshQueued=false;
+     WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted)_requestRefresh();
+     });
+    }
+   }
+  }
  }
  Future<void> _accept()async{
-  final document=_document;if(_accepting||document==null||!document.requiresAcceptance)return;
+  final document=_document;
+  if(_accepting||_loading||_error!=null||document==null||
+     !document.requiresAcceptance)return;
+  final epoch=_requestEpoch,repository=widget.repository;
   setState(()=>_accepting=true);
-  try{await widget.repository.accept(document);
-   if(mounted && identical(_document,document)){setState(()=>_accepted=true);widget.onAccepted?.call();}
-  }catch(_){if(mounted)setState(()=>_error='Could not record acceptance. Sign in and retry.');}
-  finally{if(mounted)setState(()=>_accepting=false);}
+  try{
+   await repository.accept(document);
+   if(mounted&&epoch==_requestEpoch&&
+      identical(repository,widget.repository)&&identical(_document,document)){
+    setState((){_accepted=true;_updated=false;});
+    widget.onAccepted?.call();
+   }
+  }catch(_){
+   if(mounted&&epoch==_requestEpoch)
+    setState(()=>_error='Could not record acceptance. Sign in and retry.');
+  }finally{if(mounted)setState(()=>_accepting=false);}
+ }
+ @override void dispose(){
+  WidgetsBinding.instance.removeObserver(this);
+  unawaited(_refreshSubscription?.cancel());
+  unawaited(_identitySubscription?.cancel());
+  _requestEpoch++;
+  super.dispose();
  }
  @override Widget build(BuildContext context){
   final ar=Localizations.maybeLocaleOf(context)?.languageCode=='ar';
-  return Scaffold(appBar:AppBar(title:Text(_document?.title??(ar?'محتوى منشور':'Published content'))),
+  return Scaffold(
+   appBar:AppBar(title:Text(_document?.title??(ar?'محتوى منشور':'Published content'))),
    body:SafeArea(child:Column(children:[
     if(_loading)const LinearProgressIndicator(),
-    if(_error!=null)Text(_error!),
-    Expanded(child:_document!=null?FablePublishedContentView(document:_document!,customRenderer:widget.customRenderer)
-     :FableStateView(state:_loading?FableContentState.loading:FableContentState.empty,
-       onRetry:_loading?null:_load)),
-    if(_document?.requiresAcceptance==true && !_accepted)Padding(padding:const EdgeInsets.all(12),
-      child:FilledButton(onPressed:_accepting||_loading?null:_accept,
+    if(_updated)Padding(padding:const EdgeInsets.all(12),
+      child:Text(ar?'نُشرت نسخة جديدة. يرجى مراجعتها قبل الموافقة.':
+        'A new published version is available. Review it before accepting.')),
+    if(_error!=null)Padding(padding:const EdgeInsets.all(8),
+      child:Text(ar?'تعذر التحقق من النسخة المنشورة. حاول التحديث.':_error!)),
+    Expanded(child:_document!=null
+      ?FablePublishedContentView(document:_document!,customRenderer:widget.customRenderer)
+      :FableStateView(state:_loading?FableContentState.loading:FableContentState.empty,
+        onRetry:_loading?null:_requestRefresh)),
+    if(_document?.requiresAcceptance==true&&!_accepted)
+      Padding(padding:const EdgeInsets.all(12),
+       child:FilledButton(
+        onPressed:_accepting||_loading||_error!=null?null:_accept,
         child:Text(ar?'أوافق على النسخة المنشورة':'Accept published version'))),
-   ])));
+    if(_error!=null)TextButton(
+      onPressed:_loading?null:_requestRefresh,
+      child:Text(ar?'إعادة التحقق':'Retry verification')),
+   ])),
+  );
  }
 }
