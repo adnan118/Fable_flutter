@@ -214,8 +214,29 @@ class FableAuthGateway implements BackendApiGateway {
   }
 
   Future<Object?> sessions() async {
-    final response = await _api.request('auth.sessions');
+    if(!_contract.supports('auth.sessions'))
+      throw StateError('Backend did not export auth.sessions');
+    final response=await _api.request('auth.sessions');
     return response.data;
+  }
+
+  /// Actual Backend sessions list, not a locally inferred device count.
+  Future<List<FableActiveSession>> listActiveSessions() async {
+    final response=await sessions();
+    final payload=response is Map && response.containsKey('data')
+      ? response['data'] : response;
+    if(payload is! List || payload.length>10000)
+      throw const FormatException('Invalid active sessions response');
+    final parsed=<FableActiveSession>[];
+    final identifiers=<String>{};
+    for(final entry in payload){
+      if(entry is! Map)throw const FormatException('Invalid session entry');
+      final record=FableActiveSession.fromMap(Map<String,dynamic>.from(entry));
+      if(!identifiers.add(record.id))
+        throw const FormatException('Duplicate session identity');
+      parsed.add(record);
+    }
+    return List<FableActiveSession>.unmodifiable(parsed);
   }
 
   static Map<String, dynamic> _payload(Object? value) {
@@ -303,5 +324,55 @@ class FableAccountSummary {
     return FableAccountSummary(id:id,displayName:field('displayName',191),
       username:field('username',64),email:field('email',191),
       phone:field('phone',32),locale:field('locale',16),timezone:field('timezone',64));
+  }
+}
+
+
+/// Public presentation fields returned by GET /auth/sessions.
+/// Never stores bearer/refresh tokens, installation secrets or security proofs.
+class FableActiveSession {
+  const FableActiveSession({
+    required this.id,required this.isCurrent,required this.createdAt,
+    required this.expiresAt,this.lastUsedAt,this.displayName,this.deviceName,
+    this.platform,this.clientType,this.appVersion,
+  });
+  final String id;
+  final bool isCurrent;
+  final DateTime createdAt,expiresAt;
+  final DateTime? lastUsedAt;
+  final String? displayName,deviceName,platform,clientType,appVersion;
+
+  factory FableActiveSession.fromMap(Map<String,dynamic> source){
+    final id=source['id'];
+    if(id is! String ||
+       !RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(id))
+      throw const FormatException('Invalid active session UUID');
+    if(source['isCurrent'] is! bool)
+      throw const FormatException('Missing active session current state');
+    DateTime parseDate(String key,{bool required=true}){
+      final value=source[key];
+      if(value is! String || value.length>64)
+        throw FormatException('Invalid session date: $key');
+      final parsed=DateTime.tryParse(value)?.toUtc();
+      if(parsed==null)throw FormatException('Invalid session date: $key');
+      return parsed;
+    }
+    String? optional(String key,int max){
+      final value=source[key];
+      if(value==null)return null;
+      if(value is! String || value.length>max ||
+         value.contains(RegExp(r'[\\x00-\\x1F\\x7F]')))
+        throw FormatException('Invalid session presentation field: $key');
+      return value;
+    }
+    final createdAt=parseDate('createdAt'),expiresAt=parseDate('expiresAt');
+    final lastUsed=source['lastUsedAt']==null ? null : parseDate('lastUsedAt');
+    return FableActiveSession(
+      id:id,isCurrent:source['isCurrent'] as bool,
+      createdAt:createdAt,expiresAt:expiresAt,lastUsedAt:lastUsed,
+      displayName:optional('displayName',191),
+      deviceName:optional('deviceName',191),platform:optional('platform',64),
+      clientType:optional('clientType',64),appVersion:optional('appVersion',64),
+    );
   }
 }
