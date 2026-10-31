@@ -26,6 +26,12 @@ const WIRED=Object.freeze({
   'passkeys.authentication.options':'packages/features/fable_biometrics/lib/src/biometrics_repository.dart',
   'passkeys.authentication.verify':'packages/features/fable_biometrics/lib/src/biometrics_repository.dart',
 });
+// Screen evidence is separate from Gateway evidence; neither proves a live
+// Backend session. Keep Auth sessions as the first mapped workflow.
+const VIEW_SOURCES=Object.freeze({
+  'auth.login':'packages/features/fable_auth/lib/src/login_page.dart',
+  'auth.sessions':'packages/features/fable_auth/lib/src/sessions_page.dart',
+});
 const MOBILE_CORE='assets/contracts/mobile-core-operations.json';
 const isWebOnly=op=>op.id.startsWith('auth.web.')||op.path.startsWith('/auth/web/');
 const unique=(items)=>{
@@ -69,8 +75,15 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
        !readFileSync(join(path,source),'utf8').includes("'"+op.id+"'"))
       return {...op,status:'MAPPING_STALE',source,
         nextAction:'Update frontend source and contract binding before claiming coverage'};
+    const viewSource=VIEW_SOURCES[op.id]??null;
+    const screenWired=viewSource!=null&&existsSync(join(path,viewSource))&&
+      (op.id==='auth.sessions'
+        ?readFileSync(join(path,viewSource),'utf8').includes('listActiveSessions')
+        :readFileSync(join(path,viewSource),'utf8').includes('auth.login'));
     return {...op,status:'SOURCE_WIRED_NOT_LIVE_TESTED',source,
-      nextAction:'Validate all backend request/response/errors and a real Android/iOS flow'};
+      viewSource:screenWired?viewSource:null,
+      presentationEvidence:screenWired?'SCREEN_WIRED_NOT_LIVE_TESTED':'SCREEN_NOT_VERIFIED',
+      nextAction:'Validate request/response/errors/permissions and a real Android/iOS Backend flow'};
   });
   const counts=Object.fromEntries(['SOURCE_WIRED_NOT_LIVE_TESTED','NOT_MAPPED','MAPPING_STALE','NOT_FOR_FLUTTER']
     .map(status=>[status,mapped.filter(x=>x.status===status).length]));
