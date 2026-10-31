@@ -305,6 +305,40 @@ async function interactiveManual(question=null){
           frontendAction:'Connect this choice to a verified external Backend API before production'}))};
   }finally{cli?.close();}
 }
+export async function runGuidedFlutterSetup({
+  root=process.cwd(),source=null,expectedProjectId=null,expectedContractHash=null,
+  prune=false,ask,show=console.log,askToImport=true,
+}={}){
+  if(typeof ask!=='function')throw Error('The guided frontend wizard requires a terminal question callback');
+  const project=resolve(root);
+  if(askToImport){
+    const answer=(await ask('هل تريد استيراد قرارات Fable Backend الآن؟ (نعم/لا) [نعم]: ')).trim().toLowerCase();
+    if(['لا','n','no','0'].includes(answer)){
+      const draft=manualFrontendDecisions(await interactiveManual(ask));
+      show(formatFrontendSetupReview(draft,{root:project}));
+      const approve=await ask('اكتب «اعتمد» أو APPROVE لحفظ إعداد Flutter اليدوي: ');
+      if(!isExplicitFrontendApproval(approve)){
+        show('تم الإلغاء؛ لا توجد تغييرات.');
+        return {applied:false,cancelled:true,mode:'manual'};
+      }
+      const result=saveFrontendSetup(project,draft,{apply:true});
+      show('✓ تم حفظ إعداد Flutter اليدوي بعد الموافقة.');
+      return result;
+    }
+  }
+  let selectedSource=source;
+  if(!selectedSource){
+    const first=resolve(project,'../Fable-Backend-RC66/dist/client-contract');
+    const second=resolve(project,'../backend/dist/client-contract');
+    const suggestion=existsSync(join(first,'contract.json'))?first:second;
+    const answer=(await ask('مسار ملف قرارات الباك (مجلد dist/client-contract) ['+suggestion+']: ')).trim();
+    selectedSource=answer||suggestion;
+  }
+  return reviewedBackendImport({
+    root:project,source:selectedSource,
+    expectedProjectId,expectedContractHash,prune,ask,show,
+  });
+}
 async function main(){
   const opt=explicitKeys(process.argv.slice(2));
   const root=resolve(opt.out??process.cwd());
@@ -312,37 +346,15 @@ async function main(){
   const promptMode=guided || (opt.mode==='import' && (opt.interactive||(opt.apply && process.stdin.isTTY&&!opt.yes)));
   if(promptMode){
     const cli=createInterface({input:process.stdin,output:process.stdout});
-    const ask=text=>cli.question(text);
     try{
-      if(guided){
-        const value=(await ask('هل تريد استيراد قرارات Fable Backend الآن؟ (نعم/لا) [نعم]: ')).trim().toLowerCase();
-        const shouldImport=!['لا','n','no','0'].includes(value);
-        if(!shouldImport){
-          const manual=manualFrontendDecisions(await interactiveManual(ask));
-          console.log(formatFrontendSetupReview(manual,{root}));
-          const approved=await ask('اكتب «اعتمد» أو APPROVE لحفظ إعداد Flutter اليدوي: ');
-          if(!isExplicitFrontendApproval(approved)){
-            console.log('تم الإلغاء؛ لا توجد تغييرات.');
-            return;
-          }
-          console.log(JSON.stringify(saveFrontendSetup(root,manual,{apply:true}),null,2));
-          return;
-        }
-      }
-      let source=opt.source;
-      if(!source){
-        const first=resolve(root,'../Fable-Backend-RC66/dist/client-contract');
-        const second=resolve(root,'../backend/dist/client-contract');
-        const suggestion=existsSync(join(first,'contract.json'))?first:second;
-        const input=(await ask('مسار ملف قرارات الباك (مجلد dist/client-contract) ['+suggestion+']: ')).trim();
-        source=input||suggestion;
-      }
-      const result=await reviewedBackendImport({
-        root,source,expectedProjectId:opt['expected-project-id']??null,
+      const result=await runGuidedFlutterSetup({
+        root,source:opt.source??null,
+        expectedProjectId:opt['expected-project-id']??null,
         expectedContractHash:opt['expected-contract-hash']??null,
-        prune:!!opt.prune,ask,show:message=>console.log(message),
+        prune:!!opt.prune,ask:text=>cli.question(text),
+        show:message=>console.log(message),askToImport:guided,
       });
-      console.log(JSON.stringify(result,null,2));
+      process.stdout.write(JSON.stringify(result,null,2)+'\n');
     }finally{cli.close();}
     return;
   }
