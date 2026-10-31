@@ -35,12 +35,13 @@ export function readWizardSessionPolicy(root=process.cwd()) {
   if(!gate.ok)throw new Error('Backend export integrity check failed: '+gate.failures.join(','));
   const contract=JSON.parse(readFileSync(resolve(cwd,'assets/contracts/contract.json'),'utf8'));
   const core=JSON.parse(readFileSync(resolve(cwd,'assets/contracts/mobile-core-operations.json'),'utf8'));
+  const policy=validateSessionPolicyForWizard(contract.core?.auth?.sessionPolicy);
   const declared=[...(contract.operations??[]),...(core.operations??[])];
   if(!declared.some(o=>o.operationId==='auth.session-policy' &&
     o.method==='GET' && o.path==='/auth/session-policy' && o.public===true)) {
     throw new Error('Backend did not publish the live auth.session-policy operation');
   }
-  return validateSessionPolicyForWizard(contract.core?.auth?.sessionPolicy);
+  return policy;
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
