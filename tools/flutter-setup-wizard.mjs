@@ -24,7 +24,7 @@ function explicitKeys(options){
     const current=options[i];
     if(!current.startsWith('--'))throw Error('Unexpected argument: '+current);
     const key=current.slice(2);
-    if(['apply','interactive','prune'].includes(key)){out[key]=true;continue;}
+    if(['apply','interactive','prune','yes'].includes(key)){out[key]=true;continue;}
     if(!options[i+1]||options[i+1].startsWith('--'))throw Error('Missing value for --'+key);
     out[key]=options[++i];
   }
@@ -121,6 +121,93 @@ export function manualFrontendDecisions(input) {
       instructions:'Explicitly integrate and verify an external Backend. Manual declarations never authorize or enforce operations.'},
   };
 }
+// Display the complete public decision tree before any file is changed.
+// Do not print the private source config, environment variables or secrets.
+export function formatFrontendSetupReview(snapshot,{root=null}={}){
+  if(snapshot?.kind!=='fable.flutter-frontend-setup')throw Error('Invalid setup for review');
+  let old=null;
+  if(root){
+    const file=resolve(root,PROJECT_PATH);
+    if(existsSync(file))old=asJson(file);
+  }
+  const current=old?.decisionSnapshot?.decisions??null;
+  const proposed=snapshot.decisionSnapshot.decisions;
+  const changes=[];
+  function walk(a,b,key=''){
+    if(JSON.stringify(a)===JSON.stringify(b))return;
+    if(a && b && typeof a==='object' && typeof b==='object' &&
+       !Array.isArray(a) && !Array.isArray(b)){
+      for(const k of [...new Set([...Object.keys(a),...Object.keys(b)])].sort())
+        walk(a[k],b[k],key?key+'.'+k:k);
+    }else changes.push(key||'(root)');
+  }
+  if(current)walk(current,proposed);
+  const features=proposed?.frontendFeatures;
+  const lines=[
+    '════════════════ FABLE BACKEND → FLUTTER ════════════════',
+    'المشروع: '+snapshot.projectId,
+    'بصمة العقد: '+(snapshot.contractHash??'manual / unverified'),
+    'التحقق من هوية المشروع: '+(snapshot.projectBound?'مُطابق للقيم الموثوقة المُمررة':'المصدر فقط؛ لم تُقدَّم بصمة مستقلة'),
+    'الوضع: '+snapshot.mode,
+    '',
+    '── قرارات الباك الكاملة (للقراءة فقط) ──',
+    JSON.stringify(proposed,null,2),
+    '',
+    '── خطوات إعداد Flutter ──',
+    ...snapshot.decisionSnapshot.steps.map(step=>'- '+step.id+': '+(step.frontendAction??step.id)),
+    '',
+  ];
+  if(features){
+    lines.push('── الميزات ──',
+      'المتاحة: '+(features.enabled??[]).join(', '),
+      'غير المفعلة: '+(features.disabled??[]).join(', '),
+      'تحتاج مراجعة قرار Frontend محلي: '+(features.clientOnlyReview??[]).join(', '),'');
+  }
+  if(current)lines.push(
+    '── الفروقات عن القرارات المستوردة سابقاً ──',
+    ...(changes.length?changes.map(x=>'- '+x):['لا توجد فروقات في القرارات']),
+    '');
+  else lines.push('لا يوجد ملف قرارات مستورد سابقاً لهذا المشروع.','');
+  lines.push(
+    'لم يتم تغيير أي ملف بعد. استيراد القرارات لا يثبت نجاح الاتصال بالباك.',
+    'لن تُحذف حزم Flutter الفعلية دون اختيار --prune وفحص عقد مشروع مثبت الهوية.',
+    '═══════════════════════════════════════════════════════');
+  return lines.join('\n');
+}
+export const isExplicitFrontendApproval=answer=>['اعتمد','APPROVE'].includes(String(answer??'').trim());
+function requirePruningPin(snapshot,prune){
+  if(prune && (!snapshot.backendAuthority||!snapshot.projectBound))
+    throw Error('Pruning requires a pinned Fable Backend contract and explicit project identity');
+}
+async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={}){
+  requirePruningPin(snapshot,prune);
+  const result=saveFrontendSetup(root,snapshot,{apply:true,sourceDir:source??null});
+  if(snapshot.backendAuthority && snapshot.decisionSnapshot?.decisions?.frontendFeatures){
+    const {syncProjectFeatures}=await import('./sync-project-features.mjs');
+    result.featureSync=syncProjectFeatures(root,snapshot,{apply:snapshot.projectBound,prune});
+  }
+  return result;
+}
+// The confirmation callback is intentionally injectable to test refusals.
+export async function reviewedBackendImport({
+  root=process.cwd(),source,expectedProjectId=null,expectedContractHash=null,
+  prune=false,ask,show=console.log,
+}={}){
+  if(typeof ask!=='function')throw Error('An interactive confirmation prompt is required');
+  const project=resolve(root);
+  const snapshot=importBackendDecisions(source??project,{expectedProjectId,expectedContractHash});
+  requirePruningPin(snapshot,prune);
+  show(formatFrontendSetupReview(snapshot,{root:project}));
+  const answer=await ask('بعد مراجعة جميع القرارات، اكتب «اعتمد» أو APPROVE لتطبيقها (أي إجابة أخرى تلغي): ');
+  if(!isExplicitFrontendApproval(answer)){
+    show('تم إلغاء الاستيراد. لم يتغير أي ملف في مشروع Flutter.');
+    return {applied:false,cancelled:true,projectId:snapshot.projectId};
+  }
+  const result=await applyReviewedSnapshot(project,snapshot,{source:source??project,prune});
+  show('✓ تم تطبيق قرارات الباك الموافق عليها.');
+  return result;
+}
+
 // Manual review with a Fable Backend still uses the signed Backend as authority.
 // Only supplied fields are compared, and client-only UI preferences can differ.
 export function reconcileManualWithBackend(manual,verified) {
