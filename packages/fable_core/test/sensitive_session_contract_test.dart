@@ -20,6 +20,8 @@ FableContract contract({bool otp=true,bool revoke=true})=>FableContract(contract
     featureIds:const <String>{},operations:{
       if(revoke)'sessions.remove':const FableOperation('sessions.remove','POST',
         '/auth/sessions/{id}/revoke','hash',requiresAuth:true,enforceAuth:true),
+      'sessions.bulk':const FableOperation('sessions.bulk','POST',
+        '/auth/sessions/revoke-selected','hash',requiresAuth:true,enforceAuth:true),
       'sessions.all':const FableOperation('sessions.all','POST',
         '/auth/logout-all','hash',requiresAuth:true,enforceAuth:true),
       if(otp)'sensitive.send':const FableOperation('sensitive.send','POST',
@@ -116,4 +118,58 @@ void main(){
     await expectLater(client.requestSensitiveActionOtp(),throwsStateError);
     await expectLater(client.revokeOtherSession(id),throwsStateError);
   });
+
+  test('One bulk-revocation request consumes one proof for all selected sessions',()async{
+    final second='550e8400-e29b-41d4-a716-446655440003';
+    final seen=<RequestOptions>[];
+    final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract(),secureSession:MemorySession(),
+      client:intercepted((req)async{
+        seen.add(req);
+        if(req.path=='/auth/otp/request')return response(req,200,{'challengeId':challenge});
+        if(req.path=='/auth/otp/verify')return response(req,200,{
+          'verified':true,'challengeId':challenge,'purpose':'SENSITIVE_ACTION'});
+        if(req.path=='/auth/sessions/revoke-selected'){
+          if(req.headers['X-Security-Challenge-Id']!=challenge)
+            return response(req,403,{'code':'AUTH_RECENT_AUTH_REQUIRED'});
+          expect(req.data,{'sessionIds':[id,second]});
+          return response(req,200,{'revoked':2,'sessionIds':[id,second],
+            'currentSessionRevoked':false,'clientActions':[]});
+        }
+        return response(req,404,{});
+      }));
+    addTearDown(client.dispose);
+    await expectLater(client.revokeSelectedSessions([id,second,id]),
+      throwsA(isA<FableApiException>().having((e)=>e.code,'code','AUTH_RECENT_AUTH_REQUIRED')));
+    final proof=await client.verifySensitiveActionOtp(
+      await client.requestSensitiveActionOtp(),'123456');
+    final result=await client.revokeSelectedSessions([id,second,id],proof:proof);
+    expect(result,[id,second]);
+    expect(seen.where((e)=>e.path=='/auth/sessions/revoke-selected').length,2);
+    expect(seen.last.headers['X-Security-Challenge-Id'],challenge);
+  });
+  test('Selected-session revocation clears current credentials only when server confirms',()async{
+    final session=MemorySession();
+    final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract(),secureSession:session,
+      client:intercepted((req)async=>response(req,200,{
+        'revoked':1,'sessionIds':[id],'currentSessionRevoked':true})));
+    addTearDown(client.dispose);
+    expect(await client.revokeSelectedSessions([id]),[id]);
+    expect(session.access,isNull);
+    expect(session.identityRevision,1);
+  });
+  test('Malformed or foreign server confirmation cannot silently revoke local identity',()async{
+    final session=MemorySession();
+    final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract(),secureSession:session,
+      client:intercepted((req)async=>response(req,200,{
+        'revoked':1,'sessionIds':['550e8400-e29b-41d4-a716-446655440099'],
+        'currentSessionRevoked':true})));
+    addTearDown(client.dispose);
+    await expectLater(client.revokeSelectedSessions([id]),throwsFormatException);
+    expect(session.access,'demo-token');
+    await expectLater(client.revokeSelectedSessions([]),throwsArgumentError);
+  });
+
 }
