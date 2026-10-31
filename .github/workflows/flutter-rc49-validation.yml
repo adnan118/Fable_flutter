@@ -28,7 +28,7 @@ jobs:
           node-version: '24'
       - name: Verify imported Fable contract source (never implies project/live acceptance)
         run: |
-          node --test test/contract-acceptance.test.mjs test/session-policy-for-wizard.test.mjs
+          node --test test/contract-acceptance.test.mjs test/session-policy-for-wizard.test.mjs test/flutter-setup-wizard.test.mjs
           node tools/verify-fable-contract.mjs --mode source
       - uses: subosito/flutter-action@v2
         with:
