@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_design_system/fable_design_system.dart';
 import 'published_content_repository.dart';
+import 'structured_content_text.dart';
 
 /// Safe, backend-neutral content block renderer. It NEVER interprets HTML or
 /// opens untrusted URLs, and never invents image/media endpoints. Projects can
@@ -24,46 +25,123 @@ class FablePublishedBlockView extends StatelessWidget {
  final FableContentBlock block;
  final FableCustomBlockRenderer? customRenderer;
  String? text(String key,{int max=10000}){
-  final v=block.data[key];return v is String&&v.length<=max?v:null;
+  final v=block.data[key];
+  return v is String&&v.length<=max?v:null;
+ }
+ Widget rich(String key)=>FableStructuredTextView(payload:block.data[key]);
+ Widget fallback(BuildContext context,{String? reason}){
+  final ar=Localizations.maybeLocaleOf(context)?.languageCode=='ar';
+  return Semantics(
+   label:ar?'عنصر محتوى يحتاج تكاملاً موثقاً: ${block.type}':
+     'Published content needs verified integration: ${block.type}',
+   child:Text(reason??(ar?'العنصر ${block.type} يحتاج ربطاً موثّقاً قبل العرض.':
+       'Content block ${block.type} requires verified integration.'),
+    style:Theme.of(context).textTheme.bodySmall));
  }
  @override Widget build(BuildContext context){
   final typography=Theme.of(context).textTheme;
+  // Media, downloads, links and custom blocks must be bound to project
+  // capabilities explicitly. A raw mediaId or URL is never an image or action.
+  if(const {'image','gallery','video','file-download','button','custom'}
+       .contains(block.type)){
+   final vetted=customRenderer?.call(context,block);
+   if(vetted!=null)return vetted;
+   if(block.type=='button'){
+    return OutlinedButton(onPressed:null,
+      child:Text(text('label',max:200)??'Action unavailable'));
+   }
+   return fallback(context);
+  }
   switch(block.type){
    case 'heading':
-     final level=block.data['level'].toString();
-     final style=level=='1'?typography.headlineMedium:level=='2'?typography.headlineSmall:typography.titleMedium;
-     return Semantics(header:true,child:Text(text('text')??'',style:style));
-   case 'paragraph':return Text(text('content')??'');
-   case 'quote':return Padding(padding:const EdgeInsets.symmetric(horizontal:12),child:Column(
-     crossAxisAlignment:CrossAxisAlignment.start,children:[Text(text('text')??'',style:typography.bodyLarge),
-       if(text('author')!=null)Text(text('author')!,style:typography.labelMedium)]));
-   case 'notice':return Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(
-     crossAxisAlignment:CrossAxisAlignment.start,children:[if(text('title')!=null)Text(text('title')!,style:typography.titleMedium),
-     Text(text('content')??'')])));
+    final level=block.data['level'].toString();
+    final style=level=='1'?typography.headlineMedium:
+      level=='2'?typography.headlineSmall:typography.titleMedium;
+    return Semantics(header:true,child:Text(text('text')??'',style:style));
+   case 'paragraph':return rich('content');
+   case 'rich-text':return rich('document');
+   case 'quote':return Padding(padding:const EdgeInsets.symmetric(horizontal:12),
+     child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text(text('text')??'',style:typography.bodyLarge),
+      if(text('author')!=null)Text(text('author')!,style:typography.labelMedium),
+     ]));
+   case 'notice':return Card(child:Padding(padding:const EdgeInsets.all(12),
+     child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      if(text('title')!=null)Text(text('title')!,style:typography.titleMedium),
+      rich('content'),
+     ])));
    case 'divider':return const Divider();
-   case 'spacer':return SizedBox(height:switch(block.data['size']){'sm'=>8.0,'lg'=>32.0,_=>16.0});
+   case 'spacer':return SizedBox(height:switch(block.data['size']){
+     'sm'=>8.0,'lg'=>32.0,_=>16.0});
+   case 'image-text':
+    // Text remains available to users without inventing a media URL. A
+    // project's verified media renderer may implement the entire combined block.
+    final vetted=customRenderer?.call(context,block);
+    if(vetted!=null)return vetted;
+    return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+     if(text('title')!=null)Text(text('title')!,style:typography.titleMedium),
+     rich('content'),
+     fallback(context),
+    ]);
    case 'list':
-     final items=block.data['items'];
-     if(items is List && items.length<=100 && items.every((x)=>x is String&&x.length<=3000)){
-       return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-         for(var i=0;i<items.length;i++)Padding(padding:const EdgeInsets.symmetric(vertical:3),
-          child:Text('${block.data['style']=='numbered'?'${i+1}.':'•'} ${items[i]}'))]);
-     }
-     break;
+    final items=block.data['items'];
+    if(items is List&&items.length<=100&&
+       items.every((x)=>x is String&&x.length<=3000)){
+     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      for(var i=0;i<items.length;i++)
+       Padding(padding:const EdgeInsets.symmetric(vertical:3),
+        child:Text("${block.data['style']=='numbered'?'${i+1}.':'•'} ${items[i]}")),
+     ]);
+    }
+    return fallback(context);
    case 'faq':
-     final items=block.data['items'];
-     if(items is List && items.length<=60 && items.every((x)=>x is Map&&x['question'] is String&&x['answer'] is String)){
-       return Column(children:[for(final entry in items)ExpansionTile(title:Text(entry['question'] as String),
-         children:[Padding(padding:const EdgeInsets.all(12),child:Text(entry['answer'] as String))])]);
-     }
-     break;
+    final items=block.data['items'];
+    if(items is List&&items.length<=60&&items.every((x)=>x is Map&&
+       x['question'] is String&&x['answer'] is String&&
+       (x['question'] as String).length<=500&&
+       (x['answer'] as String).length<=5000)){
+     return Column(children:[for(final entry in items)
+      ExpansionTile(title:Text(entry['question'] as String),children:[
+       Padding(padding:const EdgeInsets.all(12),
+        child:Text(entry['answer'] as String)),
+      ])]);
+    }
+    return fallback(context);
+   case 'table':
+    final cols=block.data['columns'],rows=block.data['rows'];
+    if(cols is List&&cols.isNotEmpty&&cols.length<=12&&
+       cols.every((x)=>x is String&&x.length<=120)&&rows is List&&
+       rows.length<=80&&rows.every((r)=>r is List&&
+         r.length==cols.length&&r.every((cell)=>cell is String&&cell.length<=1000))){
+     return SingleChildScrollView(scrollDirection:Axis.horizontal,
+      child:DataTable(
+       columns:[for(final c in cols)DataColumn(label:Text(c as String))],
+       rows:[for(final row in rows)
+        DataRow(cells:[for(final cell in row as List)
+         DataCell(Text(cell as String))])]));
+    }
+    return fallback(context);
+   case 'columns':
+    final columns=block.data['columns'];
+    if(columns is List&&columns.isNotEmpty&&columns.length<=6&&
+       columns.every((c)=>c is Map&&
+         (c['title']==null||c['title'] is String)&&
+         (c['content']==null||c['content'] is String||c['content'] is Map))){
+     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      for(final c in columns)
+       Padding(padding:const EdgeInsets.symmetric(vertical:8),child:
+        Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+         if(c['title'] is String)Text(c['title'] as String,
+           style:typography.titleMedium),
+         if(c['content']!=null)FableStructuredTextView(payload:c['content']),
+        ])),
+     ]);
+    }
+    return fallback(context);
   }
   final optional=customRenderer?.call(context,block);
   if(optional!=null)return optional;
-  final isAr=Localizations.maybeLocaleOf(context)?.languageCode=='ar';
-  return Semantics(label:isAr?'عنصر محتوى غير مدعوم: ${block.type}':'Unsupported content block: ${block.type}',
-    child:Text(isAr?'عنصر محتوى غير مدعوم (${block.type})':'Unsupported content block (${block.type})',
-    style:typography.bodySmall));
+  return fallback(context);
  }
 }
 
@@ -108,8 +186,14 @@ class _FablePublishedContentPageState extends State<FablePublishedContentPage>
   });
   _identitySubscription=widget.identitySignals?.listen((_){
    if(!mounted)return;
-   // Do not reuse approval obtained under another user/session.
-   setState(()=>_accepted=false);
+   // Invalidate both pending reads and in-flight acceptance before a new
+   // account can view this page. A reply from the previous identity must
+   // never mark the current identity as having approved the old request.
+   _requestEpoch++;
+   setState((){
+    _accepted=false;_document=null;_updated=false;_error=null;
+    _loading=false;_refreshQueued=false;
+   });
    _requestRefresh();
   });
  }

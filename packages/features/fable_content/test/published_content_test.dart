@@ -35,6 +35,7 @@ class _MutablePublishedGateway implements BackendApiGateway {
  String version='v1';
  bool failReads=false;
  final accepted=<String>[];
+ Completer<void>? holdAcceptance;
  int reads=0;
  @override Future<Response<dynamic>> execute(String operationId,{
   Map<String,dynamic>? path,Map<String,dynamic>? query,
@@ -57,6 +58,7 @@ class _MutablePublishedGateway implements BackendApiGateway {
    final input=body;
    if(input is! Map||input['versionId']!=version)
     throw StateError('Current version mismatch');
+   if(holdAcceptance!=null)await holdAcceptance!.future;
    accepted.add(input['versionId'] as String);
    return Response(requestOptions:RequestOptions(path:'/verified'),data:{});
   }
@@ -214,6 +216,31 @@ void main() {
     api.reply={'revision':List.filled(64,'a').join(),'unchanged':true,
       'resetRequired':false};
     await expectLater(repo.publishedIndex(),throwsFormatException);
+  });
+
+  testWidgets('account switch invalidates an earlier in-flight policy acceptance',
+  (tester) async{
+    final api=_MutablePublishedGateway();
+    final identity=StreamController<Object?>.broadcast();
+    final gate=Completer<void>();
+    api.holdAcceptance=gate;
+    addTearDown(identity.close);
+    var confirmations=0;
+    await tester.pumpWidget(MaterialApp(home:FablePublishedContentPage(
+      slug:'privacy-policy',repository:FablePublishedContentRepository(api),
+      identitySignals:identity.stream,onAccepted:()=>confirmations++,
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Accept published version'));
+    await tester.pump();
+    identity.add('different-account');
+    await tester.pumpAndSettle();
+    expect(api.reads,greaterThanOrEqualTo(2));
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(confirmations,0);
+    expect(find.text('Accept published version'),findsOneWidget);
+    expect(api.accepted,['v1']);
   });
 
 }
