@@ -72,11 +72,17 @@ export function planFeatureSync(root,verified){
      declared.disabled.some(x=>enabled.has(x)) ||
      declared.clientOnlyReview.some(x=>enabled.has(x)) ||
      !declared.disabled.every(x=>KNOWN.includes(x)) ||
-     !declared.clientOnlyReview.every(x=>KEEP_CLIENT_ONLY.has(x))){
+     !declared.clientOnlyReview.every(x=>KEEP_CLIENT_ONLY.has(x)) ||
+     declared.disabled.some(x=>declared.clientOnlyReview.includes(x)) ||
+     new Set(declared.clientOnlyReview).size!==declared.clientOnlyReview.length){
     throw Error('Conflicting or unsupported Backend feature inventory');
   }
   const visible=KNOWN.filter(x=>enabled.has(x));
-  const disabled=KNOWN.filter(x=>!enabled.has(x));
+  // Client-only capabilities (for example offline or deep links) are not
+  // evidence of a missing Backend feature. Keep their packages for review
+  // instead of irreversibly treating them as unused server functionality.
+  const review=new Set(declared.clientOnlyReview);
+  const disabled=KNOWN.filter(x=>!enabled.has(x)&&!review.has(x));
   const rootDir=resolve(root);
   const local=existsSync(join(rootDir,'.fable','mobile-features.json'))?
     json(join(rootDir,'.fable','mobile-features.json')):null;
@@ -94,7 +100,7 @@ export function planFeatureSync(root,verified){
     protectedProjectFeatureCount:protectedProjectFeatures.length,
     requestedSource:local?.selectionSource??null,
     pruneAvailable:verified.projectBound===true,
-    note:'Frontend UI and built-in registry are synced; physical package pruning requires --prune and a pinned project contract.',
+    note:'Backend feature registry is synced; client-only packages stay protected for developer review. Physical Backend feature pruning requires --prune and a pinned project contract.',
   };
 }
 function removePushSections(src){
