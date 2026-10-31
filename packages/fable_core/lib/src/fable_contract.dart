@@ -66,6 +66,22 @@ class FableContract implements OperationCatalog {
   final FableSessionPolicy? sessionPolicy;
   /// Read-only, signed frontend-setup decisions from Fable Backend.
   final Map<String,dynamic>? frontendSetup;
+  /// Null denotes a legacy export. A new Backend contract must explicitly say
+  /// which client features are enabled; disabled features never appear as tiles.
+  Set<String>? get backendVisibleFeatureIds {
+    final setup=frontendSetup;
+    if(setup==null)return null;
+    final choices=setup['decisions'];
+    if(choices is! Map)return null;
+    final features=choices['frontendFeatures'];
+    if(features is! Map)return null;
+    final ids=features['enabled'];
+    if(ids is! List)return null;
+    return Set<String>.unmodifiable(ids.whereType<String>());
+  }
+  bool isFeatureAvailable(String featureId) =>
+    backendVisibleFeatureIds?.contains(featureId) ?? true;
+
 
   static FableContract fromMaps(Map<String, dynamic> handoff,
       Map<String, dynamic> contract,
@@ -160,6 +176,27 @@ class FableContract implements OperationCatalog {
         parsed['schemaVersion']!=1 || parsed['projectId']!=project?['id'] ||
         parsed['steps'] is! List || parsed['decisions'] is! Map){
         throw const FormatException('Invalid backend frontend-setup decisions');
+      }
+      final choices=parsed['decisions'];
+      if(choices is! Map)throw const FormatException('Invalid frontend decisions');
+      final featurePolicy=choices['frontendFeatures'];
+      if(featurePolicy!=null){
+        if(featurePolicy is! Map || featurePolicy['schemaVersion']!=1 ||
+          featurePolicy['source']!='backend-installed-capabilities' ||
+          featurePolicy['enabled'] is! List ||
+          !(featurePolicy['enabled'] as List).every((item)=>item is String && item.isNotEmpty) ||
+          featurePolicy['disabled'] is! List ||
+          !(featurePolicy['disabled'] as List).every((item)=>item is String && item.isNotEmpty)) {
+          throw const FormatException('Invalid backend feature visibility');
+        }
+        final enabled=(featurePolicy['enabled'] as List).cast<String>().toSet();
+        final disabled=(featurePolicy['disabled'] as List).cast<String>().toSet();
+        if(enabled.length!=(featurePolicy['enabled'] as List).length ||
+          disabled.length!=(featurePolicy['disabled'] as List).length ||
+          enabled.intersection(disabled).isNotEmpty ||
+          !enabled.contains('auth') || !enabled.contains('access_control')){
+          throw const FormatException('Backend feature visibility policy conflicts');
+        }
       }
       frontendSetup=Map<String,dynamic>.unmodifiable(parsed);
     }
