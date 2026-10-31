@@ -48,7 +48,7 @@ navigatorKey: someValue,
     decisionSnapshot:{decisions:{frontendFeatures:{
       schemaVersion:1,source:'backend-installed-capabilities',
       enabled:['auth','profile','localization','access_control'],
-      disabled:['notifications','support'],
+      disabled:['notifications','media','support','social','biometrics','realtime','messaging','location','payments','analytics','content'],
       clientOnlyReview:['deeplinks','offline']
     }}}};
   return {root,verified};
