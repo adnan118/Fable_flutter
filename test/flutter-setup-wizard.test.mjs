@@ -200,3 +200,22 @@ test('Declining backend import allows separate manual wizard after independent r
     assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+test('Approval applies only the exact Backend export that was displayed in the terminal',async()=>{
+  const f=fixture(),shown=[];
+  try{
+    await assert.rejects(reviewedBackendImport({
+      root:f.root,source:f.dir,
+      ask:async()=>{
+        const handoff=join(f.dir,'flutter-handoff.json');
+        // Even innocuous same-JSON reformatting must require a new review.
+        writeFileSync(handoff,readFileSync(handoff,'utf8')+'\n');
+        return 'اعتمد';
+      },
+      show:line=>shown.push(line),
+    }),/source changed since the terminal review/);
+    assert.ok(shown[0].includes('قرارات الباك الكاملة'));
+    assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
+    assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
