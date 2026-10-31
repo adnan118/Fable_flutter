@@ -46,7 +46,9 @@ class _AppState extends State<FableStarterApp> {
           credentials=auth.session;
           auth.dispose();
         }
-      } else if(snapshot.externalContract!=null){
+      } else if(snapshot.externalContract!=null && snapshot.externalAuthBinding!=null){
+        // An external catalog without a verified Auth binding is NOT evidence
+        // of authentication. Never unlock push navigation from stale credentials.
         credentials=ExternalAuthGateway.secureSessionFor(snapshot.externalContract!);
       }
       if(!mounted||credentials==null)return;
