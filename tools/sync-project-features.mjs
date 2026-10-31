@@ -59,7 +59,13 @@ export function planFeatureSync(root,verified){
      declared.source!=='backend-installed-capabilities' ||
      !Array.isArray(declared.enabled)||!Array.isArray(declared.disabled)||
      !Array.isArray(declared.clientOnlyReview))throw Error('Backend did not publish complete feature decisions');
-  const enabled=new Set(declared.enabled);
+  const selection=verified.frontendSelection??{mode:'advisory',features:null};
+  const requested=selection.mode==='explicit' ? new Set(selection.features??[]) : null;
+  if(requested && [...requested].some(id=>!KNOWN.includes(id)))
+    throw Error('Backend handoff selected an unknown Flutter feature');
+  if(requested && [...requested].some(id=>declared.disabled.includes(id)))
+    throw Error('Frontend feature selection requires a capability disabled in Backend');
+  const enabled=new Set(declared.enabled.filter(id=>!requested||REQUIRED.has(id)||requested.has(id)));
   if(![...enabled].every(x=>KNOWN.includes(x)) ||
      ![...REQUIRED].every(x=>enabled.has(x)) ||
      new Set(declared.enabled).size!==declared.enabled.length ||
