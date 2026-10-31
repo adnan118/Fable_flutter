@@ -190,6 +190,13 @@ void main() {
     expect(entries.single.slug,'privacy-policy');
     expect(entries.single.version,2);
     expect(entries.single.versionId,entry['revision']);
+    api.reply={'revision':List.filled(64,'a').join(),'unchanged':false,
+      'resetRequired':false,'entries':[{
+        'slug':'سياسة-الخصوصية',
+        'revision':'550e8400-e29b-41d4-a716-446655440001','version':3,
+      }]};
+    final arabic=await mapped.publishedIndex();
+    expect(arabic.single.slug,'سياسة-الخصوصية');
   });
   test('published index rejects unrelated admin, duplicate and invalid manifests',()async{
     final api=_PublishedIndexGateway({'entries':[]});
