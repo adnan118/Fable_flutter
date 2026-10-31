@@ -16,6 +16,21 @@ test('Auth integration audit separates source wiring, missing flows and live ver
   assert.equal(report.productionReady,false);
   assert.equal(report.projectBound,false);
   assert.ok(report.operations.some(x=>x.status==='NOT_MAPPED'));
+  // The reusable ci_fable contract is a 9-operation test sample; 17
+  // installed packages must not be presented as 17 verified integrations.
+  assert.equal(report.operationCount,9);
+  assert.equal(report.auditScope.importedContractKind,'CI_STARTER_DEMO_CONTRACT');
+  assert.equal(report.auditScope.backendFeatureInventoryPresent,false);
+  assert.equal(report.auditScope.exhaustiveBackendFeatureAudit,false);
+  assert.equal(report.auditScope.featureCount,17);
+  assert.equal(report.featureMatrix.length,17);
+  assert.equal(report.featureMatrix.filter(f=>f.liveVerified).length,0);
+  assert.ok(report.auditScope.featuresWithoutImportedOperations.includes('payments'));
+  assert.ok(report.auditScope.featuresWithoutImportedOperations.includes('notifications'));
+  assert.ok(report.auditScope.featuresWithoutImportedOperations.includes('localization'));
+  assert.equal(report.featureMatrix.find(f=>f.id==='payments')?.status,
+    'NOT_AUDITED_NO_IMPORTED_OPERATIONS');
+  assert.equal(report.featureMatrix.find(f=>f.id==='auth')?.ownership,'server');
 });
 test('Project binding cannot be asserted without independently trusted backend hash',()=>{
   assert.throws(()=>auditBackendFeatureParity(process.cwd(),{
