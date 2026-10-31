@@ -24,7 +24,7 @@ function explicitKeys(options){
     const current=options[i];
     if(!current.startsWith('--'))throw Error('Unexpected argument: '+current);
     const key=current.slice(2);
-    if(['apply','interactive'].includes(key)){out[key]=true;continue;}
+    if(['apply','interactive','prune'].includes(key)){out[key]=true;continue;}
     if(!options[i+1]||options[i+1].startsWith('--'))throw Error('Missing value for --'+key);
     out[key]=options[++i];
   }
@@ -231,7 +231,17 @@ async function main(){
   const snapshot=opt.mode==='manual'?
     manualFrontendDecisions(opt.interactive?await interactiveManual():asJson(resolve(opt.file))):input;
   const effective=(opt.mode==='manual' && imported)?reconcileManualWithBackend(snapshot.decisionSnapshot,imported):snapshot;
+  if(opt.prune && (!opt.apply || !effective.backendAuthority || !effective.projectBound)){
+    throw Error('Feature package pruning requires --apply and a pinned imported Fable Backend project');
+  }
   const result=saveFrontendSetup(root,effective,{apply:!!opt.apply,sourceDir:opt.mode==='import'?(opt.source??root):opt.source??null});
+  if(effective.backendAuthority && effective.decisionSnapshot?.decisions?.frontendFeatures){
+    const {syncProjectFeatures}=await import('./sync-project-features.mjs');
+    result.featureSync=syncProjectFeatures(root,effective,{
+      apply:!!opt.apply && effective.projectBound===true,
+      prune:!!opt.prune,
+    });
+  }
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
