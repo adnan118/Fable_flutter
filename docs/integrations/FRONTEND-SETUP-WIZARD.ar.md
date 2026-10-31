@@ -5,7 +5,7 @@
 من جذر مشروع Flutter شغّل:
 
 ```bash
-node tools/flutter-setup-wizard.mjs
+pnpm wizard
 ```
 
 أول سؤال يظهر قبل إعداد أي ميزة:
@@ -129,7 +129,7 @@ node tools/flutter-setup-wizard.mjs --mode import \
   --expected-project-id REAL_PROJECT_ID --expected-contract-hash VERIFIED_HASH
 ```
 
-ينشئ الوضع الأخير نسخة احتياطية في `.fable/feature-backups` ويسجل الملفات/الحزم المحذوفة والمحجوبة في `.fable/last-feature-sync.json`. ما زال يستخدم `pubspec.yaml` و`lib/src/generated/feature_registry.dart` الملائمين لهذا المشروع. **لا يُزال كود مربوط باعتمادية فعلية**؛ يظهر في `blocked` بدلاً من كسر البناء. تبقى `auth` و`access_control` دائماً، وتحتاج الميزة المحلية `deeplinks` قراراً من الفرونت، بينما Offline Sync يتطلب عقد الباك عند استخدامه. الميزات الدومينية التي بناها المبرمج لا تُحذف آلياً.
+لا يحذف الوضع الأخير ميزات Flutter المحلية ذات القرار المؤجل مثل Offline وDeep Links؛ لا يُسمح بحذفها إلا بمراجعة صريحة مستقلة. ينشئ الوضع الأخير نسخة احتياطية في `.fable/feature-backups` ويسجل الملفات/الحزم المحذوفة والمحجوبة في `.fable/last-feature-sync.json`. ما زال يستخدم `pubspec.yaml` و`lib/src/generated/feature_registry.dart` الملائمين لهذا المشروع. **لا يُزال كود مربوط باعتمادية فعلية**؛ يظهر في `blocked` بدلاً من كسر البناء. تبقى `auth` و`access_control` دائماً، وتبقى حزم الميزات المحلية `deeplinks` و`offline` محفوظة للمراجعة الصريحة؛ ولا يُستدل على عدم حاجة المشروع إليها من غياب Capability في الباك. لا تُفعّل مزامنة Offline مع الخادم دون عقد وعمليات صريحة. الميزات الدومينية التي بناها المبرمج لا تُحذف آلياً.
 
 **قيد مهم:** هذه عملية على **مشروع Flutter موثّق ومولَّد** وليست على قالب Fable Flutter العام أو عقد `test-project`. لا يبدأ الحذف عندما لا توجد هوية مشروع وبصمة عقد مؤكدة ومستقلة. ويمكن استعادة الملفات من النسخة الاحتياطية أو Git.
 
