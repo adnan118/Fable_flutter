@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'sessions_page.dart';
@@ -276,7 +277,12 @@ class _FableLoginPageState extends State<FableLoginPage> {
           CheckboxListTile(
             contentPadding:EdgeInsets.zero,
             value:_rememberIdentifier,
-            onChanged:_busy?null:(value)=>setState(()=>_rememberIdentifier=value??false),
+            onChanged:_busy?null:(value) async {
+              setState(()=>_rememberIdentifier=value??false);
+              if(!_rememberIdentifier) {
+                try{await _credentialHints.clear();}catch(_){}
+              }
+            },
             title:const Text('Remember my login identifier on this device'),
             subtitle:const Text('Passwords stay with your device password manager.'),
           ),
