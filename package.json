@@ -8,6 +8,7 @@
     "wizard": "node tools/flutter-setup-wizard.mjs",
     "wizard:review": "node tools/flutter-setup-wizard.mjs --mode guided",
     "wizard:verify": "node tools/verify-fable-contract.mjs --mode source",
-    "test:wizard": "node --test test/flutter-setup-wizard.test.mjs test/feature-sync.test.mjs test/backend-feature-parity-audit.test.mjs"
+    "test:wizard": "node --test test/flutter-setup-wizard.test.mjs test/feature-sync.test.mjs test/backend-feature-parity-audit.test.mjs test/frontend-feature-ownership.test.mjs",
+    "wizard:frontend": "node tools/frontend-owned-features.mjs"
   }
 }
