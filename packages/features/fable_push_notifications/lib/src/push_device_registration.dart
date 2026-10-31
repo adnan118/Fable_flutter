@@ -54,11 +54,14 @@ class FablePushDeviceRegistration {
   StreamSubscription<FableIdentityEvent>? _identityEvents;
   Future<void>? _identityCleanup;
   int? _registeredIdentityRevision;
+  bool _needsTokenDeletion=false;
   bool _disposed=false;
   bool get configured=>_tokens!=null;
 
   Future<bool> requestPermissionAndRegister({void Function()? onForegroundHint})async{
     await _identityCleanup;
+    if(_needsTokenDeletion)await _forgetAfterIdentityChange();
+    if(_needsTokenDeletion)throw StateError('Previous login FCM token could not be cleared');
     if(_disposed||!isSessionCurrent())throw StateError('Verified authenticated session required');
     // User action must invoke this method; never prompt during app bootstrap.
     final p=await _messaging.requestPermission(alert:true,badge:true,sound:true,
@@ -94,6 +97,8 @@ class FablePushDeviceRegistration {
   /// or a transient network error. Does not display the OS permission dialog.
   Future<bool> retryRegistrationOnResume()async{
     await _identityCleanup;
+    if(_needsTokenDeletion)await _forgetAfterIdentityChange();
+    if(_needsTokenDeletion)return false;
     if(_disposed||!isSessionCurrent())return false;
     final settings=await _messaging.getNotificationSettings();
     if(settings.authorizationStatus!=AuthorizationStatus.authorized&&
@@ -126,11 +131,19 @@ class FablePushDeviceRegistration {
     _registeredIdentityRevision=identity;
   }
   Future<void> _forgetAfterIdentityChange()async{
-    // Do not make a privileged unregister request using a replaced identity.
-    // Backend session-revocation events delete server token associations.
+    // No privileged unregister using a replaced identity. Backend session
+    // revocation owns server token associations; local deletion is best effort
+    // and retried before any new FCM registration.
+    _needsTokenDeletion=true;
     await _tokens?.cancel();_tokens=null;
     await _foreground?.cancel();_foreground=null;
-    if(!_disposed)await _messaging.deleteToken();
+    try {
+      await _messaging.deleteToken();
+      _needsTokenDeletion=false;
+    }catch(_){
+      // Do not crash on a native/plugin/network failure. Fail closed for new
+      // token registration until a later foreground retry can clean it.
+    }
   }
   /// Logout calls this BEFORE revoking the session if online; the backend
   /// also revokes push device associations on session logout independently.
