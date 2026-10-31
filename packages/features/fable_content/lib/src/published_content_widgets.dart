@@ -90,7 +90,7 @@ class FablePublishedBlockView extends StatelessWidget {
      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       for(var i=0;i<items.length;i++)
        Padding(padding:const EdgeInsets.symmetric(vertical:3),
-        child:Text("${block.data['style']=='numbered'?'\${i+1}.':'•'} ${items[i]}")),
+        child:Text("${block.data['style']=='numbered'?'${i+1}.':'•'} ${items[i]}")),
      ]);
     }
     return fallback(context);
