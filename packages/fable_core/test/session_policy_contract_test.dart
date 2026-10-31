@@ -34,7 +34,7 @@ FableContract _importWithPolicy(Map<String,dynamic> policy) {
 }
 
 void main() {
-  test('Single, bounded multi and unlimited policy are read from backend export',()=>{
+  test('Single, bounded multi and unlimited policy are read from backend export',() {
     for(final entry in <(String,int,String,bool)>[
       ('single',1,'revoke-oldest',false),
       ('multi',3,'reject-new',true),
@@ -52,7 +52,7 @@ void main() {
     }
   });
 
-  test('Policy parsing fails closed for malformed backend values',()=>{
+  test('Policy parsing fails closed for malformed backend values',() {
     final good=<String,dynamic>{
       'mode':'multi','maxActive':5,'overflow':'reject-new',
       'runtimeEndpoint':'/auth/session-policy'
@@ -71,7 +71,7 @@ void main() {
     }
   });
 
-  test('Legacy export without explicit policy is unknown, not automatically multi',()=>{
+  test('Legacy export without explicit policy is unknown, not automatically multi',() {
     final policy=FableSessionPolicy.fromMap({
       'mode':'multi','maxActive':0,'overflow':'revoke-oldest',
       'onePerInstallation':true,
