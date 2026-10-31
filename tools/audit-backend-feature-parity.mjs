@@ -200,6 +200,13 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
     featureCount:FEATURE_IDS.length,
     featuresWithoutImportedOperations:featureMatrix
       .filter(f=>f.operationCount===0).map(f=>f.id),
+    unclassifiedBackendOperationIds:mapped.filter(o=>!featureOfOperation(o)&&!isWebOnly(o))
+      .map(o=>o.id),
+    featuresWithoutNativeScreen:featureMatrix
+      .filter(f=>f.ownership==='server'&&!f.nativeScreen.customFableScreen)
+      .map(f=>f.id),
+    unimplementedOperationIds:mapped.filter(o=>o.status==='NOT_MAPPED'||
+      o.status==='MAPPING_STALE').map(o=>o.id),
     exhaustiveBackendFeatureAudit:false,
     note:fixture
       ?'ci_fable includes only a demo subset of operations. Do not count packages as integrated Backend features.'
