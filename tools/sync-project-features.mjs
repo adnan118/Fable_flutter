@@ -64,7 +64,7 @@ export function planFeatureSync(root,verified,{prune=false}={}){
     const pubspec=join(rootDir,'pubspec.yaml');
     const featuresPath=join(rootDir,'.fable/project-features.json');
     if(existsSync(pubspec)&&existsSync(featuresPath)&&
-      /^name:\\s*ci_fable\\s*$/m.test(readFileSync(pubspec,'utf8'))&&
+      /^name:\s*ci_fable\s*$/m.test(readFileSync(pubspec,'utf8'))&&
       json(featuresPath).app==='apps/ci_fable')
       throw Error('Refusing to prune the reusable ci_fable starter. Generate and identify a real Flutter project first.');
   }
@@ -116,7 +116,7 @@ function applyPrune(root,plan,{prune=false}={}){
   // The checked-in ci_fable repository is a reusable validation fixture,
   // not a customer project. Never physically delete template packages.
   if(prune &&
-     /^name:\\s*ci_fable\\s*$/m.test(readFileSync(packageYaml,'utf8')) &&
+     /^name:\s*ci_fable\s*$/m.test(readFileSync(packageYaml,'utf8')) &&
      existsSync(join(project,'.fable/project-features.json')) &&
      json(join(project,'.fable/project-features.json')).app==='apps/ci_fable'){
     throw Error('Refusing to prune the reusable ci_fable starter. Generate and identify a real Flutter project first.');
