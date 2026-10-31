@@ -123,6 +123,14 @@ function applyPrune(root,plan,{prune=false}={}){
   const packageYaml=join(project,'pubspec.yaml');
   if(!existsSync(registryPath)||!existsSync(appPath)||!existsSync(packageYaml))
     throw Error('Flutter project source missing');
+  // The checked-in ci_fable repository is a reusable validation fixture,
+  // not a customer project. Never physically delete template packages.
+  if(prune &&
+     /^name:\\s*ci_fable\\s*$/m.test(readFileSync(packageYaml,'utf8')) &&
+     existsSync(join(project,'.fable/project-features.json')) &&
+     json(join(project,'.fable/project-features.json')).app==='apps/ci_fable'){
+    throw Error('Refusing to prune the reusable ci_fable starter. Generate and identify a real Flutter project first.');
+  }
   // Apply only after a real pinned Backend; source-only staging can preview.
   if(!plan.projectBound)throw Error('Feature removal requires an independently pinned Backend project ID and contract hash');
   const pkgDirs=plan.disabled.map(id=>({id,rel:pathOf(id)})).filter(x=>existsSync(join(project,x.rel)));
