@@ -203,6 +203,16 @@ class FableAuthGateway implements BackendApiGateway {
     return FableAccountSummary.fromMap(_payload(response.data));
   }
 
+  /// Read the effective policy from the deployed backend; do not infer it from
+  /// a static build-time default or from a local account/device count.
+  Future<FableSessionPolicy> loadSessionPolicy() async {
+    if (!_contract.supports('auth.session-policy')) {
+      throw StateError('Backend has not exported auth.session-policy');
+    }
+    final response=await _api.request('auth.session-policy',authorized:false);
+    return FableSessionPolicy.fromMap(_payload(response.data));
+  }
+
   Future<Object?> sessions() async {
     final response = await _api.request('auth.sessions');
     return response.data;
