@@ -93,6 +93,68 @@ class FableManagedLifecycleChallenge {
   final int identityRevision;
 }
 
+class FableManagedMember {
+  const FableManagedMember({required this.userId,required this.access,
+    required this.isOwner,this.username,this.displayName,this.joinedAt});
+  final String userId,access;
+  final bool isOwner;
+  final String? username,displayName;
+  final DateTime? joinedAt;
+  factory FableManagedMember.fromPayload(Object? raw){
+    if(raw is! Map)throw const FormatException('Invalid member');
+    final userId=raw['userId'],access=raw['access'],owner=raw['isOwner'];
+    if(userId is! String||!FableManagedAccount._uuid.hasMatch(userId)||
+      access is! String||!const {'OWNER','MANAGER','VIEWER'}.contains(access)||
+      owner is! bool || (owner!=(access=='OWNER')))
+      throw const FormatException('Invalid managed membership or owner status');
+    String? field(String key){
+      final v=raw[key];
+      if(v==null)return null;
+      if(v is! String||v.length>191||RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(v))
+        throw FormatException('Invalid member presentation: $key');
+      return v;
+    }
+    final joined=raw['joinedAt'];
+    if(joined!=null && (joined is! String||DateTime.tryParse(joined)==null))
+      throw const FormatException('Invalid member creation date');
+    return FableManagedMember(userId:userId,access:access,isOwner:owner,
+      username:field('username'),displayName:field('displayName'),
+      joinedAt:joined is String?DateTime.parse(joined).toUtc():null);
+  }
+}
+
+class FableSentInvitation {
+  const FableSentInvitation({required this.id,required this.access,
+    required this.expiresAt,this.username,this.displayName});
+  final String id,access;
+  final DateTime expiresAt;
+  final String? username,displayName;
+  factory FableSentInvitation.fromPayload(Object? raw){
+    if(raw is! Map)throw const FormatException('Invalid sent invitation');
+    final id=raw['id'],access=raw['access'],expiresAt=raw['expiresAt'];
+    if(id is! String||!FableManagedAccount._uuid.hasMatch(id)||
+      access is! String||!const {'MANAGER','VIEWER'}.contains(access)||
+      expiresAt is! String||DateTime.tryParse(expiresAt)==null)
+      throw const FormatException('Invalid sent invitation');
+    String? safe(Object? input){
+      if(input==null)return null;
+      if(input is! String||input.length>191||
+        RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(input))
+        throw const FormatException('Invalid invitation recipient');
+      return input;
+    }
+    return FableSentInvitation(id:id,access:access,
+      expiresAt:DateTime.parse(expiresAt).toUtc(),
+      username:safe(raw['username']),displayName:safe(raw['displayName']));
+  }
+}
+
+class FableCursorPage<T> {
+  const FableCursorPage(this.items,this.nextCursor);
+  final List<T> items;
+  final String? nextCursor;
+}
+
 class FableManagedAccountsRepository {
   const FableManagedAccountsRepository(this.gateway,this.contract);
   final FableAuthGateway gateway;
@@ -183,6 +245,95 @@ class FableManagedAccountsRepository {
       throw ArgumentError('Invalid invitee or delegated access level');
     await gateway.execute(_operation('/managed-entities/{id}/invitations','POST'),
       path:{'id':entityId},body:{'username':username,'access':access});
+  }
+
+  bool get canListMembers=>can('/managed-entities/{id}/members','GET');
+  bool get canRemoveMember=>can('/managed-entities/{id}/members/{userId}','DELETE');
+  bool get canViewSentInvitations=>can('/managed-entities/{id}/invitations','GET');
+  bool get canRevokeSentInvitation=>can('/managed-entities/{id}/invitations/{invitationId}','DELETE');
+
+  void _requireSelection(FableManagedAccount entity,FableManagedAccountSelection selected,{
+    bool ownerOnly=false,
+  }){
+    if(selected.id!=entity.id||
+       selected.identityRevision!=gateway.session.identityRevision||
+       (ownerOnly && (!entity.isOwner||selected.access!='OWNER')))
+      throw StateError('No verified identity, owner rights or active entity context');
+    if(entity.status!='ACTIVE'&&entity.status!='DISABLED')
+      throw StateError('Inactive entity does not permit membership administration');
+  }
+
+  FableCursorPage<T> _cursorPage<T>(Object? value,T Function(Object?) parse){
+    final payload=_unwrap(value);
+    if(payload is! Map||payload['items'] is! List)
+      throw const FormatException('Invalid Backend cursor page');
+    final rows=payload['items'] as List;
+    if(rows.length>50)throw const FormatException('Backend exceeded membership page size');
+    final next=payload['nextCursor'];
+    if(next!=null&&(next is! String||!FableManagedAccount._uuid.hasMatch(next)))
+      throw const FormatException('Invalid next page cursor');
+    return FableCursorPage<T>(
+      List<T>.unmodifiable(rows.map(parse)),next as String?);
+  }
+
+  Future<FableCursorPage<FableManagedMember>> members(
+    FableManagedAccount entity,FableManagedAccountSelection selected,{String? after})async{
+    _requireSelection(entity,selected,ownerOnly:true);
+    if(after!=null&&!FableManagedAccount._uuid.hasMatch(after))
+      throw ArgumentError('Invalid membership page cursor');
+    final response=await gateway.execute(_operation('/managed-entities/{id}/members','GET'),
+      path:{'id':entity.id},query:after==null?null:{'after':after});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _cursorPage<FableManagedMember>(
+      response.data,FableManagedMember.fromPayload);
+  }
+
+  Future<bool> removeMember(FableManagedAccount entity,FableManagedAccountSelection selected,
+    FableManagedMember member)async{
+    _requireSelection(entity,selected,ownerOnly:true);
+    if(member.isOwner||member.access=='OWNER'||!FableManagedAccount._uuid.hasMatch(member.userId))
+      throw StateError('Owner membership is immutable');
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}/members/{userId}','DELETE'),
+      path:{'id':entity.id,'userId':member.userId});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final payload=_unwrap(response.data);
+    if(payload is! Map||payload['removed']!=true)
+      throw const FormatException('Backend did not confirm removal');
+    return true;
+  }
+
+  Future<FableCursorPage<FableSentInvitation>> sentInvitations(
+    FableManagedAccount entity,FableManagedAccountSelection selected,{String? after})async{
+    _requireSelection(entity,selected);
+    if(!entity.collaborationEnabled ||
+       !(selected.access=='OWNER' ||
+         selected.access=='MANAGER'&&entity.managersCanInvite))
+      throw StateError('Only a verified authorized invitation admin may access sent invitations');
+    if(after!=null&&!FableManagedAccount._uuid.hasMatch(after))
+      throw ArgumentError('Invalid invitation cursor');
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}/invitations','GET'),
+      path:{'id':entity.id},query:after==null?null:{'after':after});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _cursorPage<FableSentInvitation>(
+      response.data,FableSentInvitation.fromPayload);
+  }
+  Future<void> revokeSentInvitation(FableManagedAccount entity,
+    FableManagedAccountSelection selected,FableSentInvitation invitation)async{
+    _requireSelection(entity,selected);
+    if(!entity.collaborationEnabled ||
+      !(selected.access=='OWNER'||
+        selected.access=='MANAGER'&&entity.managersCanInvite))
+      throw StateError('Invalid invitation revocation permissions');
+    await gateway.execute(
+      _operation('/managed-entities/{id}/invitations/{invitationId}','DELETE'),
+      path:{'id':entity.id,'invitationId':invitation.id});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
   }
 
   static const _lifecyclePaths=<String,String>{
