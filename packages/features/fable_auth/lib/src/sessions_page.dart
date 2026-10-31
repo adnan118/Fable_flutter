@@ -21,6 +21,8 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
   bool _actionBusy=false;
   String? _pendingSensitiveChallenge;
   String? _pendingSessionId;
+  List<String>? _pendingSelectedIds;
+  final Set<String> _selectedSessionIds=<String>{};
   bool _pendingLogoutAll=false;
   final _otpController=TextEditingController();
   String? _error;
@@ -30,6 +32,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     _identityEvents=widget.gateway.session.identityEvents.listen((_){
       if(!mounted)return;
       _clearSensitive();
+      _selectedSessionIds.clear();
       setState((){
         _sessions=null;_policy=null;_loading=false;
         _error='The authentication session changed. Sign in again to refresh devices.';
@@ -55,7 +58,11 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
         }catch(_){runtimePolicy=null;}
       }
       if(!mounted || widget.gateway.session.identityRevision!=revision)return;
-      setState((){_sessions=sessions;_policy=runtimePolicy;});
+      setState((){
+        _sessions=sessions;_policy=runtimePolicy;
+        _selectedSessionIds.removeWhere((id)=>!sessions.any(
+          (session)=>session.id==id&&!session.isCurrent));
+      });
     }on FableApiException catch(error){
       if(!mounted || widget.gateway.session.identityRevision!=revision)return;
       setState((){
@@ -78,17 +85,23 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
   bool get _supportsSingleRevoke=>widget.contract.operations.values.any(
     (op)=>op.path=='/auth/sessions/{id}/revoke' &&
       op.method=='POST' && op.requiresAuth && op.credentialHeader==null);
+  bool get _supportsBulkRevoke=>widget.gateway.canRevokeSelectedSessions;
   bool get _supportsLogoutAll=>widget.contract.operations.values.any(
     (op)=>op.path=='/auth/logout-all' && op.method=='POST' &&
       op.requiresAuth && op.credentialHeader==null);
 
-  Future<void> _revoke(String? target,{bool logoutAll=false}) async {
+  Future<void> _revoke(String? target,{bool logoutAll=false,List<String>? selectedIds}) async {
     if(_actionBusy||_loading)return;
-    if(logoutAll ? !_supportsLogoutAll : !_supportsSingleRevoke)return;
+    if(logoutAll ? !_supportsLogoutAll
+      : selectedIds!=null ? !_supportsBulkRevoke : !_supportsSingleRevoke)return;
+    if(selectedIds!=null && (selectedIds.isEmpty||selectedIds.length>100||
+      _sessions==null||selectedIds.any((id)=>!_sessions!.any(
+        (session)=>session.id==id&&!session.isCurrent))))return;
     final ar=Localizations.localeOf(context).languageCode=='ar';
     final accepted=await showDialog<bool>(context:context,builder:(ctx)=>
       AlertDialog(
         title:Text(logoutAll?(ar?'تسجيل الخروج من جميع الأجهزة؟':'Sign out on every device?')
+          :selectedIds!=null?(ar?'إلغاء الجلسات المحددة؟':'Revoke selected sessions?')
           :(ar?'إلغاء جلسة الجهاز؟':'Revoke this device session?')),
         content:Text(ar
           ?'سيطلب الخادم إثباتاً أمنياً إذا لم تكن المصادقة القوية حديثة.'
@@ -106,6 +119,8 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     try{
       if(logoutAll){
         await widget.gateway.revokeAllSessions();
+      }else if(selectedIds!=null){
+        await widget.gateway.revokeSelectedSessions(selectedIds);
       }else{
         await widget.gateway.revokeOtherSession(target!);
       }
@@ -117,6 +132,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
           _error=ar?'تم إلغاء الجلسات؛ سجّل الدخول مجدداً.':'Sessions revoked; sign in again.';
         });
       }else{
+        _selectedSessionIds.clear();
         await _refreshAfterAction();
       }
     }on FableApiException catch(error){
@@ -127,7 +143,9 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
           if(!mounted||widget.gateway.session.identityRevision!=epoch)return;
           setState((){
             _pendingSensitiveChallenge=challenge;
-            _pendingSessionId=target;_pendingLogoutAll=logoutAll;
+            _pendingSessionId=target;
+            _pendingSelectedIds=selectedIds==null?null:List<String>.unmodifiable(selectedIds);
+            _pendingLogoutAll=logoutAll;
           });
         }catch(_){
           if(mounted)setState(()=>_error=ar
@@ -152,6 +170,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     _otpController.clear();
     _pendingSensitiveChallenge=null;
     _pendingSessionId=null;
+    _pendingSelectedIds=null;
     _pendingLogoutAll=false;
   }
 
@@ -165,6 +184,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     final challenge=_pendingSensitiveChallenge;
     if(challenge==null||_actionBusy)return;
     final target=_pendingSessionId;
+    final selectedIds=_pendingSelectedIds;
     final all=_pendingLogoutAll;
     final epoch=widget.gateway.session.identityRevision;
     final ar=Localizations.localeOf(context).languageCode=='ar';
@@ -174,6 +194,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
         challenge,_otpController.text.trim());
       if(widget.gateway.session.identityRevision!=epoch)throw StateError('Identity changed');
       if(all)await widget.gateway.revokeAllSessions(proof:proof);
+      else if(selectedIds!=null)await widget.gateway.revokeSelectedSessions(selectedIds,proof:proof);
       else await widget.gateway.revokeOtherSession(target!,proof:proof);
       if(!mounted)return;
       setState((){
@@ -183,7 +204,10 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
           _error=ar?'تم تسجيل الخروج من جميع الأجهزة.':'Signed out of all devices.';
         }
       });
-      if(!all)await _refreshAfterAction();
+      if(!all){
+        _selectedSessionIds.clear();
+        await _refreshAfterAction();
+      }
     }catch(_){
       if(mounted&&widget.gateway.session.identityRevision==epoch)
         setState(()=>_error=ar
@@ -243,6 +267,12 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
             ].join(' · ')),
             trailing:session.isCurrent
               ?Chip(label:Text(ar?'الجهاز الحالي':'This device'))
+              :_supportsBulkRevoke
+                ?Checkbox(value:_selectedSessionIds.contains(session.id),
+                  onChanged:_actionBusy||_loading?null:(checked)=>setState((){
+                    if(checked==true)_selectedSessionIds.add(session.id);
+                    else _selectedSessionIds.remove(session.id);
+                  }))
               :_supportsSingleRevoke
                 ?IconButton(
                   tooltip:ar?'إلغاء جلسة الجهاز':'Revoke device session',
@@ -252,6 +282,15 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
           )),
         const SizedBox(height:20),
         if(_actionBusy)const LinearProgressIndicator(),
+        if(_supportsBulkRevoke&&_selectedSessionIds.isNotEmpty)
+          FilledButton.tonalIcon(
+            onPressed:_actionBusy||_loading?null:()=>unawaited(
+              _revoke(null,selectedIds:List<String>.of(_selectedSessionIds))),
+            icon:const Icon(Icons.phonelink_erase_outlined),
+            label:Text(ar
+              ?'إلغاء الجلسات المحددة ('+_selectedSessionIds.length.toString()+')'
+              :'Revoke selected sessions ('+_selectedSessionIds.length.toString()+')'),
+          ),
         if(_supportsLogoutAll)
           OutlinedButton.icon(
             onPressed:_actionBusy||_loading?null:()=>unawaited(_revoke(null,logoutAll:true)),
