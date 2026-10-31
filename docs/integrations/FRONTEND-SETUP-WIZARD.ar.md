@@ -72,3 +72,33 @@ node tools/flutter-setup-wizard.mjs --mode manual --source ../backend/dist/clien
 - Flutter: `tools/flutter-setup-wizard.mjs` و`tools/verify-fable-contract.mjs` و`packages/fable_core/lib/src/fable_contract.dart`.
 
 **التسليم التنفيذي:** Backend PR #8، Flutter PR #5. لا تعتبر ملفات البداية Fixture إقراراً بالجاهزية للإنتاج.
+
+## مطابقة الميزات وإخفاؤها ثم حذف غير المستخدم
+
+ينشر الباك قائمة `decisions.frontendFeatures.enabled` المبنية على الـCapabilities المثبتة. لا يختلق الفرونت قوائم مستقلة؛ الشاشة الرئيسية ومسارات الإشعارات لا تعرض ولا تفتح الميزات الموجودة خارج القائمة.
+
+بعد استيراد العقد:
+
+```bash
+# معاينة الميزات التي ستبقى والتي ستخرج من التطبيق (بدون تغيير)
+node tools/sync-project-features.mjs --source ../backend/dist/client-contract --out . \
+  --expected-project-id REAL_PROJECT_ID --expected-contract-hash VERIFIED_HASH
+
+# تطبيق القائمة الموثقة وإخراج غير المستخدم من سجل Flutter
+node tools/flutter-setup-wizard.mjs --mode import \
+  --source ../backend/dist/client-contract --out . --apply \
+  --expected-project-id REAL_PROJECT_ID --expected-contract-hash VERIFIED_HASH
+
+# حذف حزم المشروع غير المستخدمة فعلياً مع نسخة احتياطية، بعد فحص imports
+node tools/flutter-setup-wizard.mjs --mode import \
+  --source ../backend/dist/client-contract --out . --apply --prune \
+  --expected-project-id REAL_PROJECT_ID --expected-contract-hash VERIFIED_HASH
+```
+
+ينشئ الوضع الأخير نسخة احتياطية في `.fable/feature-backups` ويسجل الملفات/الحزم المحذوفة والمحجوبة في `.fable/last-feature-sync.json`. ما زال يستخدم `pubspec.yaml` و`lib/src/generated/feature_registry.dart` الملائمين لهذا المشروع. **لا يُزال كود مربوط باعتمادية فعلية**؛ يظهر في `blocked` بدلاً من كسر البناء. تبقى `auth` و`access_control` دائماً، وتحتاج الميزات المحلية `deeplinks` و`offline` قراراً من الفرونت. الميزات الدومينية التي بناها المبرمج لا تُحذف آلياً.
+
+**قيد مهم:** هذه عملية على **مشروع Flutter موثّق ومولَّد** وليست على قالب Fable Flutter العام أو عقد `test-project`. لا يبدأ الحذف عندما لا توجد هوية مشروع وبصمة عقد مؤكدة ومستقلة. ويمكن استعادة الملفات من النسخة الاحتياطية أو Git.
+
+## ماذا لا تفعل المزامنة؟
+
+لا تستبدل الصلاحيات الفعلية: الـRole والـPermissions وحالة الاشتراك تؤخذ من طلبات Backend الحالية. ولا يمكن اعتبار ظهور شاشة دليلاً على سماح تنفيذ عملية. إغلاق الميزة في Dashboard أو Flutter لا يمنع الوصول إلى API من دون Backend Guard.
