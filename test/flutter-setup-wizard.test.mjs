@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,copyFileSync,rmSync,exi
 import {resolve,join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
-import {importBackendDecisions,manualFrontendDecisions,reconcileManualWithBackend,saveFrontendSetup,formatFrontendSetupReview,isExplicitFrontendApproval,reviewedBackendImport} from '../tools/flutter-setup-wizard.mjs';
+import {importBackendDecisions,manualFrontendDecisions,reconcileManualWithBackend,saveFrontendSetup,formatFrontendSetupReview,isExplicitFrontendApproval,reviewedBackendImport,runGuidedFlutterSetup} from '../tools/flutter-setup-wizard.mjs';
 
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?
@@ -162,5 +162,41 @@ test('Deletion is rejected before any prompts or files without an independently 
       prune:true,ask:async()=>{prompted=true;return 'اعتمد';},show:()=>{}}),/pinned/);
     assert.equal(prompted,false);
     assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('Guided Flutter wizard starts by asking whether to import Backend decisions',async()=>{
+  const f=fixture(),prompts=[],shown=[];
+  try{
+    const result=await runGuidedFlutterSetup({
+      root:f.root,source:f.dir,
+      ask:async prompt=>{
+        prompts.push(prompt);
+        return prompts.length===1?'نعم':'لا';
+      },show:line=>shown.push(line),
+    });
+    assert.match(prompts[0],/هل تريد استيراد قرارات Fable Backend/);
+    assert.match(prompts[1],/اعتمد/);
+    assert.equal(result.cancelled,true);
+    assert.ok(shown[0].includes('قرارات الباك الكاملة'));
+    assert.equal(existsSync(join(f.root,'assets/config/frontend-setup.json')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('Declining backend import allows separate manual wizard after independent review',async()=>{
+  const f=fixture(),prompts=[];
+  try{
+    const result=await runGuidedFlutterSetup({
+      root:f.root,source:f.dir,
+      ask:async prompt=>{
+        prompts.push(prompt);
+        if(prompts.length===1)return 'لا';
+        if(prompt.includes('اكتب «اعتمد»'))return 'اعتمد';
+        return '';
+      },show:()=>{},
+    });
+    assert.match(prompts[0],/هل تريد استيراد قرارات Fable Backend/);
+    assert.equal(result.applied,true);
+    assert.equal(read(join(f.root,'assets/config/frontend-setup.json')).backendAuthority,false);
+    assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
