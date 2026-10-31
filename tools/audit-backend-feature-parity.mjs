@@ -6,6 +6,7 @@ import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve,join,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {verifyFableContract} from './verify-fable-contract.mjs';
+import {FEATURE_IDS,FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
 
 const WIRED=Object.freeze({
   'auth.login':'packages/fable_core/lib/src/fable_auth_gateway.dart',
@@ -56,6 +57,50 @@ function load(root){
   const m=JSON.parse(readFileSync(core,'utf8'));
   return {contract:c,operations:unique([...(c.operations??[]),...(m.operations??[])])};
 }
+// The checked-in ci_fable starter contains a narrow demo contract. It is
+// not an exhaustive API surface for every project/capability in Backend.
+function featureOfOperation(op){
+  const id=op.id;
+  if(id.startsWith('auth.social.'))return 'social';
+  if(id.startsWith('passkeys.'))return 'biometrics';
+  if(id.startsWith('account.'))return 'profile';
+  if(id.startsWith('auth.'))return 'auth';
+  if(id.startsWith('push.'))return 'notifications';
+  const prefix=id.split('.')[0];
+  return FEATURE_IDS.includes(prefix)?prefix:null;
+}
+function auditFeatureMatrix(root,operations,features,projectBound){
+  const registryPath=join(root,'lib/src/generated/feature_registry.dart');
+  const registry=existsSync(registryPath)?readFileSync(registryPath,'utf8'):'';
+  return FEATURE_IDS.map(id=>{
+    const featureOperations=operations.filter(o=>featureOfOperation(o)===id);
+    const wired=featureOperations.filter(o=>o.status==='SOURCE_WIRED_NOT_LIVE_TESTED');
+    const screens=wired.filter(o=>o.presentationEvidence==='SCREEN_WIRED_NOT_LIVE_TESTED');
+    const configured=features
+      ?features.enabled.includes(id)?'ENABLED'
+      :features.disabled?.includes(id)?'DISABLED'
+      :features.clientOnlyReview?.includes(id)?'CLIENT_DECISION'
+      :'NOT_DECLARED'
+      :'NO_BACKEND_FEATURE_INVENTORY';
+    const packagePresent=existsSync(join(root,'packages/features/fable_'+id,'pubspec.yaml'));
+    const registered=registry.includes("package:fable_"+id+"/");
+    return {
+      id,ownership:FEATURE_OWNERSHIP[id],packagePresent,registered,
+      backendDecision:configured,operationCount:featureOperations.length,
+      sourceWiredOperationCount:wired.length,screenWiredCount:screens.length,
+      operationIds:featureOperations.map(o=>o.id),
+      liveVerified:false,
+      status:featureOperations.length===0?'NOT_AUDITED_NO_IMPORTED_OPERATIONS'
+        :wired.length===0?'NOT_MAPPED'
+        :wired.length<featureOperations.length?'PARTIAL_SOURCE_WIRING'
+        :screens.length===0?'GATEWAY_ONLY_NO_VERIFIED_UI'
+        :'SOURCE_WIRED_NOT_LIVE_VERIFIED',
+      nextAction:projectBound
+        ?'Verify all Backend operations, permissions, errors and Android/iOS runtime behavior'
+        :'Import and independently pin the real project Backend contract; fixture/source only',
+    };
+  });
+}
 export function auditBackendFeatureParity(root,{requireProjectBinding=false,expectedProjectId=null,expectedContractHash=null}={}){
   const path=resolve(root),gate=verifyFableContract(path,{
     mode:requireProjectBinding?'project':'source',
@@ -85,6 +130,22 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
       presentationEvidence:screenWired?'SCREEN_WIRED_NOT_LIVE_TESTED':'SCREEN_NOT_VERIFIED',
       nextAction:'Validate request/response/errors/permissions and a real Android/iOS Backend flow'};
   });
+  const featureMatrix=auditFeatureMatrix(path,mapped,projectFeatures,gate.projectBound);
+  const fixturePath=join(path,'.fable/project-features.json');
+  const fixture=existsSync(fixturePath) &&
+    JSON.parse(readFileSync(fixturePath,'utf8')).app==='apps/ci_fable';
+  const auditScope={
+    importedContractKind:fixture?'CI_STARTER_DEMO_CONTRACT':'PROJECT_CONTRACT',
+    independentlyProjectBound:gate.projectBound,
+    backendFeatureInventoryPresent:Boolean(projectFeatures),
+    featureCount:FEATURE_IDS.length,
+    featuresWithoutImportedOperations:featureMatrix
+      .filter(f=>f.operationCount===0).map(f=>f.id),
+    exhaustiveBackendFeatureAudit:false,
+    note:fixture
+      ?'ci_fable includes only a demo subset of operations. Do not count packages as integrated Backend features.'
+      :'A source contract is not runtime E2E proof; feature inventory and backend project binding are separately required.',
+  };
   const counts=Object.fromEntries(['SOURCE_WIRED_NOT_LIVE_TESTED','NOT_MAPPED','MAPPING_STALE','NOT_FOR_FLUTTER']
     .map(status=>[status,mapped.filter(x=>x.status===status).length]));
   return {
@@ -92,6 +153,7 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
     projectId:contract.project?.id??null,contractHash:contract.contractHash,
     projectBound:gate.projectBound,productionReady:false,
     enabledBackendFeatures:projectFeatures?.enabled??null,
+    auditScope,featureMatrix,
     operationCount:mapped.length,counts,operations:mapped,
     assurance:'Source wiring only; e2e tests required before marking operations complete',
   };
@@ -107,6 +169,8 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).hr
     mkdirSync(dirname(target),{recursive:true});
     writeFileSync(target,JSON.stringify(report,null,2)+'\n');
     console.log(JSON.stringify({output:target,counts:report.counts,
+      auditScope:report.auditScope,
+      unverifiedFeatureIds:report.featureMatrix.filter(f=>!f.liveVerified).map(f=>f.id),
       productionReady:report.productionReady},null,2));
   }catch(e){console.error(e.message??String(e));process.exitCode=1;}
 }
