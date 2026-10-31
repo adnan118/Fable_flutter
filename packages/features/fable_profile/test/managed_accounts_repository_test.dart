@@ -32,6 +32,21 @@ FableContract catalog({bool installed=true})=>FableContract(
       '/managed-entities/invitations/{invitationId}/decline','hash',enforceAuth:true),
     'entity.invite':const FableOperation('entity.invite','POST',
       '/managed-entities/{id}/invitations','hash',enforceAuth:true),
+    'auth.2fa.status':const FableOperation('auth.2fa.status','GET','/auth/2fa/status','hash',enforceAuth:true),
+    'auth.otp.request':const FableOperation('auth.otp.request','POST','/auth/otp/request','hash',enforceAuth:true),
+    'auth.otp.verify':const FableOperation('auth.otp.verify','POST','/auth/otp/verify','hash',enforceAuth:true),
+    'entity.disable':const FableOperation('entity.disable','POST','/managed-entities/{id}/disable','hash',enforceAuth:true),
+    'entity.enable':const FableOperation('entity.enable','POST','/managed-entities/{id}/enable','hash',enforceAuth:true),
+    'entity.delete.request':const FableOperation('entity.delete.request','POST','/managed-entities/{id}/delete-request','hash',enforceAuth:true),
+    'entity.restore':const FableOperation('entity.restore','POST','/managed-entities/{id}/restore','hash',enforceAuth:true),
+    'entity.members':const FableOperation('entity.members','GET',
+      '/managed-entities/{id}/members','hash',enforceAuth:true),
+    'entity.member.remove':const FableOperation('entity.member.remove','DELETE',
+      '/managed-entities/{id}/members/{userId}','hash',enforceAuth:true),
+    'entity.sent.invites':const FableOperation('entity.sent.invites','GET',
+      '/managed-entities/{id}/invitations','hash',enforceAuth:true),
+    'entity.invite.revoke':const FableOperation('entity.invite.revoke','DELETE',
+      '/managed-entities/{id}/invitations/{invitationId}','hash',enforceAuth:true),
     'business.op':const FableOperation('business.op','GET','/business/me','hash',enforceAuth:true),
   }:const <String,FableOperation>{});
 Map<String,Object?> entity()=>{
@@ -53,7 +68,8 @@ void main(){
     final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
       contract:catalog(),secureSession:session,client:dio((req)async{
         seen.add(req);
-        if(req.path=='/managed-entities')return ok(req,[entity()]);
+        if(req.path=='/managed-entities')return ok(req,[{
+          ...entity(),'memberships':[{'access':'OWNER','active':true}]}]);
         if(req.path=='/managed-entities/'+entityId+'/activate')return ok(req,{
           'managedEntityId':entityId,'access':'OWNER',
           'header':{'name':'X-Fable-Managed-Entity-Id','value':entityId},
@@ -114,4 +130,142 @@ void main(){
       'managedAccount':{'id':entityId,'nameAr':'نادي الشاطئ'},
     }),throwsFormatException);
   });
+
+  test('Owner lifecycle chooses authoritative TWO_FACTOR proof and consumes it only on backend action',()async{
+    final session=_Session(),calls=<RequestOptions>[],challenge='550e8400-e29b-41d4-a716-446655440003';
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        calls.add(req);
+        if(req.path=='/auth/2fa/status')return ok(req,{'enabled':true});
+        if(req.path=='/auth/otp/request'){
+          expect(req.data,{'purpose':'TWO_FACTOR'});
+          return ok(req,{'challengeId':challenge});
+        }
+        if(req.path=='/auth/otp/verify'){
+          expect(req.data,{'challengeId':challenge,'code':'123456'});
+          return ok(req,{'verified':true,'challengeId':challenge,'purpose':'TWO_FACTOR'});
+        }
+        if(req.path=='/managed-entities/'+entityId+'/disable'){
+          expect(req.data,{'otpChallengeId':challenge});
+          return ok(req,{'data':{'code':'MANAGED_ENTITY_DISABLED'}});
+        }
+        return ok(req,{});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final owner=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'OWNER','active':true}],
+    });
+    expect(owner.isOwner,true);
+    expect(repo.canLifecycle('disable'),true);
+    final pending=await repo.requestLifecycleChallenge(owner,'disable');
+    expect(pending.purpose,'TWO_FACTOR');
+    await repo.verifyAndApplyLifecycle(pending,'123456');
+    expect(calls.map((r)=>r.path).toList(),[
+      '/auth/2fa/status','/auth/otp/request','/auth/otp/verify',
+      '/managed-entities/'+entityId+'/disable',
+    ]);
+    expect(calls.last.headers.containsKey('X-Fable-Managed-Entity-Id'),false);
+    expect(calls.last.headers.containsKey('X-Security-Challenge-Id'),false);
+  });
+  test('SENSITIVE_ACTION lifecycle requires Backend 2FA=disabled, denies members and stale identity',()async{
+    final session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        if(req.path=='/auth/2fa/status')return ok(req,{'enabled':false});
+        if(req.path=='/auth/otp/request')return ok(req,{'challengeId':inviteId});
+        if(req.path=='/auth/otp/verify')return ok(req,{
+          'verified':true,'challengeId':inviteId,'purpose':'SENSITIVE_ACTION'});
+        return ok(req,{});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final member=FableManagedAccount.fromPayload(entity());
+    expect(member.isOwner,false);
+    await expectLater(repo.requestLifecycleChallenge(member,'disable'),throwsStateError);
+    final owner=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'OWNER','active':true}]});
+    final pending=await repo.requestLifecycleChallenge(owner,'disable');
+    expect(pending.purpose,'SENSITIVE_ACTION');
+    session.identityRevision++;
+    await expectLater(repo.verifyAndApplyLifecycle(pending,'123456'),throwsStateError);
+  });
+  test('Entity lifecycle rejects wrong status, missing contract, and unverified owner claims',()async{
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(installed:false),secureSession:_Session());
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog(installed:false));
+    expect(repo.canLifecycle('disable'),false);
+    final disabled=FableManagedAccount.fromPayload({
+      ...entity(),'status':'DISABLED',
+      'memberships':[{'access':'OWNER','active':true}]});
+    await expectLater(repo.requestLifecycleChallenge(disabled,'disable'),throwsStateError);
+    final forged=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'MANAGER','active':true}]});
+    expect(forged.isOwner,false);
+  });
+
+
+  test('Owner can page real members, remove nonowner and revoke sent invitations',()async{
+    final seen=<RequestOptions>[];
+    final session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        seen.add(req);
+        if(req.path=='/managed-entities/'+entityId+'/activate')return ok(req,{
+          'managedEntityId':entityId,'access':'OWNER',
+          'header':{'name':'X-Fable-Managed-Entity-Id','value':entityId}});
+        if(req.path=='/managed-entities/'+entityId+'/members')return ok(req,{
+          'items':[{'userId':entityId,'access':'OWNER','isOwner':true,
+              'username':'owner','joinedAt':'2026-09-01T00:00:00Z'},
+            {'userId':inviteId,'access':'VIEWER','isOwner':false,
+              'username':'viewer','joinedAt':'2026-09-02T00:00:00Z'}],
+          'nextCursor':null});
+        if(req.path=='/managed-entities/'+entityId+'/members/'+inviteId)
+          return ok(req,{'removed':true});
+        if(req.path=='/managed-entities/'+entityId+'/invitations')
+          return ok(req,{'items':[{
+            'id':inviteId,'access':'VIEWER','username':'invitee',
+            'expiresAt':'2026-11-30T00:00:00Z',
+          }],'nextCursor':null});
+        return ok(req,{'data':null,'code':'MANAGED_ENTITY_INVITATION_REVOKED'});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final owner=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'OWNER','active':true}]});
+    final selected=await repo.activate(owner);
+    final page=await repo.members(owner,selected);
+    expect(page.items.length,2);
+    expect(page.items.first.isOwner,true);
+    await expectLater(repo.removeMember(owner,selected,page.items.first),throwsStateError);
+    expect(await repo.removeMember(owner,selected,page.items.last),true);
+    final sent=await repo.sentInvitations(owner,selected);
+    expect(sent.items.single.username,'invitee');
+    await repo.revokeSentInvitation(owner,selected,sent.items.single);
+    expect(seen.any((x)=>x.method=='DELETE'&&
+      x.path=='/managed-entities/'+entityId+'/members/'+inviteId),true);
+    expect(seen.any((x)=>x.method=='DELETE'&&
+      x.path=='/managed-entities/'+entityId+'/invitations/'+inviteId),true);
+    session.identityRevision++;
+    await expectLater(repo.members(owner,selected),throwsStateError);
+  });
+  test('Membership and invitation pagination fails closed for forged access or cursor',()async{
+    final session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async=>
+        ok(req,{'items':[],'nextCursor':'https://attacker.test'})));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final entityOwner=FableManagedAccount.fromPayload({
+      ...entity(),'memberships':[{'access':'OWNER','active':true}]});
+    final selected=FableManagedAccountSelection(id:entityId,access:'OWNER',
+      nameAr:'نادي الشاطئ',nameEn:'Beach Club',identityRevision:session.identityRevision);
+    await expectLater(repo.members(entityOwner,selected),throwsFormatException);
+    await expectLater(repo.members(entityOwner,selected,after:'bad'),throwsArgumentError);
+    final fake=FableManagedAccount.fromPayload(entity());
+    await expectLater(repo.members(fake,selected),throwsStateError);
+    await expectLater(repo.sentInvitations(fake,selected),throwsStateError);
+  });
+
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'managed_accounts_repository.dart';
+import 'managed_members_page.dart';
 
 /// Available ONLY with explicit Fable managed-entities contract operations.
 /// Local selection cannot confer role, grant membership or synthesize a route.
@@ -20,6 +21,8 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
   List<FableManagedAccount>? _entities;
   List<FableManagedInvitation>? _invitations;
   FableManagedAccountSelection? _selected;
+  FableManagedLifecycleChallenge? _pendingLifecycle;
+  final _lifecycleOtp=TextEditingController();
   bool _busy=false;
   String? _message;
   bool get _ar=>Localizations.localeOf(context).languageCode=='ar';
@@ -28,6 +31,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
     _events=widget.gateway.session.identityEvents.listen((_){
       if(mounted)setState((){
         _entities=null;_invitations=null;_selected=null;_busy=false;
+        _pendingLifecycle=null;_lifecycleOtp.clear();
         _message='Login identity changed. Refresh the new account.';
       });
     });
@@ -147,7 +151,72 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       setState(()=>_message='Backend rejected the invitation action.');}
     finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
   }
-  @override void dispose(){unawaited(_events?.cancel());super.dispose();}
+  String _lifecycleLabel(String action){
+    if(_ar){
+      switch(action){
+        case 'disable':return 'تعطيل الكيان';
+        case 'enable':return 'إعادة تفعيل الكيان';
+        case 'delete-request':return 'طلب حذف الكيان';
+        case 'restore':return 'استعادة الكيان';
+      }
+    }
+    switch(action){
+      case 'disable':return 'Disable entity';
+      case 'enable':return 'Enable entity';
+      case 'delete-request':return 'Request entity deletion';
+      case 'restore':return 'Restore entity';
+      default:return 'Sensitive action';
+    }
+  }
+  Future<void> _requestLifecycle(FableManagedAccount entity,String action) async {
+    if(_busy||!entity.isOwner||!_repo.canLifecycle(action))return;
+    if(!await _confirm(_lifecycleLabel(action)+'?')||!mounted)return;
+    final rev=widget.gateway.session.identityRevision;
+    setState((){_busy=true;_message=null;_pendingLifecycle=null;_lifecycleOtp.clear();});
+    try{
+      final pending=await _repo.requestLifecycleChallenge(entity,action);
+      if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+      setState(()=>_pendingLifecycle=pending);
+    }catch(_){
+      if(mounted&&rev==widget.gateway.session.identityRevision)
+        setState(()=>_message=_ar
+          ?'تعذر طلب رمز العملية الحساسة وفق سياسة الباك.'
+          :'Backend could not issue a verified lifecycle OTP.');
+    }finally{
+      if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);
+    }
+  }
+  Future<void> _applyLifecycle() async{
+    final pending=_pendingLifecycle;
+    if(_busy||pending==null)return;
+    final rev=widget.gateway.session.identityRevision;
+    if(rev!=pending.identityRevision)return;
+    setState((){_busy=true;_message=null;});
+    try{
+      await _repo.verifyAndApplyLifecycle(pending,_lifecycleOtp.text.trim());
+      if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+      setState((){
+        _pendingLifecycle=null;_lifecycleOtp.clear();_selected=null;
+        _message=_ar?'أكد الخادم العملية، وتم تحديث وضع الكيان.'
+          :'Backend confirmed the lifecycle action.';
+      });
+      await _reloadAfterMutation();
+    }catch(_){
+      if(mounted&&rev==widget.gateway.session.identityRevision){
+        setState((){
+          // A verified proof may have been consumed even if the mutation
+          // response was lost. Require new challenge; do not replay POST.
+          _pendingLifecycle=null;_lifecycleOtp.clear();
+          _message=_ar?'لم تؤكد العملية؛ حدّث القائمة قبل إعادة المحاولة.'
+            :'Action was not confirmed. Refresh before retrying with a new proof.';
+        });
+      }
+    }finally{
+      if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);
+    }
+  }
+
+  @override void dispose(){unawaited(_events?.cancel());_lifecycleOtp.dispose();super.dispose();}
   @override Widget build(BuildContext context){
     final ar=_ar;
     return Scaffold(appBar:AppBar(title:Text(ar?'الكيانات التي أديرها':'Managed entities')),
@@ -174,6 +243,32 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
                   onPressed:_busy?null:()=>unawaited(_activate(entity)),
                   child:Text(ar?'اختيار':'Select'))
                 :null),
+          if(_selected?.id==entity.id&&(
+              entity.isOwner&&_repo.canListMembers ||
+              entity.collaborationEnabled&&_repo.canViewSentInvitations&&
+              (_selected!.access=='OWNER'||
+                _selected!.access=='MANAGER'&&entity.managersCanInvite)))
+            TextButton.icon(
+              icon:const Icon(Icons.groups_outlined),
+              onPressed:_busy?null:()=>Navigator.of(context).push(
+                MaterialPageRoute<void>(builder:(_)=>FableManagedMembersPage(
+                  repo:_repo,entity:entity,selection:_selected!))),
+              label:Text(ar?'الأعضاء والدعوات المرسلة':'Members and sent invitations')),
+          if(entity.isOwner)...[
+            if(entity.status=='ACTIVE'&&_repo.canLifecycle('disable'))
+              TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'disable')),
+                child:Text(_lifecycleLabel('disable'))),
+            if(entity.status=='DISABLED'&&_repo.canLifecycle('enable'))
+              TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'enable')),
+                child:Text(_lifecycleLabel('enable'))),
+            if(const {'ACTIVE','DISABLED'}.contains(entity.status)&&
+              _repo.canLifecycle('delete-request'))
+              TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'delete-request')),
+                child:Text(_lifecycleLabel('delete-request'))),
+            if(entity.status=='PENDING_DELETE'&&_repo.canLifecycle('restore'))
+              TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'restore')),
+                child:Text(_lifecycleLabel('restore'))),
+          ],
           if(_selected?.id==entity.id&&entity.collaborationEnabled&&
             _repo.canInvite&&(_selected!.access=='OWNER'||
             _selected!.access=='MANAGER'&&entity.managersCanInvite))
@@ -183,6 +278,20 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
         if(_selected!=null)Text((ar?'السياق المعتمد: ':'Selected: ')+
           (ar?_selected!.nameAr:_selected!.nameEn)+' ('+_selected!.access+
           '). Backend re-verifies membership; this screen does not grant roles.'),
+        if(_pendingLifecycle!=null)...[
+          const Divider(),
+          Text(_ar
+            ?'رمز التحقق المطلوب: '+_pendingLifecycle!.purpose
+            :'Verification required: '+_pendingLifecycle!.purpose),
+          TextField(controller:_lifecycleOtp,keyboardType:TextInputType.number,
+            obscureText:true,maxLength:10,
+            decoration:InputDecoration(labelText:_ar?'رمز OTP':'OTP code')),
+          FilledButton(onPressed:_busy?null:()=>unawaited(_applyLifecycle()),
+            child:Text(_ar?'تحقق ونفّذ':'Verify and apply')),
+          TextButton(onPressed:_busy?null:()=>setState((){
+            _pendingLifecycle=null;_lifecycleOtp.clear();
+          }),child:Text(_ar?'إلغاء':'Cancel')),
+        ],
         if(_repo.canReadInvitations)...[
           const Divider(),Text(ar?'دعواتي':'My invitations'),
           for(final item in _invitations??<FableManagedInvitation>[])

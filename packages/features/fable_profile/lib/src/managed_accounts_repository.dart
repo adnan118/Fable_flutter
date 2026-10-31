@@ -7,9 +7,11 @@ class FableManagedAccount {
     required this.id,required this.type,required this.nameAr,
     required this.nameEn,required this.status,required this.visibility,
     required this.collaborationEnabled,required this.managersCanInvite,
+    this.isOwner=false,
   });
   final String id,type,nameAr,nameEn,status,visibility;
   final bool collaborationEnabled,managersCanInvite;
+  final bool isOwner;
 
   static final _uuid=RegExp(
     r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
@@ -31,11 +33,18 @@ class FableManagedAccount {
       throw const FormatException('Invalid managed entity status or visibility');
     if(raw['collaborationEnabled'] is! bool||raw['managersCanInvite'] is! bool)
       throw const FormatException('Invalid managed entity collaboration settings');
+    // listMine only returns the requester's memberships. Never infer OWNER
+    // from a visible entity or from the owner's public identifier.
+    final memberships=raw['memberships'];
+    final isOwner=memberships is List &&
+      memberships.length<=100 &&
+      memberships.any((membership)=>membership is Map &&
+        membership['access']=='OWNER' && membership['active']==true);
     return FableManagedAccount(id:id,type:field('type',max:64),
       nameAr:field('nameAr'),nameEn:field('nameEn'),
       status:status,visibility:visibility,
       collaborationEnabled:raw['collaborationEnabled'] as bool,
-      managersCanInvite:raw['managersCanInvite'] as bool);
+      managersCanInvite:raw['managersCanInvite'] as bool,isOwner:isOwner);
   }
 }
 
@@ -73,6 +82,77 @@ class FableManagedInvitation {
     return FableManagedInvitation(id:id,entityId:managedId,entityName:name,
       access:access,expiresAt:parsed.toUtc());
   }
+}
+
+/// In-memory OTP proof request. Never persist this challenge, its code or the
+/// authenticated identity it belongs to.
+class FableManagedLifecycleChallenge {
+  const FableManagedLifecycleChallenge._(this.challengeId,this.purpose,
+    this.entityId,this.operation,this.identityRevision);
+  final String challengeId,purpose,entityId,operation;
+  final int identityRevision;
+}
+
+class FableManagedMember {
+  const FableManagedMember({required this.userId,required this.access,
+    required this.isOwner,this.username,this.displayName,this.joinedAt});
+  final String userId,access;
+  final bool isOwner;
+  final String? username,displayName;
+  final DateTime? joinedAt;
+  factory FableManagedMember.fromPayload(Object? raw){
+    if(raw is! Map)throw const FormatException('Invalid member');
+    final userId=raw['userId'],access=raw['access'],owner=raw['isOwner'];
+    if(userId is! String||!FableManagedAccount._uuid.hasMatch(userId)||
+      access is! String||!const {'OWNER','MANAGER','VIEWER'}.contains(access)||
+      owner is! bool || (owner!=(access=='OWNER')))
+      throw const FormatException('Invalid managed membership or owner status');
+    String? field(String key){
+      final v=raw[key];
+      if(v==null)return null;
+      if(v is! String||v.length>191||RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(v))
+        throw FormatException('Invalid member presentation: $key');
+      return v;
+    }
+    final joined=raw['joinedAt'];
+    if(joined!=null && (joined is! String||DateTime.tryParse(joined)==null))
+      throw const FormatException('Invalid member creation date');
+    return FableManagedMember(userId:userId,access:access,isOwner:owner,
+      username:field('username'),displayName:field('displayName'),
+      joinedAt:joined is String?DateTime.parse(joined).toUtc():null);
+  }
+}
+
+class FableSentInvitation {
+  const FableSentInvitation({required this.id,required this.access,
+    required this.expiresAt,this.username,this.displayName});
+  final String id,access;
+  final DateTime expiresAt;
+  final String? username,displayName;
+  factory FableSentInvitation.fromPayload(Object? raw){
+    if(raw is! Map)throw const FormatException('Invalid sent invitation');
+    final id=raw['id'],access=raw['access'],expiresAt=raw['expiresAt'];
+    if(id is! String||!FableManagedAccount._uuid.hasMatch(id)||
+      access is! String||!const {'MANAGER','VIEWER'}.contains(access)||
+      expiresAt is! String||DateTime.tryParse(expiresAt)==null)
+      throw const FormatException('Invalid sent invitation');
+    String? safe(Object? input){
+      if(input==null)return null;
+      if(input is! String||input.length>191||
+        RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(input))
+        throw const FormatException('Invalid invitation recipient');
+      return input;
+    }
+    return FableSentInvitation(id:id,access:access,
+      expiresAt:DateTime.parse(expiresAt).toUtc(),
+      username:safe(raw['username']),displayName:safe(raw['displayName']));
+  }
+}
+
+class FableCursorPage<T> {
+  const FableCursorPage(this.items,this.nextCursor);
+  final List<T> items;
+  final String? nextCursor;
 }
 
 class FableManagedAccountsRepository {
@@ -123,6 +203,7 @@ class FableManagedAccountsRepository {
     final payload=_unwrap(response.data);
     if(payload is! Map || payload['managedEntityId']!=entity.id||
       !const {'OWNER','MANAGER','VIEWER'}.contains(payload['access']) ||
+      (payload['access']=='OWNER'&&!entity.isOwner) ||
       payload['header'] is! Map ||
       (payload['header'] as Map)['name']!='X-Fable-Managed-Entity-Id'||
       (payload['header'] as Map)['value']!=entity.id)
@@ -165,6 +246,165 @@ class FableManagedAccountsRepository {
       throw ArgumentError('Invalid invitee or delegated access level');
     await gateway.execute(_operation('/managed-entities/{id}/invitations','POST'),
       path:{'id':entityId},body:{'username':username,'access':access});
+  }
+
+  bool get canListMembers=>can('/managed-entities/{id}/members','GET');
+  bool get canRemoveMember=>can('/managed-entities/{id}/members/{userId}','DELETE');
+  bool get canViewSentInvitations=>can('/managed-entities/{id}/invitations','GET');
+  bool get canRevokeSentInvitation=>can('/managed-entities/{id}/invitations/{invitationId}','DELETE');
+
+  void _requireSelection(FableManagedAccount entity,FableManagedAccountSelection selected,{
+    bool ownerOnly=false,
+  }){
+    if(selected.id!=entity.id||
+       selected.identityRevision!=gateway.session.identityRevision||
+       (selected.access=='OWNER'&&!entity.isOwner) ||
+       (ownerOnly && (!entity.isOwner||selected.access!='OWNER')))
+      throw StateError('No verified identity, owner rights or active entity context');
+    if(entity.status!='ACTIVE'&&entity.status!='DISABLED')
+      throw StateError('Inactive entity does not permit membership administration');
+  }
+
+  FableCursorPage<T> _cursorPage<T>(Object? value,T Function(Object?) parse){
+    final payload=_unwrap(value);
+    if(payload is! Map||payload['items'] is! List)
+      throw const FormatException('Invalid Backend cursor page');
+    final rows=payload['items'] as List;
+    if(rows.length>50)throw const FormatException('Backend exceeded membership page size');
+    final next=payload['nextCursor'];
+    if(next!=null&&(next is! String||!FableManagedAccount._uuid.hasMatch(next)))
+      throw const FormatException('Invalid next page cursor');
+    return FableCursorPage<T>(
+      List<T>.unmodifiable(rows.map(parse)),next as String?);
+  }
+
+  Future<FableCursorPage<FableManagedMember>> members(
+    FableManagedAccount entity,FableManagedAccountSelection selected,{String? after})async{
+    _requireSelection(entity,selected,ownerOnly:true);
+    if(after!=null&&!FableManagedAccount._uuid.hasMatch(after))
+      throw ArgumentError('Invalid membership page cursor');
+    final response=await gateway.execute(_operation('/managed-entities/{id}/members','GET'),
+      path:{'id':entity.id},query:after==null?null:{'after':after});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _cursorPage<FableManagedMember>(
+      response.data,FableManagedMember.fromPayload);
+  }
+
+  Future<bool> removeMember(FableManagedAccount entity,FableManagedAccountSelection selected,
+    FableManagedMember member)async{
+    _requireSelection(entity,selected,ownerOnly:true);
+    if(member.isOwner||member.access=='OWNER'||!FableManagedAccount._uuid.hasMatch(member.userId))
+      throw StateError('Owner membership is immutable');
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}/members/{userId}','DELETE'),
+      path:{'id':entity.id,'userId':member.userId});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final payload=_unwrap(response.data);
+    if(payload is! Map||payload['removed']!=true)
+      throw const FormatException('Backend did not confirm removal');
+    return true;
+  }
+
+  Future<FableCursorPage<FableSentInvitation>> sentInvitations(
+    FableManagedAccount entity,FableManagedAccountSelection selected,{String? after})async{
+    _requireSelection(entity,selected);
+    if(!entity.collaborationEnabled ||
+       !(selected.access=='OWNER' ||
+         selected.access=='MANAGER'&&entity.managersCanInvite))
+      throw StateError('Only a verified authorized invitation admin may access sent invitations');
+    if(after!=null&&!FableManagedAccount._uuid.hasMatch(after))
+      throw ArgumentError('Invalid invitation cursor');
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}/invitations','GET'),
+      path:{'id':entity.id},query:after==null?null:{'after':after});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _cursorPage<FableSentInvitation>(
+      response.data,FableSentInvitation.fromPayload);
+  }
+  Future<void> revokeSentInvitation(FableManagedAccount entity,
+    FableManagedAccountSelection selected,FableSentInvitation invitation)async{
+    _requireSelection(entity,selected);
+    if(!entity.collaborationEnabled ||
+      !(selected.access=='OWNER'||
+        selected.access=='MANAGER'&&entity.managersCanInvite))
+      throw StateError('Invalid invitation revocation permissions');
+    await gateway.execute(
+      _operation('/managed-entities/{id}/invitations/{invitationId}','DELETE'),
+      path:{'id':entity.id,'invitationId':invitation.id});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+  }
+
+  static const _lifecyclePaths=<String,String>{
+    'disable':'/managed-entities/{id}/disable',
+    'enable':'/managed-entities/{id}/enable',
+    'delete-request':'/managed-entities/{id}/delete-request',
+    'restore':'/managed-entities/{id}/restore',
+  };
+
+  bool canLifecycle(String action){
+    final route=_lifecyclePaths[action];
+    if(route==null||!can(route,'POST'))return false;
+    return can('/auth/2fa/status','GET') &&
+      can('/auth/otp/request','POST') && can('/auth/otp/verify','POST');
+  }
+
+  Future<FableManagedLifecycleChallenge> requestLifecycleChallenge(
+      FableManagedAccount entity,String action)async{
+    if(!entity.isOwner)throw StateError('Only a Backend-listed owner may request entity lifecycle actions');
+    if(!canLifecycle(action)||!FableManagedAccount._uuid.hasMatch(entity.id))
+      throw StateError('Backend has not exported this verified lifecycle/OTP workflow');
+    if(action=='disable'&&entity.status!='ACTIVE' ||
+       action=='enable'&&entity.status!='DISABLED' ||
+       action=='restore'&&entity.status!='PENDING_DELETE' ||
+       action=='delete-request'&&!const {'ACTIVE','DISABLED'}.contains(entity.status))
+      throw StateError('This lifecycle action is invalid for the entity status');
+    final rev=gateway.session.identityRevision;
+    final status=await gateway.execute(_operation('/auth/2fa/status','GET'));
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_unwrap(status.data);
+    if(data is! Map || data['enabled'] is! bool)
+      throw const FormatException('Backend did not disclose authoritative 2FA status');
+    final purpose=data['enabled']==true?'TWO_FACTOR':'SENSITIVE_ACTION';
+    final request=await gateway.execute(_operation('/auth/otp/request','POST'),
+      body:{'purpose':purpose});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final value=_unwrap(request.data),challengeId=value is Map?value['challengeId']:null;
+    if(challengeId is! String || !FableManagedAccount._uuid.hasMatch(challengeId))
+      throw const FormatException('Backend returned invalid lifecycle challenge identity');
+    return FableManagedLifecycleChallenge._(challengeId,purpose,entity.id,action,rev);
+  }
+
+  /// The Backend consumes a VERIFIED, purpose-scoped, one-time OTP. No local
+  /// authority or reusable proof is created and lifecycle changes are not
+  /// automatically repeated on network errors.
+  Future<Object?> verifyAndApplyLifecycle(
+    FableManagedLifecycleChallenge pending,String code)async{
+    if(!canLifecycle(pending.operation)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
+      throw ArgumentError('Invalid lifecycle OTP or backend operation');
+    final rev=pending.identityRevision;
+    if(gateway.session.identityRevision!=rev)
+      throw StateError('Lifecycle challenge belongs to another login');
+    final verified=await gateway.execute(_operation('/auth/otp/verify','POST'),
+      body:{'challengeId':pending.challengeId,'code':code});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final proof=_unwrap(verified.data);
+    if(proof is! Map||proof['verified']!=true||
+       proof['challengeId']!=pending.challengeId||
+       proof['purpose']!=pending.purpose)
+      throw const FormatException('Wrong security proof purpose or challenge');
+    final route=_lifecyclePaths[pending.operation]!;
+    final changed=await gateway.execute(_operation(route,'POST'),
+      path:{'id':pending.entityId},body:{'otpChallengeId':pending.challengeId});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _unwrap(changed.data);
   }
 
   /// The caller must opt into each scoped operation. No implicit injection
