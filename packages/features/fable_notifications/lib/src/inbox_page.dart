@@ -159,7 +159,29 @@ class _FableInboxPageState extends State<FableInboxPage> {
        if(item.readAt==null)unawaited(_read(item));
      },
      title:Text(item.title,maxLines:2,overflow:TextOverflow.ellipsis),
-     subtitle:Text(item.body,maxLines:3,overflow:TextOverflow.ellipsis),
+     subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+       Text(item.body,maxLines:5,overflow:TextOverflow.ellipsis),
+       if(widget.fableContract!=null && item.securityActions.isNotEmpty)
+         Wrap(spacing:8,runSpacing:4,children:[
+           for(final action in item.securityActions)
+             if(action.id=='THIS_WAS_ME')
+               TextButton(onPressed:_loading?null:(){
+                 // Acknowledgement is a read action, NEVER an auth/security override.
+                 unawaited(_read(item));
+                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+                   _ar?'تمت قراءة التنبيه فقط؛ لم يُلغَ أي قفل أمني.'
+                       :'Notice acknowledged; no security protection was disabled.')));
+               },child:Text(_ar?'هذه محاولتي':'This was me')),
+           for(final action in item.securityActions)
+             if(action.id=='RESET_PASSWORD')
+               TextButton(
+                 onPressed:action.route==null||
+                     FableNotificationNavigation.instance.navigateVerifiedAppRoute==null
+                   ?null:()=>unawaited(
+                     FableNotificationNavigation.instance.openVerifiedInternalRoute(action.route!)),
+                 child:Text(_ar?'استعادة كلمة المرور':'Reset password')),
+         ]),
+     ]),
      trailing:item.readAt!=null?const Icon(Icons.done_all):IconButton(
        tooltip:_ar?'تحديد كمقروء':'Mark as read',icon:const Icon(Icons.mark_email_read_outlined),
        onPressed:_loading?null:()=>_read(item))),

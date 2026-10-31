@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'sessions_page.dart';
@@ -16,6 +17,24 @@ class _FableLoginPageState extends State<FableLoginPage> {
   FableSecondFactorChallenge? _challenge;
   String? _challengeId;
   String? _preferredChannel;
+  bool _rememberIdentifier=false;
+  FableRememberedIdentifier? _remembered;
+  FableRememberedIdentifier get _credentialHints =>
+    _remembered ??= FableRememberedIdentifier(backendScope: _url);
+  Future<void> _restoreIdentifier() async {
+    if(_url.isEmpty)return;
+    try{
+      final previous=await _credentialHints.load();
+      if(!mounted||previous==null)return;
+      setState((){_user.text=previous;_rememberIdentifier=true;});
+    }catch(_){/* Native secure storage may be unavailable. */}
+  }
+  Future<void> _saveLoginHint() async {
+    // This is optional UX state, never an authentication requirement.
+    try {
+      await _credentialHints.save(identifier:_user.text,remember:_rememberIdentifier);
+    }catch(_){/* A storage failure must not invalidate a valid server session. */}
+  }
   bool _busy=false;
   bool _signedIn=false;
   bool _savedSessionAvailable=false;
@@ -26,6 +45,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
   @override
   void initState() {
     super.initState();
+    _restoreIdentifier();
     // Do not infer a valid server session just because a token is on disk.
     // First surface its presence, then allow explicit verification.
     if (_url.isNotEmpty && widget.contract.supports('auth.login')) {
@@ -122,6 +142,8 @@ class _FableLoginPageState extends State<FableLoginPage> {
         return;
       }
       if (result.authenticated) {
+        await _saveLoginHint();
+        TextInput.finishAutofillContext(shouldSave:true);
         _password.clear();
         setState(() { _signedIn = true; _savedSessionAvailable = false; _message = 'Session saved securely.'; });
       }
@@ -154,6 +176,9 @@ class _FableLoginPageState extends State<FableLoginPage> {
     setState(() {_busy=true;_message=null;});
     try {
       await _client().completeSecondFactor(pending,challengeId:id,code:_otp.text.trim());
+      await _saveLoginHint();
+      // Do not save after the first factor: only a confirmed full login.
+      TextInput.finishAutofillContext(shouldSave:true);
       if(mounted)setState(() {
         _otp.clear();_challenge=null;_challengeId=null;_signedIn=true;_savedSessionAvailable=false;
         _message='Two-factor sign-in completed. Session saved securely.';
@@ -237,7 +262,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
           ],
           TextButton(onPressed:_busy?null:_cancelChallenge,child:const Text('Cancel sign-in')),
         ]),
-        if (!_signedIn && _challenge==null) Form(key:_key,child:Column(children:[
+        if (!_signedIn && _challenge==null) AutofillGroup(child:Form(key:_key,child:Column(children:[
           TextFormField(controller:_user,autovalidateMode:AutovalidateMode.onUserInteraction,
             autofillHints:const [AutofillHints.username],maxLength:191,
             decoration:const InputDecoration(labelText:'Email / username / phone'),
@@ -249,10 +274,22 @@ class _FableLoginPageState extends State<FableLoginPage> {
             decoration:const InputDecoration(labelText:'Password'),
             validator:(value)=>FableValidation.message(FableValidation.requiredText(value,max:128),
               languageCode:Localizations.localeOf(context).languageCode)),
+          CheckboxListTile(
+            contentPadding:EdgeInsets.zero,
+            value:_rememberIdentifier,
+            onChanged:_busy?null:(value) async {
+              setState(()=>_rememberIdentifier=value??false);
+              if(!_rememberIdentifier) {
+                try{await _credentialHints.clear();}catch(_){}
+              }
+            },
+            title:const Text('Remember my login identifier on this device'),
+            subtitle:const Text('Passwords stay with your device password manager.'),
+          ),
           const SizedBox(height:22),FilledButton(onPressed:enabled&&!_busy?_login:null,
             child:_busy?const SizedBox(height:18,width:18,child:CircularProgressIndicator(strokeWidth:2)):
               const Text('Sign in')),
-        ])),
+        ]))),
         if(_message!=null)Padding(padding:const EdgeInsets.only(top:20),child:Text(_message!,textAlign:TextAlign.center)),
         if(_url.isEmpty)const Padding(padding:EdgeInsets.only(top:14),child:Text(
           'Configure with --dart-define=FABLE_API_BASE_URL=https://your-api.example',textAlign:TextAlign.center)),
