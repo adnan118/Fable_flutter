@@ -75,6 +75,15 @@ class FableManagedInvitation {
   }
 }
 
+/// In-memory OTP proof request. Never persist this challenge, its code or the
+/// authenticated identity it belongs to.
+class FableManagedLifecycleChallenge {
+  const FableManagedLifecycleChallenge._(this.challengeId,this.purpose,
+    this.entityId,this.operation,this.identityRevision);
+  final String challengeId,purpose,entityId,operation;
+  final int identityRevision;
+}
+
 class FableManagedAccountsRepository {
   const FableManagedAccountsRepository(this.gateway,this.contract);
   final FableAuthGateway gateway;
@@ -165,6 +174,74 @@ class FableManagedAccountsRepository {
       throw ArgumentError('Invalid invitee or delegated access level');
     await gateway.execute(_operation('/managed-entities/{id}/invitations','POST'),
       path:{'id':entityId},body:{'username':username,'access':access});
+  }
+
+  static const _lifecyclePaths=<String,String>{
+    'disable':'/managed-entities/{id}/disable',
+    'enable':'/managed-entities/{id}/enable',
+    'delete-request':'/managed-entities/{id}/delete-request',
+    'restore':'/managed-entities/{id}/restore',
+  };
+
+  bool canLifecycle(String action){
+    final route=_lifecyclePaths[action];
+    if(route==null||!can(route,'POST'))return false;
+    return can('/auth/2fa/status','GET') &&
+      can('/auth/otp/request','POST') && can('/auth/otp/verify','POST');
+  }
+
+  Future<FableManagedLifecycleChallenge> requestLifecycleChallenge(
+      FableManagedAccount entity,String action)async{
+    if(!canLifecycle(action)||!FableManagedAccount._uuid.hasMatch(entity.id))
+      throw StateError('Backend has not exported this verified lifecycle/OTP workflow');
+    if(action=='disable'&&entity.status!='ACTIVE' ||
+       action=='enable'&&entity.status!='DISABLED' ||
+       action=='restore'&&entity.status!='PENDING_DELETE' ||
+       action=='delete-request'&&!const {'ACTIVE','DISABLED'}.contains(entity.status))
+      throw StateError('This lifecycle action is invalid for the entity status');
+    final rev=gateway.session.identityRevision;
+    final status=await gateway.execute(_operation('/auth/2fa/status','GET'));
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_unwrap(status.data);
+    if(data is! Map || data['enabled'] is! bool)
+      throw const FormatException('Backend did not disclose authoritative 2FA status');
+    final purpose=data['enabled']==true?'TWO_FACTOR':'SENSITIVE_ACTION';
+    final request=await gateway.execute(_operation('/auth/otp/request','POST'),
+      body:{'purpose':purpose});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final value=_unwrap(request.data),challengeId=value is Map?value['challengeId']:null;
+    if(challengeId is! String || !FableManagedAccount._uuid.hasMatch(challengeId))
+      throw const FormatException('Backend returned invalid lifecycle challenge identity');
+    return FableManagedLifecycleChallenge._(challengeId,purpose,entity.id,action,rev);
+  }
+
+  /// The Backend consumes a VERIFIED, purpose-scoped, one-time OTP. No local
+  /// authority or reusable proof is created and lifecycle changes are not
+  /// automatically repeated on network errors.
+  Future<Object?> verifyAndApplyLifecycle(
+    FableManagedLifecycleChallenge pending,String code)async{
+    if(!canLifecycle(pending.operation)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
+      throw ArgumentError('Invalid lifecycle OTP or backend operation');
+    final rev=pending.identityRevision;
+    if(gateway.session.identityRevision!=rev)
+      throw StateError('Lifecycle challenge belongs to another login');
+    final verified=await gateway.execute(_operation('/auth/otp/verify','POST'),
+      body:{'challengeId':pending.challengeId,'code':code});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final proof=_unwrap(verified.data);
+    if(proof is! Map||proof['verified']!=true||
+       proof['challengeId']!=pending.challengeId||
+       proof['purpose']!=pending.purpose)
+      throw const FormatException('Wrong security proof purpose or challenge');
+    final route=_lifecyclePaths[pending.operation]!;
+    final changed=await gateway.execute(_operation(route,'POST'),
+      path:{'id':pending.entityId},body:{'otpChallengeId':pending.challengeId});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _unwrap(changed.data);
   }
 
   /// The caller must opt into each scoped operation. No implicit injection
