@@ -9,7 +9,8 @@ class FableRememberedIdentifier {
     : _key='fable.login.identifier.${sha256.convert(utf8.encode(backendScope)).toString().substring(0,40)}',
       _storage=storage??const FlutterSecureStorage(){
     final scope=Uri.tryParse(backendScope);
-    if(scope==null || !scope.hasAuthority || scope.userInfo.isNotEmpty ||
+    if(scope==null || !scope.hasAuthority || scope.host.isEmpty ||
+       scope.userInfo.isNotEmpty || scope.hasQuery || scope.hasFragment ||
        !(scope.scheme=='https'||(scope.scheme=='http' &&
          const {'localhost','127.0.0.1','10.0.2.2','::1'}.contains(scope.host)))) {
       throw ArgumentError('A trusted backend URL is required to scope remembered identifiers');
