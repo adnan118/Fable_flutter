@@ -262,10 +262,10 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
   outputFile(project,PROJECT_PATH,snapshot);
   return summary;
 }
-async function interactiveManual(){
-  const cli=createInterface({input:process.stdin,output:process.stdout});
+async function interactiveManual(question=null){
+  const cli=question?null:createInterface({input:process.stdin,output:process.stdout});
   try{
-    const ask=async(label,def)=>{const answer=(await cli.question(label+' ['+def+']: ')).trim();return answer||def;};
+    const ask=async(label,def)=>{const answer=(await (question?question(label+' ['+def+']: '):cli.question(label+' ['+def+']: '))).trim();return answer||def;};
     const yn=async(label,def=false)=>(await ask(label+' (yes/no)',def?'yes':'no')).toLowerCase()==='yes';
     const projectId=await ask('Project ID','my-app');
     const title=await ask('Project display title',projectId);
@@ -300,38 +300,85 @@ async function interactiveManual(){
       steps:['identity','authentication','accounts','permissions','capabilities','commercial']
         .map((id,index)=>({id,order:index+1,status:'manual-review',
           frontendAction:'Connect this choice to a verified external Backend API before production'}))};
-  }finally{cli.close();}
+  }finally{cli?.close();}
 }
 async function main(){
   const opt=explicitKeys(process.argv.slice(2));
-  if(!['import','manual'].includes(opt.mode))throw Error('Use --mode import|manual');
   const root=resolve(opt.out??process.cwd());
+  const guided=opt.mode==='guided'||(!opt.mode&&(process.stdin.isTTY||opt.interactive));
+  const promptMode=guided || (opt.mode==='import' && (opt.interactive||(opt.apply && process.stdin.isTTY&&!opt.yes)));
+  if(promptMode){
+    const cli=createInterface({input:process.stdin,output:process.stdout});
+    const ask=text=>cli.question(text);
+    try{
+      if(guided){
+        const value=(await ask('هل تريد استيراد قرارات Fable Backend الآن؟ (نعم/لا) [نعم]: ')).trim().toLowerCase();
+        const shouldImport=!['لا','n','no','0'].includes(value);
+        if(!shouldImport){
+          const manual=manualFrontendDecisions(await interactiveManual(ask));
+          console.log(formatFrontendSetupReview(manual,{root}));
+          const approved=await ask('اكتب «اعتمد» أو APPROVE لحفظ إعداد Flutter اليدوي: ');
+          if(!isExplicitFrontendApproval(approved)){
+            console.log('تم الإلغاء؛ لا توجد تغييرات.');
+            return;
+          }
+          console.log(JSON.stringify(saveFrontendSetup(root,manual,{apply:true}),null,2));
+          return;
+        }
+      }
+      let source=opt.source;
+      if(!source){
+        const first=resolve(root,'../Fable-Backend-RC66/dist/client-contract');
+        const second=resolve(root,'../backend/dist/client-contract');
+        const suggestion=existsSync(join(first,'contract.json'))?first:second;
+        const input=(await ask('مسار ملف قرارات الباك (مجلد dist/client-contract) ['+suggestion+']: ')).trim();
+        source=input||suggestion;
+      }
+      const result=await reviewedBackendImport({
+        root,source,expectedProjectId:opt['expected-project-id']??null,
+        expectedContractHash:opt['expected-contract-hash']??null,
+        prune:!!opt.prune,ask,show:message=>console.log(message),
+      });
+      console.log(JSON.stringify(result,null,2));
+    }finally{cli.close();}
+    return;
+  }
+  if(!['import','manual'].includes(opt.mode))
+    throw Error('Run the wizard in an interactive terminal or use --mode import|manual. --mode guided asks about importing the Backend.');
+  if(opt.yes && !opt.apply)throw Error('--yes is valid only with --apply');
+  if(opt.prune && !opt.apply)throw Error('--prune requires explicit --apply');
   const imported=opt.source?importBackendDecisions(opt.source,{
     expectedProjectId:opt['expected-project-id']??null,
     expectedContractHash:opt['expected-contract-hash']??null,
   }):null;
   const input=opt.mode==='import'
     ? (imported??importBackendDecisions(root,{
-      expectedProjectId:opt['expected-project-id']??null,
-      expectedContractHash:opt['expected-contract-hash']??null,
-    }))
-    : (()=>{
-        if(!opt.interactive && !opt.file)throw Error('Manual mode requires --file or --interactive');
-        return null;
-      })();
-  const snapshot=opt.mode==='manual'?
-    manualFrontendDecisions(opt.interactive?await interactiveManual():asJson(resolve(opt.file))):input;
-  const effective=(opt.mode==='manual' && imported)?reconcileManualWithBackend(snapshot.decisionSnapshot,imported):snapshot;
-  if(opt.prune && (!opt.apply || !effective.backendAuthority || !effective.projectBound)){
-    throw Error('Feature package pruning requires --apply and a pinned imported Fable Backend project');
-  }
-  const result=saveFrontendSetup(root,effective,{apply:!!opt.apply,sourceDir:opt.mode==='import'?(opt.source??root):opt.source??null});
-  if(effective.backendAuthority && effective.decisionSnapshot?.decisions?.frontendFeatures){
+        expectedProjectId:opt['expected-project-id']??null,
+        expectedContractHash:opt['expected-contract-hash']??null,
+      }))
+    : (()=>{if(!opt.interactive&&!opt.file)throw Error('Manual mode requires --file or --interactive');return null;})();
+  const snapshot=opt.mode==='manual'
+    ?manualFrontendDecisions(opt.interactive?await interactiveManual():asJson(resolve(opt.file)))
+    :input;
+  const effective=(opt.mode==='manual' && imported)
+    ?reconcileManualWithBackend(snapshot.decisionSnapshot,imported):snapshot;
+  if(effective.backendAuthority)
+    process.stdout.write(formatFrontendSetupReview(effective,{root})+'\n');
+  if(opt.prune && (!effective.backendAuthority || !effective.projectBound))
+    throw Error('Feature removal requires an independently pinned Backend project ID and contract hash');
+  if(opt.apply && effective.backendAuthority && !opt.yes)
+    throw Error('Refusing unattended changes. Run in a terminal for review/approval, or use --yes with independently verified --expected-project-id and --expected-contract-hash.');
+  if(opt.apply && effective.backendAuthority && opt.yes && !effective.projectBound)
+    throw Error('Unattended import requires independent project ID and Backend contract hash pins');
+  const result=opt.apply
+    ?await applyReviewedSnapshot(root,effective,{
+       source:opt.mode==='import'?(opt.source??root):opt.source??null,
+       prune:!!opt.prune,
+     })
+    :saveFrontendSetup(root,effective,{apply:false});
+  if(!opt.apply && effective.backendAuthority && effective.decisionSnapshot?.decisions?.frontendFeatures){
     const {syncProjectFeatures}=await import('./sync-project-features.mjs');
-    result.featureSync=syncProjectFeatures(root,effective,{
-      apply:!!opt.apply && effective.projectBound===true,
-      prune:!!opt.prune,
-    });
+    result.featureSync=syncProjectFeatures(root,effective,{apply:false,prune:false});
   }
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
 }
