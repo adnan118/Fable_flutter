@@ -349,7 +349,7 @@ class FableActiveSession {
       throw const FormatException('Invalid active session UUID');
     if(source['isCurrent'] is! bool)
       throw const FormatException('Missing active session current state');
-    DateTime parseDate(String key,{bool required=true}){
+    DateTime parseDate(String key){
       final value=source[key];
       if(value is! String || value.length>64)
         throw FormatException('Invalid session date: $key');
@@ -361,7 +361,7 @@ class FableActiveSession {
       final value=source[key];
       if(value==null)return null;
       if(value is! String || value.length>max ||
-         value.contains(RegExp(r'[\\x00-\\x1F\\x7F]')))
+         value.contains(RegExp(r'[\x00-\x1F\x7F]')))
         throw FormatException('Invalid session presentation field: $key');
       return value;
     }
