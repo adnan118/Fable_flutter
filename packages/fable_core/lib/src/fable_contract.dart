@@ -22,16 +22,48 @@ class FableOperation {
   final String? credentialHeader;
 }
 
+/// Validated backend session policy. The exported value is a wizard/build-time hint;
+/// GET /auth/session-policy is the authoritative deployed runtime setting.
+class FableSessionPolicy {
+  const FableSessionPolicy({required this.mode,required this.maxActive,
+    required this.overflow,this.onePerInstallation,this.runtimeEndpoint});
+  final String mode;
+  final int maxActive;
+  final String overflow;
+  final bool? onePerInstallation;
+  final String? runtimeEndpoint;
+
+  bool get allowsMultipleSessions => mode=='multi' && (maxActive==0 || maxActive>1);
+
+  factory FableSessionPolicy.fromMap(Map<String,dynamic> source) {
+    final mode=source['mode'],max=source['maxActive'],overflow=source['overflow'];
+    final installation=source['onePerInstallation'],endpoint=source['runtimeEndpoint'];
+    if(mode is! String || !const {'single','multi'}.contains(mode) ||
+       max is! int || max<0 || max>100 ||
+       (mode=='single' && max!=1) ||
+       overflow is! String || !const {'revoke-oldest','reject-new'}.contains(overflow) ||
+       (installation!=null && installation is! bool) ||
+       (endpoint!=null && endpoint!='/auth/session-policy')) {
+      throw const FormatException('Invalid backend session policy contract');
+    }
+    return FableSessionPolicy(mode:mode,maxActive:max,overflow:overflow,
+      onePerInstallation:installation as bool?,runtimeEndpoint:endpoint as String?);
+  }
+}
+
 /// Never guess routes. Every request must be found in the backend's actual export.
 class FableContract implements OperationCatalog {
   @override bool get sendsInstallationId => true;
   const FableContract({required this.contractHash, required this.operations,
-    required this.featureIds, required this.projectName, required this.selectionMode});
+    required this.featureIds, required this.projectName, required this.selectionMode,
+    this.sessionPolicy});
   final String contractHash;
   final Map<String, FableOperation> operations;
   final Set<String> featureIds;
   final String projectName;
   final String selectionMode;
+  /// Null on legacy exports: never interpret missing policy as multi-device.
+  final FableSessionPolicy? sessionPolicy;
 
   static FableContract fromMaps(Map<String, dynamic> handoff,
       Map<String, dynamic> contract,
@@ -108,11 +140,20 @@ class FableContract implements OperationCatalog {
           requiresAuth:!isPublic,enforceAuth:true);
       }
     }
+    final coreConfig=contract['core'];
+    final authConfig=coreConfig is Map ? coreConfig['auth'] : null;
+    final declaredPolicy=authConfig is Map ? authConfig['sessionPolicy'] : null;
+    if(declaredPolicy!=null && declaredPolicy is! Map) {
+      throw const FormatException('Malformed backend session policy contract');
+    }
+    final sessionPolicy=declaredPolicy is Map
+      ? FableSessionPolicy.fromMap(Map<String,dynamic>.from(declaredPolicy)) : null;
     final mode = (handoff['selection'] as Map)['mode'] as String? ?? 'advisory';
     final selection = (handoff['selection'] as Map)['features'];
     return FableContract(contractHash:digest, operations:ops,
       featureIds: selection is List ? selection.whereType<String>().toSet() : <String>{},
-      projectName: (backend['project'] as Map?)?['name']?.toString() ?? 'Fable', selectionMode:mode);
+      projectName: (backend['project'] as Map?)?['name']?.toString() ?? 'Fable',
+      selectionMode:mode,sessionPolicy:sessionPolicy);
   }
 
   static Future<FableContract> fromAssets(AssetBundle bundle) async {
