@@ -46,6 +46,26 @@ class _FableInboxPageState extends State<FableInboxPage> {
      const {'POST','PATCH','PUT'}.contains(update.method);
  }
  bool get _ar=>Localizations.localeOf(context).languageCode=='ar';
+ bool get _privacyContentAvailable {
+   final contract=widget.fableContract;
+   if(contract==null||!contract.isFeatureAvailable('content'))return false;
+   final read=contract.operations['content.page.read'],
+     index=contract.operations['content.publicChanges'],
+     accept=contract.operations['content.page.accept'];
+   return read?.method=='GET'&&read?.path=='/content/pages/{slug}'&&
+     read?.requiresAuth==false&&index?.method=='GET'&&
+     index?.path=='/content/pages/changes'&&index?.requiresAuth==false&&
+     accept?.method=='POST'&&accept?.path=='/content/pages/{pageId}/accept'&&
+     accept?.requiresAuth==true;
+ }
+ void _openItem(FableInboxItem item){
+   // A verified privacy notice opens the installed published-content feature,
+   // never a URL, raw pageId route, or external Backend's guessed endpoint.
+   final target=item.isPublishedPrivacyUpdate&&_privacyContentAvailable
+     ?const <String,String>{'target':'content'}:item.data;
+   unawaited(FableNotificationNavigation.instance.open(target));
+   if(item.readAt==null)unawaited(_read(item));
+ }
  void _requestRefresh(){
    if(!mounted)return;
    if(_loading){_refreshQueued=true;return;}
@@ -154,15 +174,17 @@ class _FableInboxPageState extends State<FableInboxPage> {
     if(_error!=null)Text(_error!),
     if(_items!=null&&_items!.isEmpty)Text(_ar?'لا توجد إشعارات حاليًا':'No notifications yet'),
     for(final item in _items??<FableInboxItem>[])ListTile(
-     onTap:(){
-       unawaited(FableNotificationNavigation.instance.open(item.data));
-       if(item.readAt==null)unawaited(_read(item));
-     },
+     onTap:()=>_openItem(item),
      title:Text(item.title,maxLines:2,overflow:TextOverflow.ellipsis),
      subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
        Text(item.body,maxLines:5,overflow:TextOverflow.ellipsis),
-       if(widget.fableContract!=null && item.securityActions.isNotEmpty)
+       if(widget.fableContract!=null &&
+          (item.securityActions.isNotEmpty ||
+            item.isPublishedPrivacyUpdate&&_privacyContentAvailable))
          Wrap(spacing:8,runSpacing:4,children:[
+           if(item.isPublishedPrivacyUpdate&&_privacyContentAvailable)
+             TextButton(onPressed:_loading?null:()=>_openItem(item),
+               child:Text(_ar?'عرض سياسة الخصوصية':'Review privacy policy')),
            for(final action in item.securityActions)
              if(action.id=='THIS_WAS_ME')
                TextButton(onPressed:_loading?null:(){
