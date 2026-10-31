@@ -1,5 +1,23 @@
 import 'package:fable_core/fable_core.dart';
 
+/// Snapshot of effective public pages. Admin drafts are not mobile content.
+class FablePublishedIndexEntry {
+ const FablePublishedIndexEntry(this.slug,this.versionId,this.version);
+ final String slug,versionId;
+ final int version;
+ static final _slugPattern=RegExp(r'^[\p{L}\p{N}][\p{L}\p{N}_-]{0,189}$',unicode:true);
+ static final _uuid=RegExp(r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$');
+ factory FablePublishedIndexEntry.fromPayload(Object? raw){
+  if(raw is! Map||raw['slug'] is! String||raw['revision'] is! String||
+     raw['version'] is! int)throw const FormatException('Invalid published entry');
+  final slug=raw['slug'] as String,revision=raw['revision'] as String,
+    version=raw['version'] as int;
+  if(!_slugPattern.hasMatch(slug)||!_uuid.hasMatch(revision)||version<1)
+    throw const FormatException('Invalid published content revision');
+  return FablePublishedIndexEntry(slug,revision,version);
+ }
+}
+
 /// Read-only published documents from a verified operation catalog.
 /// For Other Backend, pass its explicitly bound operation ID and adapter.
 /// A structurally different external response requires an injected converter,
@@ -50,15 +68,36 @@ typedef FablePublishedContentDecoder = FablePublishedDocument Function(Object? r
 class FablePublishedContentRepository {
   const FablePublishedContentRepository(this.gateway,{this.readOperationId='content.page.read',
     this.acceptOperationId='content.page.accept',this.slugPathParameter='slug',
-    this.localeQueryParameter='locale',this.decoder=FablePublishedDocument.fromPayload});
+    this.localeQueryParameter='locale',this.indexOperationId,
+    this.decoder=FablePublishedDocument.fromPayload});
   final BackendApiGateway gateway;
   final String readOperationId,acceptOperationId;
+  /// Optional verified changes snapshot; never guessed for external backends.
+  final String? indexOperationId;
   /// Explicit path/query names for an imported Other Backend contract.
   final String slugPathParameter;
   final String? localeQueryParameter;
   /// A project can explicitly decode its *verified* external public schema.
   final FablePublishedContentDecoder decoder;
-  static final _slug=RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$');
+  static final _slug=RegExp(r'^[\p{L}\p{N}][\p{L}\p{N}_-]{0,189}$',unicode:true);
+  Future<List<FablePublishedIndexEntry>> publishedIndex()async{
+    final operation=indexOperationId;
+    if(operation==null)throw StateError('No verified published-content index operation');
+    final response=await gateway.execute(operation);
+    final raw=response.data;
+    if(raw is! Map||raw['revision'] is! String||
+       !RegExp(r'^[0-9a-f]{64}$').hasMatch(raw['revision'] as String)||
+       raw['unchanged']!=false||raw['resetRequired']!=false||
+       raw['entries'] is! List)
+      throw const FormatException('Invalid published-content snapshot');
+    final rows=raw['entries'] as List;
+    if(rows.length>500)throw const FormatException('Published content index exceeds limit');
+    final items=rows.map(FablePublishedIndexEntry.fromPayload).toList();
+    if(items.map((e)=>e.slug).toSet().length!=items.length)
+      throw const FormatException('Duplicate published content slug');
+    return List.unmodifiable(items);
+  }
+
   Future<FablePublishedDocument> read(String slug,{String? locale}) async{
     if(!_slug.hasMatch(slug))throw ArgumentError.value(slug,'slug','Invalid public content slug');
     if(locale!=null&&!RegExp(r'^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{2,8})*$').hasMatch(locale))throw ArgumentError.value(locale,'locale');

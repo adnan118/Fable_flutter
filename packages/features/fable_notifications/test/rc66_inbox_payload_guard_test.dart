@@ -27,4 +27,24 @@ void main() {
       'title':('Too long'*50)+'x','body':'Rejected',
     }),throwsFormatException);
   });
+  test('privacy revision CTA is scoped to matching Fable event and published identity',(){
+    const id='29b22238-8d4e-4d0d-b6fa-cc2a1a390001';
+    final notice={'id':id,'title':'Updated privacy','body':'Review changes',
+      'data':{'kind':'PRIVACY_POLICY_UPDATED','noticeId':id,
+        'pageId':'550e8400-e29b-41d4-a716-446655440001',
+        'versionId':'550e8400-e29b-41d4-a716-446655440002',
+        'target':'https://untrusted.test'},
+    };
+    final fable=FableInboxItem.fromPayload(notice);
+    expect(fable.isPublishedPrivacyUpdate,true);
+    expect(FableInboxItem.fromPayload(notice,requireUuidIds:false)
+      .isPublishedPrivacyUpdate,false);
+    expect(FableInboxItem.fromPayload({...notice,'data':{
+      ...notice['data'] as Map<String,Object?>,'noticeId':'different',
+    }}).isPublishedPrivacyUpdate,false);
+    expect(FableInboxItem.fromPayload({...notice,'data':{
+      ...notice['data'] as Map<String,Object?>,'versionId':'../../../other',
+    }}).isPublishedPrivacyUpdate,false);
+  });
+
 }
