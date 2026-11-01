@@ -20,7 +20,8 @@
       "reviewStatus": "native_transport_isolated",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "0a1c9a2d30f876f159b5bfc7b8e6cd17bb332177"
     },
     {
       "id": "cliModeAndPresets",
@@ -31,7 +32,8 @@
       "reviewStatus": "source_reviewed",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "c0c2745849dbec40c5c1b1b265959858d72bf726"
     },
     {
       "id": "identityModel",
@@ -42,7 +44,8 @@
       "reviewStatus": "runtime_not_verified",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "personAccountIntegrity",
@@ -53,7 +56,8 @@
       "reviewStatus": "runtime_not_verified",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "managedEntitiesPolicy",
@@ -64,7 +68,8 @@
       "reviewStatus": "runtime_not_verified",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "sessionPolicy",
@@ -75,7 +80,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "authProviderAndOtp",
@@ -86,7 +92,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "languageAndTime",
@@ -97,7 +104,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "2a9cbf1e369c90fdcfce4a7920488ecc992d9edf"
     },
     {
       "id": "requestIdAndTrace",
@@ -108,7 +116,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "2a9cbf1e369c90fdcfce4a7920488ecc992d9edf"
     },
     {
       "id": "idempotencyAndReplay",
@@ -119,7 +128,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "2a9cbf1e369c90fdcfce4a7920488ecc992d9edf"
     },
     {
       "id": "conditionalWrite",
@@ -130,7 +140,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "2a9cbf1e369c90fdcfce4a7920488ecc992d9edf"
     },
     {
       "id": "httpAuthCorsCsrf",
@@ -141,7 +152,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "759862e7041c8e285a8bfc149ef46b18954395ad"
     },
     {
       "id": "structuredErrors",
@@ -152,7 +164,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "759862e7041c8e285a8bfc149ef46b18954395ad"
     },
     {
       "id": "cacheConsistency",
@@ -163,7 +176,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "0a1c9a2d30f876f159b5bfc7b8e6cd17bb332177"
     },
     {
       "id": "dataOwnershipAndDeletion",
@@ -174,7 +188,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "84b93caad0e8038c4475355ad1dadaa427a9399d"
     },
     {
       "id": "capabilityInstalledVsBlueprint",
@@ -185,7 +200,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "featureAccessAndCommercial",
@@ -196,7 +212,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "offlineAndSync",
@@ -207,7 +224,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "0a1c9a2d30f876f159b5bfc7b8e6cd17bb332177"
     },
     {
       "id": "auditAndAbuse",
@@ -218,7 +236,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "759862e7041c8e285a8bfc149ef46b18954395ad"
     },
     {
       "id": "clientVersionPolicy",
@@ -229,7 +248,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "967cdda3b1badfecc577c497d47fe86b64b4b98d"
     },
     {
       "id": "requestPressureAndAvailability",
@@ -240,7 +260,8 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "007eaffdebaaba584418af939708a1beb71fe7a6"
     },
     {
       "id": "roleBasedUiAndFeatures",
@@ -251,7 +272,8 @@
       "reviewStatus": "partial",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "af583c605b26fec5b06c87afa0873550c1c06851"
     },
     {
       "id": "protectedFieldsAndRelations",
@@ -262,7 +284,9 @@
       "reviewStatus": "not_audited",
       "fullParityVerified": false,
       "projectContractVerified": false,
-      "liveE2EVerified": false
+      "liveE2EVerified": false,
+      "sourceGitBlobSha": "0a1c9a2d30f876f159b5bfc7b8e6cd17bb332177"
     }
-  ]
+  ],
+  "sourceTracking": "Source Git blob SHA on pinned Fable main; --backend-root mismatch means review required, not automated code sync"
 }
