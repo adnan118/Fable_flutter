@@ -6,3 +6,6 @@ Never replace a manual file, invent operations, bypass app-scoped Backend settin
 ## Mandatory continuity / استمرارية الخطة
 Read `docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md` and its JSON ledger before adding a capability; update both with per-operation gaps and Other Backend requirements. Do not mark any of the 17 features complete without a separately pinned project contract, live role/permission and Android/iOS E2E evidence. Write concise Arabic comments explaining security/contract decisions or link to `docs/integrations/FLUTTER-BLOC-LEARNING.ar.md`. Do not silently conflate Backend Fable's ~50 capabilities with Flutter's 17 feature families; use the manual/Wizard contract split.
 
+
+## Cross-cutting policy audit / سياسات تعبر حدود الميزات
+Before each feature/operation, check `docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md` and its JSON ledger; distinguish exported build decisions, runtime-authoritative policy, and server-only infrastructure. Do not assume a Fable policy for Other Backend. Arabic comments should explain password change session revocation and identity-safe async handling. Follow Auth operations one by one, recording SOURCE_IMPLEMENTED separately from live E2E acceptance.
