@@ -36,6 +36,29 @@ class FableAuthGateway implements BackendApiGateway {
   late final FableApiClient _api;
   late final FableContract _contract;
 
+  /// لا يكفي تطابق operationId: نطابق مسار Fable وطريقته وحدّ المصادقة
+  /// قبل إرسال كلمة مرور أو Refresh Token أو عرض بيانات الجلسات.
+  /// Backend الآخر يستخدم Catalog/Gateway خاصاً به، ولا يمر بهذه الدالة.
+  bool _supportsAuthOperation(String id, String method, String path,
+      {required bool requiresAuth}) {
+    final operation = _contract.operations[id];
+    return operation != null &&
+        operation.method == method &&
+        operation.path == path &&
+        operation.requiresAuth == requiresAuth &&
+        operation.enforceAuth &&
+        operation.credentialHeader == null;
+  }
+
+  void _requireAuthOperation(String id, String method, String path,
+      {required bool requiresAuth}) {
+    if (!_supportsAuthOperation(
+      id, method, path, requiresAuth: requiresAuth,
+    )) {
+      throw StateError('Fable auth operation is missing or mismatched: $id');
+    }
+  }
+
   /// A two-factor challenge does not create a session. It needs a separate
   /// challenge-completion flow before credentials can be treated as authenticated.
   Future<FableLoginOutcome> login({
@@ -47,6 +70,7 @@ class FableAuthGateway implements BackendApiGateway {
     if (id.isEmpty || password.isEmpty) {
       throw ArgumentError('Credentials are required');
     }
+    _requireAuthOperation('auth.login', 'POST', '/auth/login', requiresAuth: false);
     final identityAtStart = session.identityRevision;
     final response = await _api.request('auth.login', authorized: false, body: {
       'identifier': id,
@@ -136,6 +160,7 @@ class FableAuthGateway implements BackendApiGateway {
   }
 
   Future<bool> _refreshSession() async {
+    _requireAuthOperation('auth.refresh', 'POST', '/auth/refresh', requiresAuth: false);
     final identityAtStart = session.identityRevision;
     final token = await session.refreshToken;
     if (token == null || token.isEmpty) return false;
@@ -168,7 +193,9 @@ class FableAuthGateway implements BackendApiGateway {
     final identityAtStart = session.identityRevision;
     var revokedOnServer = false;
     try {
-      if (await session.accessToken != null) {
+      if (await session.accessToken != null && _supportsAuthOperation(
+        'auth.logout', 'POST', '/auth/logout', requiresAuth: true,
+      )) {
         final response=await _api.request('auth.logout');
         // الوصول إلى HTTP 200 لا يثبت إبطال الجلسة. Fable يعيد revoked.
         // لا نخلط نجاح حذف اعتماد الهاتف مع نجاح الخادم.
@@ -244,21 +271,23 @@ class FableAuthGateway implements BackendApiGateway {
   /// Read the effective policy from the deployed backend; do not infer it from
   /// a static build-time default or from a local account/device count.
   Future<FableSessionPolicy> loadSessionPolicy() async {
-    if (!_contract.supports('auth.session-policy')) {
-      throw StateError('Backend has not exported auth.session-policy');
-    }
+    _requireAuthOperation('auth.session-policy', 'GET', '/auth/session-policy',
+      requiresAuth: false);
     final response=await _api.request('auth.session-policy',authorized:false);
-    return FableSessionPolicy.fromMap(_payload(response.data));
+    final data=_payload(response.data);
+    // الخادم الحالي يعلن هذه السياسة دائماً؛ لا نستنتجها من إعداد Wizard قديم.
+    if (data['onePerInstallation'] is! bool) {
+      throw const FormatException('Backend did not declare onePerInstallation');
+    }
+    return FableSessionPolicy.fromMap(data);
   }
 
   /// المنطقة الزمنية تخص عرض الجلسة الحالية فقط، لا الحجز أو المواعيد.
   /// Fable يفرض التحقق الفعلي من IANA timezone، ولا نخمنه من جهاز المستخدم.
   /// docs/integrations/FABLE-AUTH-BASELINE-RC82.ar.md
   bool get supportsSessionTimeZone {
-    final op=_contract.operations['auth.session.timezone'];
-    return op!=null&&op.method=='POST'&&
-      op.path=='/auth/session/timezone'&&op.requiresAuth&&
-      op.credentialHeader==null;
+    return _supportsAuthOperation('auth.session.timezone', 'POST',
+      '/auth/session/timezone', requiresAuth: true);
   }
 
   Future<String> updateSessionTimeZone(String zone) async {
@@ -283,8 +312,8 @@ class FableAuthGateway implements BackendApiGateway {
   }
 
   Future<Object?> sessions() async {
-    if(!_contract.supports('auth.sessions'))
-      throw StateError('Backend did not export auth.sessions');
+    _requireAuthOperation('auth.sessions', 'GET', '/auth/sessions',
+      requiresAuth: true);
     final response=await _api.request('auth.sessions');
     return response.data;
   }
@@ -519,13 +548,15 @@ class FableActiveSession {
   const FableActiveSession({
     required this.id,required this.isCurrent,required this.createdAt,
     required this.expiresAt,this.lastUsedAt,this.displayName,this.deviceName,
-    this.platform,this.clientType,this.appVersion,
+    this.platform,this.clientType,this.appVersion,this.securityState,
   });
   final String id;
   final bool isCurrent;
   final DateTime createdAt,expiresAt;
   final DateTime? lastUsedAt;
   final String? displayName,deviceName,platform,clientType,appVersion;
+  /// حالة حماية الجلسة من Backend، وليست حكماً أمنياً محلياً من Flutter.
+  final String? securityState;
 
   factory FableActiveSession.fromMap(Map<String,dynamic> source){
     final id=source['id'];
@@ -552,12 +583,18 @@ class FableActiveSession {
     }
     final createdAt=parseDate('createdAt'),expiresAt=parseDate('expiresAt');
     final lastUsed=source['lastUsedAt']==null ? null : parseDate('lastUsedAt');
+    final security=source['securityState'];
+    if(security!=null && (security is! String ||
+        !const <String>{'ACTIVE','SUSPICIOUS','COMPROMISED'}.contains(security))) {
+      throw const FormatException('Invalid backend session security state');
+    }
     return FableActiveSession(
       id:id,isCurrent:source['isCurrent'] as bool,
       createdAt:createdAt,expiresAt:expiresAt,lastUsedAt:lastUsed,
       displayName:optional('displayName',191),
       deviceName:optional('deviceName',191),platform:optional('platform',64),
       clientType:optional('clientType',64),appVersion:optional('appVersion',64),
+      securityState:security as String?,
     );
   }
 }
