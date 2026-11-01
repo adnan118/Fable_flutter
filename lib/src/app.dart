@@ -65,6 +65,7 @@ class _AppState extends State<FableStarterApp> {
   }
   @override void initState(){
     super.initState();
+    unawaited(_restoreSavedLocale());
     FableNotificationNavigation.instance.navigateCapability=_fableNavigateFromNotification;
     FableNotificationNavigation.instance.isAuthenticated=()async=>false;
     unawaited(_fableSetupNotificationAuth());
@@ -100,8 +101,53 @@ class _AppState extends State<FableStarterApp> {
   // FABLE_PUSH_ROUTES_END
 
   late final Future<_Bootstrap> _bootstrap = _load();
-  Locale? _locale; // null = follow device language; Backend limits locales unless AI-only
-  Locale get _resolvedLocale => FableLanguagePolicy.resolve(_locale ?? WidgetsBinding.instance.platformDispatcher.locale);
+  // UI locale belongs to the app, not to an optional Fable/Other Backend.
+  // Never persist a locale the generated policy has not explicitly declared.
+  final FableLocalePreferenceStore _localeStore=FableLocalePreferenceStore();
+  final GlobalKey<ScaffoldMessengerState> _localeMessengerKey=
+    GlobalKey<ScaffoldMessengerState>();
+  Locale? _locale; // null = follow device language
+  int _localeRevision=0;
+  Future<void> _localeWriteQueue=Future<void>.value();
+  Locale get _resolvedLocale => FableLanguagePolicy.resolve(
+    _locale ?? WidgetsBinding.instance.platformDispatcher.locale);
+  Locale? _localeFromTag(String? tag){
+    if(tag==null)return null;
+    for(final locale in FableLanguagePolicy.supportedLocales){
+      if(locale.toLanguageTag().toLowerCase()==tag.toLowerCase())
+        return locale;
+    }
+    return null;
+  }
+  Future<void> _restoreSavedLocale() async{
+    final revision=++_localeRevision;
+    try{
+      final tag=await _localeStore.load(FableLanguagePolicy.localeTags);
+      if(mounted&&revision==_localeRevision)
+        setState(()=>_locale=_localeFromTag(tag));
+    }catch(_){
+      // Secure storage can be temporarily unavailable on some devices.
+      // Continue following the device locale, never a guessed server setting.
+    }
+  }
+  Future<void> _selectLocale(String selected) async{
+    final tag=selected=='device'?null:selected;
+    final revision=++_localeRevision;
+    // Serialize writes: a slower prior selection must not overwrite the last
+    // confirmed user choice in secure storage.
+    final save=_localeWriteQueue.then((_)=>_localeStore.save(
+      tag,FableLanguagePolicy.localeTags));
+    _localeWriteQueue=save.catchError((Object _){});
+    try{
+      await save;
+      if(mounted&&revision==_localeRevision)
+        setState(()=>_locale=_localeFromTag(tag));
+    }catch(_){
+      if(mounted&&revision==_localeRevision)
+        _localeMessengerKey.currentState?.showSnackBar(
+          const SnackBar(content:Text('Could not save language preference.')));
+    }
+  }
 
   Future<_Bootstrap> _load() async {
     final backend=await BackendSelection.fromAssets(rootBundle);
@@ -123,6 +169,7 @@ class _AppState extends State<FableStarterApp> {
   @override Widget build(BuildContext context) => MaterialApp(
     // FABLE_PUSH_NAV_BEGIN
     navigatorKey:FableNotificationNavigation.instance.navigatorKey,
+    scaffoldMessengerKey:_localeMessengerKey,
     // FABLE_PUSH_NAV_END
     onGenerateTitle:(context)=>AppLocalizations.of(context).appTitle,debugShowCheckedModeBanner:false,
     locale:_locale,supportedLocales:AppLocalizations.supportedLocales,
@@ -146,7 +193,7 @@ class _AppState extends State<FableStarterApp> {
       appBar:AppBar(title:Builder(builder:(context)=>Text(AppLocalizations.of(context).appTitle)),actions:[
         PopupMenuButton<String>(
           tooltip:'Language / اللغة',
-          onSelected:(selected)=>setState(()=>_locale=selected=='device'?null:Locale(selected)),
+          onSelected:(selected)=>unawaited(_selectLocale(selected)),
           itemBuilder:(context)=>[
             const PopupMenuItem<String>(value:'device',child:Text('Device / لغة الجهاز')),
             for(final choice in FableLanguagePolicy.supportedLocales)
