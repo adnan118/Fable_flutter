@@ -8,10 +8,13 @@ import 'managed_members_page.dart';
 /// Local selection cannot confer role, grant membership or synthesize a route.
 class FableManagedAccountsPage extends StatefulWidget {
   const FableManagedAccountsPage({super.key,required this.gateway,required this.contract,
-    this.onActivated});
+    this.onActivated,this.onCleared});
   final FableAuthGateway gateway;
   final FableContract contract;
   final ValueChanged<FableManagedAccountSelection>? onActivated;
+  /// Clears app-wide selected context after lifecycle/role changes. Other
+  /// Backends do not get this callback from the Fable-only screen.
+  final VoidCallback? onCleared;
   @override State<FableManagedAccountsPage> createState()=>_FableManagedAccountsPageState();
 }
 class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
@@ -47,7 +50,10 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       if(!mounted||epoch!=widget.gateway.session.identityRevision)return;
       setState((){
         _entities=entities;_invitations=invites;
-        if(!entities.any((e)=>e.id==_selected?.id&&e.status=='ACTIVE'))_selected=null;
+        if(!entities.any((e)=>e.id==_selected?.id&&e.status=='ACTIVE')){
+          if(_selected!=null)widget.onCleared?.call();
+          _selected=null;
+        }
       });
     }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision)
       setState(()=>_message='Backend did not authorize reading managed entities.');}
@@ -57,6 +63,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
     if(_busy||!_repo.canActivate)return;
     final epoch=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;_selected=null;});
+    widget.onCleared?.call();
     try{
       final selected=await _repo.activate(entity);
       if(!mounted||epoch!=widget.gateway.session.identityRevision)return;
@@ -119,6 +126,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
           collaborationEnabled:collaboration,managersCanInvite:managerInvites);
         if(mounted&&rev==widget.gateway.session.identityRevision){
           setState(()=>_selected=null);
+          widget.onCleared?.call();
           await _reloadAfterMutation();
         }
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
@@ -237,6 +245,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
           managersCanInvite:invite,slug:slug.text);
         if(!mounted||rev!=widget.gateway.session.identityRevision)return;
         setState(()=>_selected=null);
+        widget.onCleared?.call();
         await _reloadAfterMutation();
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message=_ar?'لم يؤكد الباك هذا التعديل؛ حدّث القائمة.':
@@ -358,6 +367,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
         _message=_ar?'أكد الخادم العملية، وتم تحديث وضع الكيان.'
           :'Backend confirmed the lifecycle action.';
       });
+      widget.onCleared?.call();
       await _reloadAfterMutation();
     }catch(_){
       if(mounted&&rev==widget.gateway.session.identityRevision){
