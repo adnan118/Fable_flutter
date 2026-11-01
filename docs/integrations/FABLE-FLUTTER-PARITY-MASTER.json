@@ -41,7 +41,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "Auth 40 operations: auth.change-password now has source+UI tests (RC81), but real policy, two-device E2E, and all other Auth operations remain unapproved",
+        "RC81 password change; RC82 logout acknowledgment + session timezone: source/Flutter UI tests only. All 40 operations need pinned contract/runtime/E2E review; 37 undecided, three SOURCE_IMPLEMENTED_E2E_PENDING.",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -70,6 +70,41 @@
             "structuredErrors"
           ],
           "remaining": "live two-device/backend E2E; Other mapping; dynamic policy and security notifications"
+        },
+        {
+          "milestone": "RC82",
+          "operationId": "auth.logout",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_baseline_logout_timezone_test.dart",
+            "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "structuredErrors",
+            "auditAndAbuse"
+          ],
+          "remaining": "live Session DB revocation, Push token cleanup, multi-device E2E, Other auth mapping"
+        },
+        {
+          "milestone": "RC82",
+          "operationId": "auth.session.timezone",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_baseline_logout_timezone_test.dart",
+            "packages/features/fable_auth/test/session_timezone_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "languageAndTime",
+            "sessionPolicy",
+            "clientTransport"
+          ],
+          "remaining": "live IANA validation and AuthSession persistence, multi-session isolation, Other backend binding"
         }
       ]
     },
@@ -534,5 +569,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC81 — 23 global decisions and Fable change-password source implementation; no feature E2E accepted"
+  "latestSlice": "RC82: three Auth operations SOURCE_IMPLEMENTED_E2E_PENDING; 37 operations NOT_DECIDED; no feature E2E accepted"
 }
