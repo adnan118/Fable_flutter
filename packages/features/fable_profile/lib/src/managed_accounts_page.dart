@@ -223,9 +223,10 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
 
   Future<void> _invite(FableManagedAccount entity)async{
     final chosen=_selected;
-    if(_busy||chosen?.id!=entity.id||!_repo.canInvite||
+    if(_busy||chosen==null||chosen.id!=entity.id||!_repo.canInvite||
+       entity.status!='ACTIVE'||entity.visibility=='PRIVATE'||
        !entity.collaborationEnabled||
-       !(chosen!.access=='OWNER'||chosen.access=='MANAGER'&&entity.managersCanInvite))return;
+       !(chosen.access=='OWNER'||chosen.access=='MANAGER'&&entity.managersCanInvite))return;
     final username=TextEditingController();
     var access='VIEWER';
     try{
