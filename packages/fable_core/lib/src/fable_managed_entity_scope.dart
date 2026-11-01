@@ -2,9 +2,10 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'fable_session.dart';
 
-/// A non-secret, verified-on-activation context HINT for project features.
-/// Backend permissions and entity membership must always be checked server-side.
-/// Unlike global HTTP interceptors, this never injects an entity header.
+/// تلميح سياق للواجهة فقط، يأتي من اختيار مؤكّد من خادم Fable.
+/// ليس تفويضاً؛ الخادم يتحقق من العضوية والصلاحيات عند كل طلب.
+/// لا تُحقن ترويسة الكيان تلقائياً في جميع الطلبات.
+/// راجع docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 class FableManagedEntitySelection {
  const FableManagedEntitySelection({
   required this.id,required this.access,required this.nameAr,
