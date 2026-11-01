@@ -1,10 +1,19 @@
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
-> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC85 — 2026-11-01.**
+> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC86 — 2026-11-01.**
 > الباك المرجعي وقت الفحص: `adnan118/Fable@226cbcdc542ebe9c005d7445d84cc0ec10631932`.
 > الفرونت المرجعي وقت الفحص: `adnan118/Fable_flutter@94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7` (بعد RC79).
 > **هذا تقرير مصدر وعقود وفحوص CI، وليس اعتماد تشغيل حي أو تكامل إنتاج.**
 > يرجى تحديثه مع كل PR يغلق فجوة، ولا يُستبدَل بسجلات تقدم عابرة.
+
+## RC86 — ربط مصدر الريبوين وإصدار حزمة مصدرية شاملة
+
+- وثقنا **بصمة Git لعقد Backend Auth** ومطابقته مع جرد عمليات Flutter: **40/40 تطابق معرف/طريقة/مسار** في Snapshot المراجع؛ هذا لا يثبت نقل تفاصيل جميع DTO/الواجهات.
+- أضفنا `verify-cross-repo-source-pair.mjs` و`cross-repo-source-pair-rc86.test.mjs` للفحص دون تخمين Backend غير Fable؛ و`build-rc86-source-archive.py` لإصدار ZIP كاملة من الريبوين داخل CI الخاص بـBackend، مع استبعاد الأسرار وبصمات SHA256.
+- **العداد ثابت:** 9/40 `SOURCE_IMPLEMENTED_E2E_PENDING`، 31 `NOT_DECIDED`، 0/17 E2E حقيقي؛ لم يُغلق أي Workstream دون اختبارات المشروع والأجهزة.
+- [دليل المزامنة وإصدار ZIP](./FABLE-CROSS-REPO-SYNC-RC86.ar.md) · [سجل البصمات الآلي](./FABLE-CROSS-REPO-SOURCE-PAIR-RC86.json).
+
+---
 
 ## RC85 — عمليتا OTP/2FA كاملتان على مستوى مراجعة المصدر
 
