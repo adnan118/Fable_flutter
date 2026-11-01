@@ -107,9 +107,15 @@ void main(){
     expect(result.authenticated,false);
     expect(result.secondFactor!.methods, ['EMAIL_OTP','PHONE_OTP']);
     expect(session.access,isNull);
-    final id=await gateway.requestSecondFactor(result.secondFactor!,
+    final otp=await gateway.requestSecondFactorDetails(result.secondFactor!,
       preferredChannel:'EMAIL');
+    final id=otp.challengeId;
     expect(id,otpChallenge);
+    expect(otp.method,'EMAIL_OTP');
+    expect(otp.channel,'EMAIL');
+    expect(otp.maskedDestination,'d***@example.test');
+    expect(otp.expiresAt.toUtc().year,2099);
+    expect(otp.twoFactorExpiresAt.toUtc().year,2099);
     expect(session.access,isNull);
     final complete=await gateway.completeSecondFactor(result.secondFactor!,
       challengeId:id,code:'123456');
@@ -229,4 +235,42 @@ void main(){
       challengeId:'550e8400-e29b-1414-8466-446655440000',
       code:'123456'),throwsArgumentError);
   });
+  test('malformed OTP method/channel/deadlines cannot continue to completion',()async{
+    for(final change in <Map<String,dynamic>>[
+      {'method':'PHONE_OTP'},
+      {'channel':'PHONE'},
+      {'requiresTwoFactor':false},
+      {'expiresAt':'2000-01-01T00:00:00Z'},
+      {'twoFactorExpiresAt':'2100-01-01T00:00:00Z'},
+    ]){
+      final session=_Session();
+      var completions=0;
+      final gateway=FableAuthGateway(
+        baseUri:Uri.parse('https://fable.test'),contract:_catalog(),
+        secureSession:session,client:_mock((req)async{
+          if(req.path=='/auth/login')return _answer(req,{
+            'requiresTwoFactor':true,'twoFactorToken':pendingToken,
+            'methods':['EMAIL_OTP'],'expiresAt':futureExpiry,
+          });
+          if(req.path=='/auth/2fa/login/request'){
+            return _answer(req,{
+              'challengeId':otpChallenge,'requiresTwoFactor':true,
+              'method':'EMAIL_OTP','channel':'EMAIL',
+              'expiresAt':futureExpiry,'twoFactorExpiresAt':futureExpiry,
+              ...change,
+            });
+          }
+          completions++;
+          return _answer(req,{});
+        }));
+      final login=await gateway.login(identifier:'test@example.test',
+        password:'password',platform:'android');
+      await expectLater(gateway.requestSecondFactorDetails(
+        login.secondFactor!,preferredChannel:'EMAIL'),throwsFormatException);
+      expect(completions,0);
+      expect(session.access,isNull);
+      gateway.dispose();
+    }
+  });
+
 }
