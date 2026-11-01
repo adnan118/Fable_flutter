@@ -27,7 +27,7 @@ FableContract catalog({bool installed=true})=>FableContract(
     'entity.details':const FableOperation('entity.details','GET',
       '/managed-entities/{id}','hash',enforceAuth:true),
     'entity.public':const FableOperation('entity.public','GET',
-      '/managed-entities/public/{slug}','hash',enforceAuth:false),
+      '/managed-entities/public/{slug}','hash',requiresAuth:false),
     'entity.update':const FableOperation('entity.update','PATCH',
       '/managed-entities/{id}','hash',enforceAuth:true),
     'entity.invites':const FableOperation('entity.invites','GET',
