@@ -88,13 +88,11 @@ class FableManagedPublicEntity {
 
 /// Volatile selection, validated against the activation response.
 /// Backend remains the final authority for every subsequent scoped request.
-class FableManagedAccountSelection {
+class FableManagedAccountSelection extends FableManagedEntitySelection {
   const FableManagedAccountSelection({
-    required this.id,required this.access,required this.nameAr,
-    required this.nameEn,required this.identityRevision,
+    required super.id,required super.access,required super.nameAr,
+    required super.nameEn,required super.identityRevision,
   });
-  final String id,access,nameAr,nameEn;
-  final int identityRevision;
 }
 
 class FableManagedInvitation {
