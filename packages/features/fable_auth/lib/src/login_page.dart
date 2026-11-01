@@ -4,8 +4,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'sessions_page.dart';
 
-/// Concrete R2 mobile auth contract consumer, including installation binding.
-/// Requires a real reachable generated Fable backend at FABLE_API_BASE_URL.
+/// شاشة الدخول الخاصة بـFable تعتمد عقد مصادقة الموبايل ومعرّف الجهاز.
+/// نجاح هذه الشاشة لا يعني نقل تغيير البريد/الهاتف/كلمة المرور وOTP كلها.
+/// لفهم انتقال الحالات: docs/integrations/FLUTTER-BLOC-LEARNING.ar.md
 class FableLoginPage extends StatefulWidget {
   const FableLoginPage({super.key,required this.contract});
   final FableContract contract;

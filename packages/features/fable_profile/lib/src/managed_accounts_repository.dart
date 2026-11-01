@@ -1,7 +1,8 @@
 import 'package:fable_core/fable_core.dart';
 
-/// Optional Fable Managed Accounts capability. The mere presence of a
-/// Blueprint or a profile tile never authorizes these operations.
+/// إدارة الكيانات ميزة اختيارية خاصة بعقد Fable المثبت في هذا المشروع.
+/// ظهور Widget أو وجود Blueprint عام لا يثبت توافر العملية أو صلاحيتها.
+/// راجع docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 class FableManagedAccount {
   const FableManagedAccount({
     required this.id,required this.type,required this.nameAr,

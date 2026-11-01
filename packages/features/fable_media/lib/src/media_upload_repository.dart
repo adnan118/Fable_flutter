@@ -5,9 +5,10 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
 
-/// Media is OPTIONAL. The app's selected backend contract is authoritative.
-/// Fable uses these operation IDs; Other Backend MUST explicitly map every role
-/// from its own verified contract and provide a suitable binary transport.
+/// رفع الوسائط اختياري ويخضع لعقد Backend المختار في Wizard.
+/// Fable يستخدم Operation IDs معروفة؛ Backend آخر يحتاج Mapping مستقل
+/// وتوثيق Binary Transport/Resume/Abort؛ لا ننقل مسارات Fable إليه.
+/// المرجع: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 class MediaUploadBindings {
   const MediaUploadBindings({required this.prepare, required this.status,
     required this.chunk, required this.partUrl, required this.partAck,

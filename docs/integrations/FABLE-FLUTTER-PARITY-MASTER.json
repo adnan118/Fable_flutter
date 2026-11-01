@@ -1,0 +1,515 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.flutter-feature-parity-master",
+  "snapshotAt": "2026-11-01",
+  "flutterMainAtAudit": "94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7",
+  "backendMainAtAudit": "226cbcdc542ebe9c005d7445d84cc0ec10631932",
+  "basis": "Flutter source main+CI, Fable blueprints manifests on main; not generated real-project contract",
+  "contractScope": "ci_fable is a demo, its 9 operations do not define all Fable Backend capability operations",
+  "acceptance": "No feature is E2E accepted until pinned project contract, per-operation mobile disposition and full Android/iOS live E2E",
+  "sourceStatusVocabulary": [
+    "source_and_selected_ui",
+    "repository_and_selected_ui",
+    "repository_only",
+    "client_source"
+  ],
+  "externalStatusVocabulary": [
+    "mapped_partial",
+    "not_proven",
+    "client_only"
+  ],
+  "featureCount": 17,
+  "features": [
+    {
+      "id": "auth",
+      "ownership": "server",
+      "backendCapabilities": [
+        "auth",
+        "auth-assurance",
+        "account-lifecycle",
+        "account-integrity"
+      ],
+      "frontendEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "mapped_partial",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "تدقيق جميع عمليات Auth الأربعين؛ واجهات تغيير الاسم/البريد/الهاتف/كلمة المرور وإعادة التعيين وسياسات الجلسات و2FA وإلغاء الأجهزة وسيناريوهات الإغلاق",
+        "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
+        "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
+      ],
+      "otherBackendContract": [
+        "login/register/reset/refresh/logout and sessions policy",
+        "verified methods and request/response/error schemas, refresh rotation, MFA/OTP and step-up",
+        "rate limits, device/IP metadata with consent, proof-bound protected changes",
+        "account identifier/autofill and native provider setup"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "profile",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "managed-accounts",
+        "users",
+        "account-lifecycle"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_profile/lib/src/fable_account_page.dart",
+        "packages/features/fable_profile/lib/src/managed_accounts_repository.dart",
+        "packages/fable_core/lib/src/fable_managed_entity_scope.dart"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "mapped_partial",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "فحص 18 عملية Managed Accounts إحداها عامة وكل أدوار OWNER/MANAGER/VIEWER وأشكال البيانات",
+        "تمرير الكيان إلى كل Repository نطاقي مربوط بعقد وصلاحيات ورفض العضوية الملغاة؛ لا تمرير عالمي للترويسات",
+        "ملف المستخدم الخاص بكل مشروع/الحسابات الفرعية والملكية والتعافي E2E"
+      ],
+      "otherBackendContract": [
+        "user profile schema and mutable fields with patch/validation",
+        "subaccounts and membership/invitations/roles if supported, including scoped authorization",
+        "entity activation/context and revoke after identity change",
+        "avatar and account closure/recovery if exposed"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "notifications",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "notifications",
+        "push-notifications",
+        "notification-templates"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_notifications/lib/src/inbox_page.dart",
+        "packages/features/fable_notifications/lib/src/inbox_repository.dart",
+        "packages/features/fable_push_notifications/lib/src/push_device_registration.dart"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "welcome/privacy/device/failed-limit events والتحقق من Outbox/FCM على بيئة حية",
+        "تسجيل وإبطال FCM عند تبديل الحساب والجهاز وسيناريو Foreground/Background/deep-link",
+        "اللغة/توقيت النشر/انتهاء الإشعار والعدد الصحيح وعدم التكرار"
+      ],
+      "otherBackendContract": [
+        "inbox list, read and signed navigation target semantics",
+        "push registration, unlink token, permission behavior and language preference",
+        "event types: welcome, policy, new device, login limit with security actions",
+        "delivery lifecycle, deduplication and device audience/TTL"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "media",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "media"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_media/lib/src/media_upload_repository.dart",
+        "packages/features/fable_media/lib/src/media_read_repository.dart",
+        "packages/features/fable_media/lib/src/resumable_upload_card.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "تغطية 16 عملية Media ومنها playback/refresh/end وليس الرفع فقط",
+        "Resume/abort/retries وchunk/part مع R2 والتحقق من MIME وحجم الحصص وصلاحية التوكن",
+        "عرض الوسائط المحمية على Android/iOS وإبطال روابط المشاهدة"
+      ],
+      "otherBackendContract": [
+        "client contract: providers, file quotas, MIME and presigned upload modes",
+        "prepare/chunk/part URL/part ack/complete/abort and idempotent resume",
+        "protected download/playback session renew/end and authorization",
+        "large file errors, offline queues, token refresh and retention"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "localization",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "languages"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_localization/lib/src/languages_page.dart",
+        "packages/fable_core/lib/src/fable_locale_preference.dart",
+        "lib/src/generated/language_policy.dart"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "ربط نصوص الواجهة والمحتوى الديناميكي لكل feature وليس شاشة اللغات فقط",
+        "RTL/ARB/AI Translation واختيار المصادر والكاش والمزامنة وأخطاء غياب الترجمة",
+        "اختبار كل لغة مدرجة في Wizard مع إعادة التشغيل وOffline"
+      ],
+      "otherBackendContract": [
+        "supported language tags and default/RTL mappings",
+        "localized dynamic DTOs and revision/cache invalidation semantics",
+        "fallback and missing language responses, not guessed translations",
+        "UI-local copy source or approved local bundles"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "support",
+      "ownership": "server",
+      "backendCapabilities": [],
+      "frontendEvidence": [
+        "packages/features/fable_support/lib/src/support_repository.dart",
+        "packages/features/fable_support/lib/src/support_widgets.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "لا يوجد Manifest باسم support ضمن قدرات Fable الحالية؛ لا نخترع مسار دعم",
+        "فحص توفر عقود التذاكر/المحادثات في مشروع Fable المحدد ثم بناء UX بكامل lifecycle",
+        "الصلاحيات والمرفقات والاستجابات والربط المباشر مع العميل"
+      ],
+      "otherBackendContract": [
+        "list/create/read/reply/close/reopen support tickets or conversations if promised",
+        "attachments and per-user authorization, assignee and status policy",
+        "pagination, validation, retry/duplicate prevention and error mapping",
+        "push/realtime hooks only if separately declared"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "social",
+      "ownership": "server",
+      "backendCapabilities": [
+        "auth"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_widgets.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "Google/Apple SDK على الأجهزة الحقيقية مع nonce/state ونفس البريد وتوحيد الحساب",
+        "Link/Unlink والحالات المتزامنة وتأكيد MFA/OTP وبيانات الجهاز",
+        "سياسة إظهار الطرق من عقد الباك والـWizard لكل provider"
+      ],
+      "otherBackendContract": [
+        "supported provider inventory and provider-specific client IDs/redirect/nonce contract",
+        "login/link/unlink/challenge and account-collision responses",
+        "native SDK credentials, CSRF/state/nonce, MFA fallback",
+        "provider disablement/rotation/revocation"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "biometrics",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "passkeys"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_biometrics/lib/src/biometrics_repository.dart",
+        "packages/features/fable_biometrics/lib/src/biometrics_widgets.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "6 عمليات Passkey: registration options/verify, authentication options/verify, remove وweb-only القرار",
+        "تحقق platform biometric/passkey user verification وبيئات iOS/Android",
+        "تمييز بصمة فتح محلي عن WebAuthn حقيقي وعدم اختلاق دعم Backend"
+      ],
+      "otherBackendContract": [
+        "WebAuthn challenge/credential id/rpId/origins and verification errors",
+        "registration/verify/authenticate/remove with revocation",
+        "device capability and explicit consent/attestation policy",
+        "local device unlock distinguished from backend authentication"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "realtime",
+      "ownership": "server",
+      "backendCapabilities": [
+        "realtime-communications",
+        "shared-signals",
+        "domain-events"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_realtime/lib/src/public_change_sse.dart",
+        "packages/features/fable_realtime/lib/src/verified_change_coordinator.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "لا نعتبر SSE لتغييرات عامة معادلاً لكل RTC/LiveKit أو Websocket",
+        "صلاحيات الاشتراك وإبطال الاتصال عند Logout/Entity switch",
+        "Replay/reconnect/backoff/resume والتطابق مع كل event source"
+      ],
+      "otherBackendContract": [
+        "exact SSE/WebSocket/RTC transports and signed channel scopes",
+        "subscribe/reconnect cursor and event envelopes/replay/ordering",
+        "auth renewal and revocation, backpressure, duplicate handling",
+        "foreground/background and channel availability"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "deeplinks",
+      "ownership": "client",
+      "backendCapabilities": [],
+      "frontendEvidence": [
+        "packages/features/fable_deeplinks/lib/src/deep_link_dispatcher.dart",
+        "packages/features/fable_deeplinks/lib/src/deep_link_policy.dart"
+      ],
+      "sourceStatus": "client_source",
+      "externalStatus": "client_only",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "ربط جميع المسارات الفعلية ومصادقة target والـauth deferral",
+        "Android App Links وiOS Universal Links مع ملفات التحقق الرسمية",
+        "منع open redirects وروابط إشعارات غير موثقة"
+      ],
+      "otherBackendContract": [
+        "supported destinations/route identifiers if server sends links",
+        "public domain and association files for iOS/Android",
+        "auth/permission rules for each destination",
+        "link expiry and one-time action proof if supported"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "messaging",
+      "ownership": "server",
+      "backendCapabilities": [
+        "phone-messages",
+        "mail"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_messaging/lib/src/messaging_repository.dart",
+        "packages/features/fable_messaging/lib/src/messaging_widgets.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "Webhook WhatsApp الوارد في Fable لا يشكل عقد مراسلة عميل للصادر",
+        "لا يوجد عقد واضح لمسارات list/send/read/delete لرسائل تطبيق العميل",
+        "النصوص والمرفقات والمستلمين والإشعارات تحتاج عقد مشروع فعلي"
+      ],
+      "otherBackendContract": [
+        "customer conversation list/send/read/delete if present",
+        "recipient identity and per-conversation permissions/anti-spam/rate limits",
+        "attachment upload IDs, delivery acknowledgements and retries",
+        "never expose provider webhooks/secrets in mobile client"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "location",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "location-platform",
+        "geo-jurisdiction"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_location/lib/src/location_repository.dart",
+        "packages/features/fable_location/lib/src/location_widgets.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "مقارنة 15 عملية location-platform: geocode/nearby/matrix/route/map-match/geofence/index",
+        "الصلاحيات والموقع الدقيق والخصوصية والتحقق من الأذونات عند استئناف التطبيق",
+        "Offline location fallback/خرائط أصلية ومقدمو الخرائط وE2E"
+      ],
+      "otherBackendContract": [
+        "provider list/capabilities, geocode/reverse/nearby/route/matrix optional operations",
+        "permission purpose and precision retention/consent policies",
+        "geofences, map matching and errors/rate limits if supported",
+        "mobile platform geolocation and maps integration"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "payments",
+      "ownership": "server",
+      "backendCapabilities": [
+        "financial-platform",
+        "commercial-access",
+        "supported-currencies"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_payments/lib/src/payments_repository.dart",
+        "packages/features/fable_payments/lib/src/payments_widgets.dart"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "قراءة حالة الدفع ليست Checkout/Refund/Capture/Settlement؛ تدقيق 46 عملية مالية حسب الدور",
+        "idempotency وUNCERTAIN وقيمة المال/العملة وإشعار الدفع النهائي من الخادم",
+        "المدفوعات المخزنية Apple/Google وواجهات الإدارة ليست تلقائياً واجهات مستهلك"
+      ],
+      "otherBackendContract": [
+        "provider-specific checkout, amount/currency in minor units, idempotency keys",
+        "attempts/uncertain reconciliation/confirmation/refunds and role permissions",
+        "webhook confirmation server-side; never trust client success alone",
+        "store billing policy and server validation if applicable"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "offline",
+      "ownership": "client",
+      "backendCapabilities": [],
+      "frontendEvidence": [
+        "packages/features/fable_offline/lib/src/offline_reaction_queue.dart",
+        "packages/features/fable_offline/lib/src/offline_queue_panel.dart"
+      ],
+      "sourceStatus": "client_source",
+      "externalStatus": "client_only",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "SQLite+Drift والسياسة اختياريان بقرار Wizard، وليس كل GET أو كتابة جاهزة للعمل Offline",
+        "خطط GET cache/POST PATCH DELETE replay/conflict لكل Feature حسب العقد",
+        "حماية أسرار ومفاتيح المستخدم وإبطال الطوابير عند التبديل وتغير الأسعار والمخزون"
+      ],
+      "otherBackendContract": [
+        "per-resource stable ID, revision/ETag, delta cursor, tombstones and conflict semantics",
+        "replay/idempotency operation policy, expiration and server time",
+        "price/stock/booking revalidation; payments never assumed safe offline",
+        "background sync authorization and identity boundaries"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "analytics",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "observability-platform",
+        "system-monitoring"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_analytics/lib/src/analytics_repository.dart"
+      ],
+      "sourceStatus": "repository_only",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "لا نفرض أن مراقبة النظام تمثل API تحليلات مستخدم",
+        "سياسة الموافقة/privacy وتخزين الأحداث وحذفها والـaggregation",
+        "لوحة المشرف ليست شاشة موبايل بدون أدوار وعقود"
+      ],
+      "otherBackendContract": [
+        "consented event schemas or aggregate metric endpoints if promised",
+        "privacy retention/PII exclusions, consent revocation",
+        "batching, offline transport, rate limits and dashboard roles",
+        "business KPIs with server-calculated results"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "content",
+      "ownership": "server",
+      "backendCapabilities": [
+        "content-pages"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_content/lib/src/published_content_repository.dart",
+        "packages/features/fable_content/lib/src/published_content_index.dart",
+        "packages/features/fable_content/lib/src/structured_content_text.dart"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "19 عملية Content؛ القراءات/الموافقات العامة لا تعني نقل محرّر Admin ودورات النسخ كلها",
+        "البلوكات الـ17 وملحقاتها وإصدارات سياسات الخصوصية ووقت النفاذ",
+        "Backend Issue #12 موقوف CI ويحتاج MySQL/worker حي قبل الاعتماد"
+      ],
+      "otherBackendContract": [
+        "published pages/version/effectiveAt/consent record and read-only block schema",
+        "all block types exposed by project and safe embedded actions",
+        "policy revision notifications and acceptance version concurrency",
+        "admin editor only when app includes verified admin role"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    },
+    {
+      "id": "access_control",
+      "ownership": "hybrid",
+      "backendCapabilities": [
+        "access-control",
+        "feature-flags"
+      ],
+      "frontendEvidence": [
+        "packages/features/fable_access_control/lib/src/access_bootstrap.dart",
+        "packages/features/fable_access_control/lib/src/access_repository.dart",
+        "packages/features/fable_access_control/lib/src/authorized_action.dart"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "mapped_partial",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "liveE2EVerified": false,
+      "complete": false,
+      "gaps": [
+        "6 عمليات access-control: /permissions/me موجود، إدارة الأدوار/الإسناد ليست واجهة مستخدم عادي",
+        "تحديث صلاحيات ومعرفة دور واجهات متعددة الأدوار وتغيير الكيان",
+        "توافق السياسة مع الاختيار والـWizard وإبطال grant عند 403 والتغييرات الفورية"
+      ],
+      "otherBackendContract": [
+        "identity-bound permission snapshots, role grants and revocation signals",
+        "per-operation scopes, entity context and endpoint auth classification",
+        "admin role management only when explicitly exported and authorized",
+        "conflict-safe permission refresh on foreground/session change"
+      ],
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+    }
+  ]
+}

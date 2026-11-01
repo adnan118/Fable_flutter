@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Sensitive state stays in OS backed storage, never shared preferences or assets.
-/// Non-secret, process-local identity signals shared by adapters using one session namespace.
-/// Login, account replacement and logout publish only after secure storage commits.
+/// أسرار الجلسة تحفظ في مخزن آمن لنظام التشغيل، وليس SharedPreferences.
+/// يتغير identityRevision بعد تسجيل الدخول/الخروج/تبديل المستخدم فقط،
+/// وبعد نجاح كتابة البيانات الآمنة، لإبطال الردود المتأخرة لحساب قديم.
+/// شرح عملي: docs/integrations/FLUTTER-BLOC-LEARNING.ar.md
 class FableIdentityEvent {
   const FableIdentityEvent(this.revision, this.authenticated);
   final int revision;

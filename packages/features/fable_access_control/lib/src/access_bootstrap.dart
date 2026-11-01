@@ -8,8 +8,9 @@ import 'access_policy.dart';
 import 'access_repository.dart';
 import 'access_session.dart';
 
-/// Optional app-level wiring: Fable and Other backends share the same UI gate.
-/// Only verified, contract-bound snapshots ever grant visibility.
+/// بوابة ظهور الواجهة تعمل مع Fable أو Backend خارجي بعد إثبات عقد كل منهما.
+/// غياب Snapshot موثقة أو تغيير هوية المستخدم يمنع استنتاج الصلاحيات.
+/// شرح التحقق: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 /// This widget is generated ONLY when `access_control` is selected.
 class FableAccessBootstrap extends StatefulWidget {
   const FableAccessBootstrap({super.key, this.fableContract,

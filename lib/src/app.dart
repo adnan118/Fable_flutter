@@ -105,8 +105,9 @@ class _AppState extends State<FableStarterApp> {
   // UI locale belongs to the app, not to an optional Fable/Other Backend.
   // Never persist a locale the generated policy has not explicitly declared.
   final FableLocalePreferenceStore _localeStore=FableLocalePreferenceStore();
-  // In-memory only: auth identity events invalidate this selection. Other
-  // Backend apps are never wrapped in the Fable-specific context scope.
+  // سياق الكيان يبقى بالذاكرة فقط، وينتهي مع تبديل هوية المستخدم.
+  // لا ينقل هذا السياق أي صلاحية إلى Backend آخر ولا يضيف ترويسات HTTP.
+  // التفاصيل: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
   final FableManagedEntityStore _managedEntities=FableManagedEntityStore();
   final GlobalKey<ScaffoldMessengerState> _localeMessengerKey=
     GlobalKey<ScaffoldMessengerState>();
