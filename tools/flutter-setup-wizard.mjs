@@ -223,6 +223,21 @@ export function formatFrontendSetupReview(snapshot,{root=null}={}){
       'ظهور واجهة تعتمد API لا يعني تفعيل عملية محظورة من الباك.',
       '');
   }
+  // هذه قرارات Fable عامة وليست Capability مستقلة: مجرد استيراد
+  // frontend-setup لا يثبت مطابقة سياسات HTTP/Cache/Idempotency/Retention.
+  // مرجع التفاصيل: docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md
+  lines.push('── سياسات عامة تتجاوز الميزات الفردية ──',
+    'تخزين الاعتماد: Flutter Bearer+Secure Storage في Fable، وليس Web HttpOnly Cookies.',
+    'النظام المولد: User مستقل عن Profile وManaged Entity؛ Role/Permission ليست نوع Profile.',
+    'سياسات جلسات/OTP/طرق دخول/استحقاق/صلاحيات: Runtime الخادم هو المصدر النهائي.',
+    'HTTP Headers: Locale/Time-Zone hints، Request-Id، Idempotency-Key وIf-Match بحسب كل عملية.',
+    'أخطاء 401/403/409/429/503 وCache/Sync/Retention: يلزم عقد مستقل واختبار حالات الفشل.',
+    'لا ننسخ خيارات Redis/Valkey أو أسرار البنية أو إعدادات MySQL إلى Flutter.',
+    snapshot.backendAuthority
+      ?'Fable: هذا ملخص مراجعة ولا يثبت تصدير كل سياسة عامة؛ أي سياسة غير مصدرة تبقى UNVERIFIED.'
+      :'Other Backend: لا ترث أي سياسة من Fable؛ يلزم كتالوج وخريطة وأخطاء وسياسة تشغيل موثقة من الخادم الآخر.',
+    'المرجع: docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md',
+    '');
   if(current)lines.push(
     '── الفروقات عن القرارات المستوردة سابقاً ──',
     ...(changes.length?changes.map(x=>'- '+x):['لا توجد فروقات في القرارات']),
