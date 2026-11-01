@@ -75,8 +75,9 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       ]))??false;
   Future<void> _create()async{
     if(_busy||!_repo.canCreate)return;
-    final type=TextEditingController(),ar=TextEditingController(),en=TextEditingController();
-    var visibility='PRIVATE';
+    final type=TextEditingController(),ar=TextEditingController(),
+      en=TextEditingController(),slug=TextEditingController();
+    var visibility='PRIVATE',collaboration=false,managerInvites=false;
     try{
       final form=await showDialog<bool>(context:context,builder:(ctx)=>
         StatefulBuilder(builder:(ctx,rebuild)=>AlertDialog(
@@ -85,11 +86,25 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
           TextField(controller:type,maxLength:64,decoration:const InputDecoration(labelText:'Backend-enabled type')),
           TextField(controller:ar,maxLength:191,decoration:const InputDecoration(labelText:'Arabic name')),
           TextField(controller:en,maxLength:191,decoration:const InputDecoration(labelText:'English name')),
+          TextField(controller:slug,maxLength:191,decoration:InputDecoration(
+            labelText:_ar?'المعرّف العام (اختياري)':'Public slug (optional)',
+            helperText:_ar?'أحرف لاتينية صغيرة وأرقام وشرطات':
+              'Lowercase letters, numbers and dashes')),
           DropdownButton<String>(value:visibility,items:const [
             DropdownMenuItem(value:'PRIVATE',child:Text('Private (no invitations)')),
             DropdownMenuItem(value:'INVITE_ONLY',child:Text('Invite only')),
             DropdownMenuItem(value:'PUBLIC',child:Text('Public')),
-          ],onChanged:(choice)=>rebuild(()=>visibility=choice??'PRIVATE')),
+          ],onChanged:(choice){if(choice!=null)rebuild(()=>visibility=choice);}),
+          CheckboxListTile(
+            title:Text(_ar?'السماح بالتعاون':'Enable collaboration'),
+            value:visibility!='PRIVATE'&&collaboration,
+            onChanged:visibility=='PRIVATE'?null:
+              (value)=>rebuild(()=>collaboration=value??false)),
+          CheckboxListTile(
+            title:Text(_ar?'السماح للمديرين بإرسال الدعوات':'Allow managers to invite'),
+            value:visibility!='PRIVATE'&&collaboration&&managerInvites,
+            onChanged:visibility=='PRIVATE'||!collaboration?null:
+              (value)=>rebuild(()=>managerInvites=value??false)),
         ])),
         actions:[
           TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
@@ -100,12 +115,16 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       setState((){_busy=true;_message=null;});
       try{
         await _repo.create(type:type.text,nameAr:ar.text,nameEn:en.text,
-          visibility:visibility);
-        if(mounted&&rev==widget.gateway.session.identityRevision)await _reloadAfterMutation();
+          slug:slug.text,visibility:visibility,
+          collaborationEnabled:collaboration,managersCanInvite:managerInvites);
+        if(mounted&&rev==widget.gateway.session.identityRevision){
+          setState(()=>_selected=null);
+          await _reloadAfterMutation();
+        }
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message='Backend rejected entity creation (type, quota or authorization).');}
       finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
-    }finally{type.dispose();ar.dispose();en.dispose();}
+    }finally{type.dispose();ar.dispose();en.dispose();slug.dispose();}
   }
   Future<void> _reloadAfterMutation()async{
     if(!mounted)return;
@@ -134,6 +153,31 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
     }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
       setState(()=>_message='Backend denied entity details.');}
     finally{if(mounted&&rev==widget.gateway.session.identityRevision)
+      setState(()=>_busy=false);}
+  }
+
+  Future<void> _publicPreview(FableManagedAccount entity)async{
+    if(_busy||entity.status!='ACTIVE'||entity.visibility!='PUBLIC'||
+       entity.slug==null||!_repo.canViewPublic)return;
+    final revision=widget.gateway.session.identityRevision;
+    setState((){_busy=true;_message=null;});
+    try{
+      final publicEntity=await _repo.publicBySlug(entity.slug!);
+      if(!mounted||revision!=widget.gateway.session.identityRevision)return;
+      await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
+        title:Text(_ar?'الملف العام':'Public entity preview'),
+        content:Column(mainAxisSize:MainAxisSize.min,
+          crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(publicEntity.nameAr),Text(publicEntity.nameEn),
+          Text(publicEntity.type),Text(publicEntity.slug),
+        ]),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx),
+          child:Text(_ar?'إغلاق':'Close'))]));
+    }catch(_){
+      if(mounted&&revision==widget.gateway.session.identityRevision)
+        setState(()=>_message=_ar?'تعذّر جلب الملف العام للكيان.':
+          'Backend did not confirm public visibility.');
+    }finally{if(mounted&&revision==widget.gateway.session.identityRevision)
       setState(()=>_busy=false);}
   }
 
@@ -204,24 +248,48 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
 
   Future<void> _invite(FableManagedAccount entity)async{
     final chosen=_selected;
-    if(_busy||chosen?.id!=entity.id||!_repo.canInvite||
+    if(_busy||chosen==null||chosen.id!=entity.id||!_repo.canInvite||
+       entity.status!='ACTIVE'||entity.visibility=='PRIVATE'||
        !entity.collaborationEnabled||
-       !(chosen!.access=='OWNER'||chosen.access=='MANAGER'&&entity.managersCanInvite))return;
+       !(chosen.access=='OWNER'||chosen.access=='MANAGER'&&entity.managersCanInvite))return;
     final username=TextEditingController();
+    var access='VIEWER';
     try{
-      final agreed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
-        title:const Text('Invite viewer'),
-        content:TextField(controller:username,maxLength:30,decoration:const InputDecoration(
-          labelText:'Existing username')),
+      final agreed=await showDialog<bool>(context:context,builder:(ctx)=>
+        StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
+        title:Text(_ar?'دعوة عضو إلى الكيان':'Invite entity member'),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          TextField(controller:username,maxLength:30,decoration:InputDecoration(
+            labelText:_ar?'اسم المستخدم المسجّل':'Existing username')),
+          DropdownButton<String>(value:access,items:[
+            DropdownMenuItem(value:'VIEWER',
+              child:Text(_ar?'مشاهد (VIEWER)':'Viewer (VIEWER)')),
+            DropdownMenuItem(value:'MANAGER',
+              child:Text(_ar?'مدير (MANAGER)':'Manager (MANAGER)')),
+          ],onChanged:(next){if(next!=null)refresh(()=>access=next);}),
+          Text(access=='MANAGER'
+            ?(_ar?'صلاحيات المدير يحددها الخادم وقد تشمل إرسال دعوات.':
+                'Manager permissions come from the Backend and may allow invitations.')
+            :(_ar?'المشاهد لا يحصل على صلاحيات المالك أو المدير.':
+                'Viewer does not receive owner or manager permissions.')),
+        ])),
         actions:[
-          TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
-          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Invite')),
-        ]));
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:Text(_ar?'إلغاء':'Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:Text(_ar?'إرسال الدعوة':'Send invitation')),
+        ])));
       if(agreed!=true||!mounted)return;
+      if(access=='MANAGER'){
+        if(!await _confirm(_ar
+          ?'سيُمنح المستخدم دور مدير وفق صلاحيات الخادم. هل تؤكد الدعوة؟'
+          :'This grants the Backend-defined manager role. Confirm invitation?')||
+          !mounted)return;
+      }
       final rev=widget.gateway.session.identityRevision;
       setState((){_busy=true;_message=null;});
       try{
-        await _repo.invite(entity.id,username:username.text.trim(),access:'VIEWER');
+        await _repo.invite(entity,chosen,username:username.text,access:access);
         if(mounted&&rev==widget.gateway.session.identityRevision)
           setState(()=>_message='Backend accepted the invitation.');
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
@@ -320,7 +388,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
           icon:const Icon(Icons.refresh),label:Text(ar?'تحديث':'Refresh')),
         if(_repo.canCreate)FilledButton.tonal(
           onPressed:_busy?null:()=>unawaited(_create()),
-          child:Text(ar?'إنشاء كيان خاص':'Create private entity')),
+          child:Text(ar?'إنشاء كيان':'Create entity')),
         if(_entities?.isEmpty==true)Text(ar?'لا توجد كيانات متاحة':'No managed entities'),
         for(final entity in _entities??<FableManagedAccount>[])Card(child:Column(children:[
           ListTile(
@@ -348,6 +416,11 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
             TextButton.icon(icon:const Icon(Icons.info_outline),
               onPressed:_busy?null:()=>unawaited(_details(entity)),
               label:Text(ar?'التفاصيل':'Details')),
+          if(entity.status=='ACTIVE'&&entity.visibility=='PUBLIC'&&
+             entity.slug!=null&&_repo.canViewPublic)
+            TextButton.icon(icon:const Icon(Icons.public),
+              onPressed:_busy?null:()=>unawaited(_publicPreview(entity)),
+              label:Text(ar?'معاينة الملف العام':'Public preview')),
           if(entity.isOwner&&const {'ACTIVE','DISABLED'}.contains(entity.status)&&
              _repo.canUpdateDetails)
             TextButton.icon(icon:const Icon(Icons.edit_outlined),
@@ -372,7 +445,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
             _repo.canInvite&&(_selected!.access=='OWNER'||
             _selected!.access=='MANAGER'&&entity.managersCanInvite))
             TextButton(onPressed:_busy?null:()=>unawaited(_invite(entity)),
-              child:Text(ar?'دعوة مشاهد':'Invite viewer')),
+              child:Text(ar?'دعوة عضو':'Invite member')),
         ])),
         if(_selected!=null)Text((ar?'السياق المعتمد: ':'Selected: ')+
           (ar?_selected!.nameAr:_selected!.nameEn)+' ('+_selected!.access+

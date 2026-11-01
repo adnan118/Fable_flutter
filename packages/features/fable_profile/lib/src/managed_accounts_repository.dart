@@ -54,6 +54,38 @@ class FableManagedAccount {
   }
 }
 
+/// Public presentation is strictly smaller than the authenticated entity
+/// model; never deserialize memberships, owner identifiers or private flags.
+class FableManagedPublicEntity {
+  const FableManagedPublicEntity({
+    required this.id,required this.type,required this.nameAr,
+    required this.nameEn,required this.slug,this.createdAt,
+  });
+  final String id,type,nameAr,nameEn,slug;
+  final DateTime? createdAt;
+  factory FableManagedPublicEntity.fromPayload(Object? raw){
+    if(raw is! Map||raw['visibility']!='PUBLIC')
+      throw const FormatException('Not a public managed entity');
+    String requiredString(String key,{int max=191}){
+      final v=raw[key];
+      if(v is! String||v.isEmpty||v.length>max||
+         RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(v))
+        throw FormatException('Invalid public entity field: $key');
+      return v;
+    }
+    final id=requiredString('id',max:36),slug=requiredString('slug');
+    if(!FableManagedAccount._uuid.hasMatch(id)||
+       !RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(slug))
+      throw const FormatException('Invalid public entity identity');
+    final created=raw['createdAt'];
+    if(created!=null&&(created is! String||DateTime.tryParse(created)==null))
+      throw const FormatException('Invalid public entity createdAt');
+    return FableManagedPublicEntity(id:id,type:requiredString('type',max:64),
+      nameAr:requiredString('nameAr'),nameEn:requiredString('nameEn'),
+      slug:slug,createdAt:created is String?DateTime.parse(created).toUtc():null);
+  }
+}
+
 /// Volatile selection, validated against the activation response.
 /// Backend remains the final authority for every subsequent scoped request.
 class FableManagedAccountSelection {
@@ -181,6 +213,29 @@ class FableManagedAccountsRepository {
   bool get canCreate=>can('/managed-entities','POST');
   bool get canInvite=>can('/managed-entities/{id}/invitations','POST');
   bool get canReadInvitations=>can('/managed-entities/invitations/me','GET');
+  String _publicOperation(){
+    final exported=contract.operations.values.where((operation)=>
+      operation.method=='GET'&&operation.path=='/managed-entities/public/{slug}'&&
+      !operation.requiresAuth&&operation.credentialHeader==null).toList();
+    if(exported.length!=1)
+      throw StateError('Public managed entity operation is not exported');
+    return exported.single.id;
+  }
+  bool get canViewPublic {
+    try {_publicOperation();return true;}catch(_){return false;}
+  }
+  Future<FableManagedPublicEntity> publicBySlug(String slug)async{
+    if(!RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(slug))
+      throw ArgumentError('Invalid public entity slug');
+    final revision=gateway.session.identityRevision;
+    final response=await gateway.execute(_publicOperation(),path:{'slug':slug});
+    if(revision!=gateway.session.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final item=FableManagedPublicEntity.fromPayload(_unwrap(response.data));
+    if(item.slug!=slug)
+      throw const FormatException('Backend returned different public entity');
+    return item;
+  }
 
   static Object? _unwrap(Object? raw){
     if(raw is Map && raw.containsKey('data'))return raw['data'];
@@ -219,16 +274,42 @@ class FableManagedAccountsRepository {
       identityRevision:rev);
   }
 
+  /// All optional Backend CreateManagedAccountDto controls are explicit;
+  /// never depend on unknown server defaults or synthesize entity types.
   Future<void> create({required String type,required String nameAr,
-    required String nameEn,required String visibility}) async{
-    final t=type.trim().toLowerCase(),ar=nameAr.trim(),en=nameEn.trim();
+    required String nameEn,required String visibility,String? slug,
+    bool collaborationEnabled=false,bool managersCanInvite=false}) async{
+    final t=type.trim().toLowerCase(),ar=nameAr.trim(),en=nameEn.trim(),
+      normalizedSlug=slug?.trim();
     if(!RegExp(r'^[a-z][a-z0-9_-]{1,63}$').hasMatch(t)||
       ar.isEmpty||en.isEmpty||ar.length>191||en.length>191||
-      !const {'PUBLIC','PRIVATE','INVITE_ONLY'}.contains(visibility))
+      RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(ar)||
+      RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(en)||
+      !const {'PUBLIC','PRIVATE','INVITE_ONLY'}.contains(visibility)||
+      (normalizedSlug!=null&&normalizedSlug.isNotEmpty&&
+        !RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(normalizedSlug)))
       throw ArgumentError('Invalid managed entity create data');
-    await gateway.execute(_operation('/managed-entities','POST'),body:{
+    final collab=visibility=='PRIVATE'?false:collaborationEnabled;
+    final managerInvites=collab&&managersCanInvite;
+    final revision=gateway.session.identityRevision;
+    final response=await gateway.execute(_operation('/managed-entities','POST'),body:{
       'type':t,'nameAr':ar,'nameEn':en,'visibility':visibility,
+      'collaborationEnabled':collab,'managersCanInvite':managerInvites,
+      if(normalizedSlug!=null&&normalizedSlug.isNotEmpty)'slug':normalizedSlug,
     });
+    if(revision!=gateway.session.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final created=_unwrap(response.data);
+    if(created is! Map||
+      created['id'] is! String||
+      !FableManagedAccount._uuid.hasMatch(created['id'] as String)||
+      created['type']!=t||created['nameAr']!=ar||created['nameEn']!=en||
+      created['visibility']!=visibility||
+      created['collaborationEnabled']!=collab||
+      created['managersCanInvite']!=managerInvites||
+      (normalizedSlug!=null&&normalizedSlug.isNotEmpty&&
+        created['slug']!=normalizedSlug))
+      throw const FormatException('Backend did not confirm created entity configuration');
   }
 
   Future<List<FableManagedInvitation>> invitationsMine() async{
@@ -245,13 +326,37 @@ class FableManagedAccountsRepository {
     await gateway.execute(_operation('/managed-entities/invitations/{invitationId}/$suffix','POST'),
       path:{'invitationId':id});
   }
-  Future<void> invite(String entityId,{required String username,required String access}) async{
-    if(!FableManagedAccount._uuid.hasMatch(entityId)||
-      !RegExp(r'^[a-z0-9._]{3,30}$').hasMatch(username)||
-      !const {'MANAGER','VIEWER'}.contains(access))
+  /// A local UI role label is never sufficient to authorize invitations.
+  /// A contract-exported operation, current identity and verified activation
+  /// must all agree; the server still verifies every invitation and membership.
+  Future<void> invite(FableManagedAccount entity,
+    FableManagedAccountSelection selected,{
+    required String username,required String access,
+  }) async{
+    _requireSelection(entity,selected);
+    if(entity.status!='ACTIVE'||entity.visibility=='PRIVATE'||
+       !entity.collaborationEnabled||
+       !(selected.access=='OWNER'||
+         selected.access=='MANAGER'&&entity.managersCanInvite))
+      throw StateError('Invitation is not permitted by verified entity settings');
+    final recipient=username.trim().toLowerCase();
+    if(!RegExp(r'^[a-z0-9._]{3,30}$').hasMatch(recipient)||
+       !const {'MANAGER','VIEWER'}.contains(access))
       throw ArgumentError('Invalid invitee or delegated access level');
-    await gateway.execute(_operation('/managed-entities/{id}/invitations','POST'),
-      path:{'id':entityId},body:{'username':username,'access':access});
+    final response=await gateway.execute(
+      _operation('/managed-entities/{id}/invitations','POST'),
+      path:{'id':entity.id},body:{'username':recipient,'access':access});
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final confirmed=_unwrap(response.data);
+    if(confirmed is! Map||
+       confirmed['id'] is! String||
+       !FableManagedAccount._uuid.hasMatch(confirmed['id'] as String)||
+       confirmed['managedEntityId']!=entity.id||
+       confirmed['username']!=recipient||confirmed['access']!=access||
+       confirmed['expiresAt'] is! String||
+       DateTime.tryParse(confirmed['expiresAt'] as String)==null)
+      throw const FormatException('Backend did not confirm verified invitation');
   }
 
   bool get canReadDetails=>can('/managed-entities/{id}','GET');
