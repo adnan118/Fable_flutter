@@ -1,8 +1,9 @@
 import 'package:fable_core/fable_core.dart';
 
-/// Financial capability exposes VERIFIED READ ONLY status. Checkout, capture,
-/// refund and settlement require payment-specific idempotency and verified
-/// server quotes; the generic BackendApiGateway does not expose those contracts.
+/// هذه الواجهة تتحقق من قراءة حالة الدفع فقط، وليست Checkout مكتملة.
+/// Capture/Refund/Settlement تتطلب عقوداً منفصلة وIdempotency ومراجعة UNCERTAIN.
+/// ممنوع إعادة POST مالي تلقائياً عند انقطاع الشبكة.
+/// التفاصيل: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 class FablePaymentOperations {
   const FablePaymentOperations._(this.readId);
   final String readId;
