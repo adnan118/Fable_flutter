@@ -80,7 +80,10 @@ void main(){
             'installationId':'0123456789abcdef0123456789abcdef',
             'preferredChannel':'EMAIL',
           });
-          return _answer(req,{'challengeId':otpChallenge});
+          return _answer(req,{'challengeId':otpChallenge,
+            'requiresTwoFactor':true,'method':'EMAIL_OTP','channel':'EMAIL',
+            'expiresAt':futureExpiry,'twoFactorExpiresAt':futureExpiry,
+            'destination':'d***@example.test'});
         }
         if(req.path=='/auth/2fa/login/complete'){
           expect(req.method,'POST');
