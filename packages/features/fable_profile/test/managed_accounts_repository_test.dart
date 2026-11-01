@@ -26,6 +26,8 @@ FableContract catalog({bool installed=true})=>FableContract(
     'entity.create':const FableOperation('entity.create','POST','/managed-entities','hash',enforceAuth:true),
     'entity.details':const FableOperation('entity.details','GET',
       '/managed-entities/{id}','hash',enforceAuth:true),
+    'entity.public':const FableOperation('entity.public','GET',
+      '/managed-entities/public/{slug}','hash',enforceAuth:false),
     'entity.update':const FableOperation('entity.update','PATCH',
       '/managed-entities/{id}','hash',enforceAuth:true),
     'entity.invites':const FableOperation('entity.invites','GET',
@@ -340,4 +342,141 @@ void main(){
     expect(()=>FableManagedAccount.fromPayload({...entity(),'slug':'invalid slug'}),
       throwsFormatException);
   });
+  test('Create sends all verified DTO fields and private entities disable collaboration',()async{
+    final seen=<RequestOptions>[];
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:_Session(),client:dio((req)async{
+        seen.add(req);
+        final data=Map<String,Object?>.from(req.data as Map);
+        return ok(req,{'code':'MANAGED_ACCOUNT_CREATED','data':{
+          'id':entityId,'status':'ACTIVE',...data,
+        }});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    await repo.create(type:'Hotel',nameAr:'فندق',nameEn:'Hotel',
+      visibility:'INVITE_ONLY',slug:'sample-hotel',
+      collaborationEnabled:true,managersCanInvite:true);
+    expect(seen.single.method,'POST');
+    expect(seen.single.path,'/managed-entities');
+    expect(seen.single.data,{
+      'type':'hotel','nameAr':'فندق','nameEn':'Hotel','slug':'sample-hotel',
+      'visibility':'INVITE_ONLY','collaborationEnabled':true,
+      'managersCanInvite':true,
+    });
+    await repo.create(type:'hotel',nameAr:'خاص',nameEn:'Private',
+      visibility:'PRIVATE',collaborationEnabled:true,managersCanInvite:true);
+    expect(seen.last.data,{
+      'type':'hotel','nameAr':'خاص','nameEn':'Private',
+      'visibility':'PRIVATE','collaborationEnabled':false,
+      'managersCanInvite':false,
+    });
+    expect(seen.every((x)=>!x.headers.containsKey('X-Fable-Managed-Entity-Id')),true);
+    final before=seen.length;
+    await expectLater(repo.create(type:'hotel',nameAr:'A',nameEn:'B',
+      visibility:'PUBLIC',slug:'../admin'),throwsArgumentError);
+    expect(seen.length,before);
+  });
+
+  test('Create rejects forged response, identity switch and missing export',()async{
+    final fake=_Session();
+    final missingGateway=FableAuthGateway(
+      baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(installed:false),secureSession:fake);
+    addTearDown(missingGateway.dispose);
+    final missing=FableManagedAccountsRepository(
+      missingGateway,catalog(installed:false));
+    await expectLater(missing.create(type:'hotel',nameAr:'X',nameEn:'Y',
+      visibility:'PRIVATE'),throwsStateError);
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:_Session(),client:dio((req)async=>
+        ok(req,{'data':{'id':inviteId,'nameAr':'tampered'}})));
+    addTearDown(gateway.dispose);
+    await expectLater(FableManagedAccountsRepository(gateway,catalog()).create(
+      type:'hotel',nameAr:'X',nameEn:'Y',visibility:'PRIVATE'),throwsFormatException);
+    final switched=_Session();
+    final changing=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:switched,client:dio((req)async{
+        switched.identityRevision++;
+        return ok(req,{'data':{'id':entityId}});
+      }));
+    addTearDown(changing.dispose);
+    await expectLater(FableManagedAccountsRepository(changing,catalog()).create(
+      type:'hotel',nameAr:'X',nameEn:'Y',visibility:'PRIVATE'),
+      throwsA(isA<FableApiException>()));
+  });
+
+  test('Manager invitations honor verified roles, entity selection and response',()async{
+    final seen=<RequestOptions>[],session=_Session();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:session,client:dio((req)async{
+        seen.add(req);
+        final input=Map<String,Object?>.from(req.data as Map);
+        return ok(req,{'data':{
+          'id':inviteId,'managedEntityId':entityId,
+          'username':input['username'],'access':input['access'],
+          'expiresAt':'2026-12-01T00:00:00.000Z',
+        }});
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    final entityManager=FableManagedAccount.fromPayload({...entity(),
+      'visibility':'INVITE_ONLY','collaborationEnabled':true,
+      'managersCanInvite':true,'memberships':[
+        {'access':'MANAGER','active':true}]});
+    final manager=FableManagedAccountSelection(id:entityId,access:'MANAGER',
+      nameAr:'نادي الشاطئ',nameEn:'Beach Club',
+      identityRevision:session.identityRevision);
+    await repo.invite(entityManager,manager,username:'Person.Name',access:'MANAGER');
+    expect(seen.single.path,'/managed-entities/$entityId/invitations');
+    expect(seen.single.data,{'username':'person.name','access':'MANAGER'});
+    await repo.invite(entityManager,manager,username:'viewer_name',access:'VIEWER');
+    expect(seen.length,2);
+    final viewer=FableManagedAccountSelection(id:entityId,access:'VIEWER',
+      nameAr:'Viewer',nameEn:'Viewer',
+      identityRevision:session.identityRevision);
+    await expectLater(repo.invite(entityManager,viewer,
+      username:'another',access:'MANAGER'),throwsStateError);
+    final noDelegate=FableManagedAccount.fromPayload({...entity(),
+      'collaborationEnabled':true,'managersCanInvite':false});
+    await expectLater(repo.invite(noDelegate,manager,
+      username:'another',access:'VIEWER'),throwsStateError);
+    session.identityRevision++;
+    await expectLater(repo.invite(entityManager,manager,
+      username:'another',access:'MANAGER'),throwsStateError);
+    expect(seen.length,2);
+  });
+
+  test('Public lookup is contract-bound, safe and never exposes private entity',()async{
+    final requests=<RequestOptions>[];
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(),secureSession:_Session(),client:dio((req)async{
+        requests.add(req);
+        return ok(req,{
+          'id':entityId,'type':'hotel','nameAr':'فندق','nameEn':'Hotel',
+          'slug':'sample-hotel','visibility':'PUBLIC',
+          'createdAt':'2026-10-01T00:00:00.000Z',
+        });
+      }));
+    addTearDown(gateway.dispose);
+    final repo=FableManagedAccountsRepository(gateway,catalog());
+    expect(repo.canViewPublic,true);
+    final row=await repo.publicBySlug('sample-hotel');
+    expect(row.nameEn,'Hotel');
+    expect(requests.single.path,'/managed-entities/public/sample-hotel');
+    await expectLater(repo.publicBySlug('../admin'),throwsArgumentError);
+    final missingGateway=FableAuthGateway(
+      baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog(installed:false),secureSession:_Session());
+    addTearDown(missingGateway.dispose);
+    final missing=FableManagedAccountsRepository(
+      missingGateway,catalog(installed:false));
+    expect(missing.canViewPublic,false);
+    await expectLater(missing.publicBySlug('sample-hotel'),throwsStateError);
+    expect(()=>FableManagedPublicEntity.fromPayload({
+      'id':entityId,'slug':'sample-hotel','visibility':'PRIVATE',
+      'type':'hotel','nameAr':'A','nameEn':'B',
+    }),throwsFormatException);
+  });
+
 }
