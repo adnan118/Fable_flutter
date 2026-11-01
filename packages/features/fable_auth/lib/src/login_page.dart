@@ -27,6 +27,8 @@ class _FableLoginPageState extends State<FableLoginPage> {
   final _user=TextEditingController(),_password=TextEditingController(),_otp=TextEditingController();
   FableSecondFactorChallenge? _challenge;
   String? _challengeId;
+  DateTime? _otpExpiresAt;
+  String? _otpMethod, _otpDestination;
   String? _preferredChannel;
   bool _rememberIdentifier=false;
   FableRememberedIdentifier? _remembered;
@@ -162,7 +164,8 @@ class _FableLoginPageState extends State<FableLoginPage> {
           methods.contains('PHONE_OTP')?'PHONE':null;
         _password.clear();
         setState(() {
-          _challenge=pending;_challengeId=null;_preferredChannel=channel;
+          _challenge=pending;_challengeId=null;_otpExpiresAt=null;
+          _otpMethod=null;_otpDestination=null;_preferredChannel=channel;
           _message=widget.contract.supports('auth.2fa.login.request') &&
               widget.contract.supports('auth.2fa.login.complete')
             ? 'Choose your verification channel and request a one-time code.'
@@ -200,8 +203,16 @@ class _FableLoginPageState extends State<FableLoginPage> {
     if(_busy||pending==null)return;
     setState(() {_busy=true;_message=null;});
     try {
-      final id=await _client().requestSecondFactor(pending,preferredChannel:_preferredChannel);
-      if(mounted)setState(() {_challengeId=id;_message='A one-time code was requested. Enter it to finish sign-in.';});
+      final details=await _client().requestSecondFactorDetails(
+        pending,preferredChannel:_preferredChannel);
+      if(!mounted || !identical(pending,_challenge))return;
+      setState(() {
+        _challengeId=details.challengeId;
+        _otpExpiresAt=details.expiresAt;
+        _otpMethod=details.method;
+        _otpDestination=details.maskedDestination;
+        _message='A one-time code was requested. Enter it to finish sign-in.';
+      });
     }on FableApiException catch(error){
       if(mounted)setState(()=>_message='Verification request rejected: ${error.code}');
     }catch(_){
@@ -222,7 +233,9 @@ class _FableLoginPageState extends State<FableLoginPage> {
       // Do not save after the first factor: only a confirmed full login.
       TextInput.finishAutofillContext(shouldSave:true);
       setState(() {
-        _otp.clear();_challenge=null;_challengeId=null;_signedIn=true;
+        _otp.clear();_challenge=null;_challengeId=null;
+        _otpExpiresAt=null;_otpMethod=null;_otpDestination=null;
+        _signedIn=true;
         _passwordChangeRequired=outcome.mustChangePassword;_savedSessionAvailable=false;
         _message=outcome.mustChangePassword
           ? 'Second factor verified. Change your password before continuing.'
@@ -237,7 +250,10 @@ class _FableLoginPageState extends State<FableLoginPage> {
 
   void _cancelChallenge(){
     _otp.clear();_password.clear();
-    setState((){_challenge=null;_challengeId=null;_preferredChannel=null;_message=null;});
+    setState((){
+      _challenge=null;_challengeId=null;_preferredChannel=null;_message=null;
+      _otpExpiresAt=null;_otpMethod=null;_otpDestination=null;
+    });
   }
 
   Future<void> _logout() async {
@@ -320,7 +336,10 @@ class _FableLoginPageState extends State<FableLoginPage> {
               if(_challenge!.methods.contains('EMAIL_OTP'))const DropdownMenuItem(value:'EMAIL',child:Text('Email')),
               if(_challenge!.methods.contains('PHONE_OTP'))const DropdownMenuItem(value:'PHONE',child:Text('Phone')),
             ],
-            onChanged:_busy?null:(value)=>setState((){_preferredChannel=value;_challengeId=null;}),
+            onChanged:_busy?null:(value)=>setState((){
+              _preferredChannel=value;_challengeId=null;_otpExpiresAt=null;
+              _otpMethod=null;_otpDestination=null;_otp.clear();
+            }),
           ),
           const SizedBox(height:12),
           FilledButton.tonal(onPressed:!_busy&&widget.contract.supports('auth.2fa.login.request')&&
@@ -328,6 +347,12 @@ class _FableLoginPageState extends State<FableLoginPage> {
             child:const Text('Request verification code')),
           if(_challengeId!=null) ...[
             const SizedBox(height:12),
+            if(_otpMethod!=null)Text(_otpMethod=='EMAIL_OTP'
+              ?'Verification code sent by email.'
+              :'Verification code sent by phone.'),
+            if(_otpDestination!=null)Text('Recipient: $_otpDestination'),
+            if(_otpExpiresAt!=null)Text(
+              'Code expires: ${_otpExpiresAt!.toLocal()}'),
             TextField(controller:_otp,keyboardType:TextInputType.number,
               autofillHints:const [AutofillHints.oneTimeCode],maxLength:10,
               decoration:const InputDecoration(labelText:'One-time code')),
