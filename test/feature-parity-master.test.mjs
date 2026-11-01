@@ -36,9 +36,19 @@ test('جميع عمليات Auth الأربعون موثقة بالاسم ومف
  assert.ok(auth.operations.some(x=>x.id==='auth.2fa.enable'));
  assert.ok(auth.operations.some(x=>x.id==='auth.contact.phone.change'));
  assert.ok(auth.operations.some(x=>x.id==='auth.web.login'));
+ // أي انتقال إلى SOURCE_IMPLEMENTED يبقى مقترناً بدليل Flutter/اختبارات
+ // ولا يتحول إلى اعتماد E2E. عدّل هذه القائمة عند كل دفعة مراجعة فعلية.
+ const sourceReviewed=new Set([
+   'auth.change-password','auth.logout','auth.session.timezone',
+   'auth.login','auth.refresh','auth.sessions','auth.session-policy',
+ ]);
+ assert.equal(auth.operations.filter(op=>
+   op.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,7);
  for(const op of auth.operations){
    assert.equal(op.realE2EVerified,false);
-   if(['auth.change-password','auth.logout','auth.session.timezone'].includes(op.id)){
+   assert.equal(op.externalBackendMapped,false);
+   assert.equal(op.wizardDecisionReviewed,false);
+   if(sourceReviewed.has(op.id)){
      assert.equal(op.disposition,'SOURCE_IMPLEMENTED_E2E_PENDING');
      assert.equal(op.modelAndDtoReviewed,true);
      assert.equal(op.uiFlowReviewed,true);
