@@ -2,7 +2,7 @@
 // RC86: verify Fable-Backend source identity and Flutter Auth source ledger.
 // This verifies imported source declarations, NOT live E2E acceptance.
 import {createHash} from 'node:crypto';
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync,readFileSync,readdirSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
@@ -97,7 +97,6 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     report.backendRouteCount=catalog.size;
     report.authSourceBlobVerified=true;
     // This never claims feature parity. Inventory is provided for manual review.
-    const {readdirSync}=awaitInventory();
     const capabilities=join(back,'Fable-Backend-RC66/blueprints/capabilities');
     const rows=readdirSync(capabilities,{withFileTypes:true})
       .filter(x=>x.isDirectory()).map(x=>x.name);
@@ -105,12 +104,6 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     report.sourceOnly=false;
   }
   return report;
-}
-// Avoid runtime code generation/network access, read the local checkout only.
-function awaitInventory(){
-  return {readdirSync:(path,opts)=>{
-    const fs=process.getBuiltinModule('node:fs');return fs.readdirSync(path,opts);
-  }};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   const idx=process.argv.indexOf('--backend-root');
