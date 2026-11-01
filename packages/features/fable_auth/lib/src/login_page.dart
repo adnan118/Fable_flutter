@@ -9,8 +9,11 @@ import 'change_password_page.dart';
 /// نجاح هذه الشاشة لا يعني نقل تغيير البريد/الهاتف/كلمة المرور وOTP كلها.
 /// لفهم انتقال الحالات: docs/integrations/FLUTTER-BLOC-LEARNING.ar.md
 class FableLoginPage extends StatefulWidget {
-  const FableLoginPage({super.key,required this.contract});
+  const FableLoginPage({super.key,required this.contract,this.gateway});
   final FableContract contract;
+  /// حقن Gateway يسهّل Widget tests من دون افتراض URL أو Backend حي.
+  /// ملكية هذا المورد تبقى للمستدعي، لذا لا تتخلص منه الشاشة عند الخروج.
+  final FableAuthGateway? gateway;
   @override State<FableLoginPage> createState()=>_FableLoginPageState();
 }
 class _FableLoginPageState extends State<FableLoginPage> {
@@ -39,6 +42,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
   }
   bool _busy=false;
   bool _signedIn=false;
+  bool _passwordChangeRequired=false;
   bool _savedSessionAvailable=false;
   String? _message;
   static const _url=String.fromEnvironment('FABLE_API_BASE_URL');
@@ -50,7 +54,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
     _restoreIdentifier();
     // Do not infer a valid server session just because a token is on disk.
     // First surface its presence, then allow explicit verification.
-    if (_url.isNotEmpty && widget.contract.supports('auth.login')) {
+    if ((_url.isNotEmpty || widget.gateway!=null) && widget.contract.supports('auth.login')) {
       _restoreLocalSession();
     }
   }
@@ -74,40 +78,53 @@ class _FableLoginPageState extends State<FableLoginPage> {
 
   Future<void> _verifySavedSession() async {
     if (_busy || !_savedSessionAvailable || !widget.contract.supports('auth.sessions')) return;
-    setState(() { _busy = true; _message = null; });
+    final client=_client();
+    final revision=client.session.identityRevision;
+    setState(() { _busy=true; _message=null; });
     try {
-      final client = _client();
-      final revision = client.session.identityRevision;
-      await client.sessions(); // A protected, contract-declared read.
-      if (!mounted || client.session.identityRevision != revision) return;
+      await client.sessions(); // قراءة موثّقة من الخادم، لا من ذاكرة الجهاز.
+      if(!mounted || client.session.identityRevision!=revision)return;
       setState(() {
-        _signedIn = true;
-        _savedSessionAvailable = false;
-        _message = 'Your saved session was verified by the server.';
+        _signedIn=true;_passwordChangeRequired=false;_savedSessionAvailable=false;
+        _message='Your saved session was verified by the server.';
       });
-    } on FableApiException catch (error) {
-      if (!mounted) return;
-      final stillStored = await _client().session.accessToken != null;
-      if (!mounted) return;
+    } on FableApiException catch(error) {
+      // 403 لهذا الكود لا تعني انتهاء التوكن؛ الخادم يسمح بتغيير
+      // كلمة المرور أو Logout فقط. لا نحذف الاعتماد ولا نعرض Sessions.
+      if(error.status==403 && error.code=='AUTH_PASSWORD_CHANGE_REQUIRED'){
+        final stillStored=await client.session.accessToken;
+        if(!mounted || client.session.identityRevision!=revision)return;
+        if(stillStored!=null && stillStored.isNotEmpty){
+          setState((){
+            _signedIn=true;_passwordChangeRequired=true;_savedSessionAvailable=false;
+            _message='You must change your password before using this account.';
+          });
+          return;
+        }
+      }
+      final stillStored=await client.session.accessToken;
+      if(!mounted || client.session.identityRevision!=revision)return;
       setState(() {
-        _savedSessionAvailable = stillStored;
-        _message = error.status == 401
+        _savedSessionAvailable=stillStored!=null;
+        _message=error.status==401
           ? 'Your session has expired. Please sign in again.'
           : 'Unable to verify the saved session. You may retry when connected.';
       });
     } catch (_) {
-      if (mounted) setState(() => _message =
+      if(mounted && client.session.identityRevision==revision)
+        setState(()=>_message=
           'Session verification is unavailable. Your saved credentials were not deleted.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if(mounted && client.session.identityRevision==revision)
+        setState(()=>_busy=false);
     }
   }
   @override void dispose(){_user.dispose();_password.dispose();_otp.dispose();_gateway?.dispose();super.dispose();}
-  FableAuthGateway _client() => _gateway ??= FableAuthGateway(
+  FableAuthGateway _client() => widget.gateway ?? (_gateway ??= FableAuthGateway(
     baseUri: Uri.parse(_url),
     contract: widget.contract,
     allowHttpForLocalDevelopment: kDebugMode,
-  );
+  ));
 
   Future<void> _login() async {
     if (_busy || !_key.currentState!.validate()) return;
@@ -115,7 +132,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
       setState(() => _message = 'Login operation missing from imported backend contract.');
       return;
     }
-    if (_url.isEmpty) {
+    if (_url.isEmpty && widget.gateway==null) {
       setState(() => _message = 'Set FABLE_API_BASE_URL at build/run time.');
       return;
     }
@@ -147,7 +164,13 @@ class _FableLoginPageState extends State<FableLoginPage> {
         await _saveLoginHint();
         TextInput.finishAutofillContext(shouldSave:true);
         _password.clear();
-        setState(() { _signedIn = true; _savedSessionAvailable = false; _message = 'Session saved securely.'; });
+        setState(() {
+          _signedIn=true;_passwordChangeRequired=result.mustChangePassword;
+          _savedSessionAvailable=false;
+          _message=result.mustChangePassword
+            ? 'Password change is required before using the account.'
+            : 'Session saved securely.';
+        });
       }
     } on FableApiException catch (error) {
       if (mounted) setState(() => _message = 'Server rejected login: ${error.code}');
@@ -177,13 +200,17 @@ class _FableLoginPageState extends State<FableLoginPage> {
     if(_busy||pending==null||id==null||!RegExp(r'^\d{4,10}$').hasMatch(_otp.text.trim()))return;
     setState(() {_busy=true;_message=null;});
     try {
-      await _client().completeSecondFactor(pending,challengeId:id,code:_otp.text.trim());
+      final outcome=await _client().completeSecondFactor(
+        pending,challengeId:id,code:_otp.text.trim());
       await _saveLoginHint();
       // Do not save after the first factor: only a confirmed full login.
       TextInput.finishAutofillContext(shouldSave:true);
       if(mounted)setState(() {
-        _otp.clear();_challenge=null;_challengeId=null;_signedIn=true;_savedSessionAvailable=false;
-        _message='Two-factor sign-in completed. Session saved securely.';
+        _otp.clear();_challenge=null;_challengeId=null;_signedIn=true;
+        _passwordChangeRequired=outcome.mustChangePassword;_savedSessionAvailable=false;
+        _message=outcome.mustChangePassword
+          ? 'Second factor verified. Change your password before continuing.'
+          : 'Two-factor sign-in completed. Session saved securely.';
       });
     }on FableApiException catch(error){
       if(mounted)setState(()=>_message='Verification rejected: ${error.code}');
@@ -204,6 +231,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
       final confirmed = await _client().logout();
       if (mounted) setState(() {
         _signedIn = false;
+        _passwordChangeRequired=false;
         _savedSessionAvailable = false;
         _message = confirmed
             ? 'Signed out of this session.'
@@ -220,6 +248,13 @@ class _FableLoginPageState extends State<FableLoginPage> {
       constraints:const BoxConstraints(maxWidth:470),child:ListView(padding:const EdgeInsets.all(24),children:[
         const Icon(Icons.lock_outline,size:48),const SizedBox(height:24),
         Text(enabled?'Fable account':'Login contract missing',style:Theme.of(context).textTheme.headlineSmall),
+        if(_signedIn && _passwordChangeRequired)
+          const Padding(padding:EdgeInsets.only(top:12),
+            child:Text('Password change required. Other account operations are locked until the password is updated.',textAlign:TextAlign.center)),
+        if(_signedIn && _passwordChangeRequired &&
+           !widget.contract.supports('auth.change-password'))
+          const Padding(padding:EdgeInsets.only(top:8),
+            child:Text('This contract has no verified password-change operation. Sign out and contact support.',textAlign:TextAlign.center)),
         if (_signedIn) Padding(padding: const EdgeInsets.symmetric(vertical: 16),
           child: FilledButton.tonal(onPressed:_busy?null:_logout,child:const Text('Sign out'))),
         if(_signedIn && widget.contract.supports('auth.change-password'))
@@ -232,15 +267,17 @@ class _FableLoginPageState extends State<FableLoginPage> {
                 if(changed==true&&mounted){
                   // عند تغيير كلمة المرور ألغى الباك كل الجلسات، لا نُظهر Login صالحاً.
                   setState((){
-                    _signedIn=false;_savedSessionAvailable=false;_challenge=null;
+                    _signedIn=false;_passwordChangeRequired=false;
+                    _savedSessionAvailable=false;_challenge=null;
                     _message='Password updated. Sign in again on every device.';
                   });
                 }
               },
               icon:const Icon(Icons.password),
-              label:const Text('Change password'),
+              label:Text(_passwordChangeRequired?'Change password to continue':'Change password'),
             )),
-        if(_signedIn && widget.contract.supports('auth.sessions'))
+        if(_signedIn && !_passwordChangeRequired &&
+           widget.contract.supports('auth.sessions'))
           Padding(padding:const EdgeInsets.only(bottom:12),
             child:OutlinedButton.icon(
               onPressed:_busy?null:()=>Navigator.of(context).push(
