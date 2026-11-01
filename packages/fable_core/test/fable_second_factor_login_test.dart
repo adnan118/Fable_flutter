@@ -48,7 +48,8 @@ void main(){
    if(request.uri.path=='/auth/2fa/login/request')return _response(request,{
      'challengeId':'11111111-1111-4111-8111-111111111111'});
    if(request.uri.path=='/auth/2fa/login/complete')return _response(request,{
-     'accessToken':'new-access','refreshToken':List<String>.filled(64,'r').join()});
+     'accessToken':'new-access','refreshToken':List<String>.filled(64,'r').join(),
+     'expiresAt':'2099-12-01T12:00:00Z','mustChangePassword':true});
    throw StateError('Undeclared route');
   });
   final gateway=FableAuthGateway(baseUri:Uri.parse('https://example.test'),
@@ -60,7 +61,9 @@ void main(){
   final pending=login.secondFactor!;
   final id=await gateway.requestSecondFactor(pending,preferredChannel:'EMAIL');
   expect(session.token,isNull);
-  await gateway.completeSecondFactor(pending,challengeId:id,code:'123456');
+  final complete=await gateway.completeSecondFactor(pending,challengeId:id,code:'123456');
+  expect(complete.authenticated,true);
+  expect(complete.mustChangePassword,true);
   expect(session.token,'new-access');
   expect(session.refresh,List<String>.filled(64,'r').join());
   expect(calls,['/auth/login','/auth/2fa/login/request','/auth/2fa/login/complete']);
@@ -68,7 +71,8 @@ void main(){
  test('missing 2FA contract rejects flow without guessing or creating a session',()async{
   final session=_Session();
   final dio=_mock((request)async=>_response(request,{
-    'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join()}));
+    'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join(),
+    'expiresAt':'2099-01-01T00:00:00Z'}));
   final gateway=FableAuthGateway(baseUri:Uri.parse('https://example.test'),
     contract:_contract({'auth.login':_ops['auth.login']!}),secureSession:session,client:dio);
   addTearDown(gateway.dispose);
@@ -79,7 +83,8 @@ void main(){
  test('second factor for old identity is rejected after account switch',()async{
   final session=_Session();
   final dio=_mock((request)async=>_response(request,{
-    'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join()}));
+    'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join(),
+    'expiresAt':'2099-01-01T00:00:00Z'}));
   final gateway=FableAuthGateway(baseUri:Uri.parse('https://example.test'),
     contract:_contract(),secureSession:session,client:dio);
   addTearDown(gateway.dispose);

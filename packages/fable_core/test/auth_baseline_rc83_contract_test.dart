@@ -154,7 +154,8 @@ void main() {
         return _reply(req, 200, {
           'accessToken': 'new-access',
           'refreshToken': List<String>.filled(64, 's').join(),
-          'expiresAt': '2026-12-01T12:00:00Z',
+          'expiresAt': '2099-12-01T12:00:00Z',
+          'mustChangePassword': false,
         });
       }),
     );

@@ -91,14 +91,18 @@ class FableAuthGateway implements BackendApiGateway {
       final methods=(data['methods'] is List)
         ? (data['methods'] as List).whereType<String>().toList(growable:false)
         : <String>[];
+      final challengeExpires=_expiresAt(data['expiresAt'],
+        context:'second-factor challenge');
       return FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge._(
-        challenge, identityAtStart, methods, platform,
-        DateTime.tryParse(data['expiresAt']?.toString() ?? ''),
+        challenge, identityAtStart, methods, platform, challengeExpires,
       ));
     }
+    // لا نعامل Session مفروضة لتغيير كلمة المرور كدخول طبيعي.
+    // هذا الحقل إلزامي في استجابة Fable RC66؛ غيابه يوقف حفظ التوكن.
+    final mandatoryChange = _requiredPasswordChangeState(data);
     final saved = await _saveNewSession(data, newLogin: true, expectedIdentity: identityAtStart);
     if (!saved) throw FableApiException(409, 'session_changed_discard_response');
-    return FableLoginOutcome.authenticated();
+    return FableLoginOutcome.authenticated(mustChangePassword: mandatoryChange);
   }
 
   /// Request an OTP bound to the pending first-factor challenge. The challenge
@@ -130,7 +134,7 @@ class FableAuthGateway implements BackendApiGateway {
 
   /// Consume a verified OTP once and create a session only on a successful
   /// backend completion. Replays and account switches fail closed.
-  Future<void> completeSecondFactor(FableSecondFactorChallenge pending,{
+  Future<FableLoginOutcome> completeSecondFactor(FableSecondFactorChallenge pending,{
       required String challengeId,required String code}) async {
     _checkPending(pending,'auth.2fa.login.complete');
     if(!RegExp(r'^\d{4,10}$').hasMatch(code)) {
@@ -144,9 +148,14 @@ class FableAuthGateway implements BackendApiGateway {
       'clientType':'flutter','installationId':await session.installationId(),
       'platform':pending.platform,
     });
-    final saved=await _saveNewSession(_payload(response.data),newLogin:true,
+    final payload=_payload(response.data);
+    // إكمال العامل الثاني يصدر Session كاملة؛ تنطبق عليها سياسة تغيير
+    // كلمة المرور تماماً كما في Login العادي، ولا يجوز تجاوزها بعد OTP.
+    final mandatoryChange=_requiredPasswordChangeState(payload);
+    final saved=await _saveNewSession(payload,newLogin:true,
       expectedIdentity:pending._identityRevision);
     if(!saved)throw FableApiException(409,'session_changed_discard_response');
+    return FableLoginOutcome.authenticated(mustChangePassword:mandatoryChange);
   }
 
   void _checkPending(FableSecondFactorChallenge pending,String operation){
@@ -464,10 +473,36 @@ class FableAuthGateway implements BackendApiGateway {
     return Map<String, dynamic>.from(candidate);
   }
 
+  /// يجب رفض اعتماد انتهت مدته بالفعل، ولا نتخيل انتهاءً من ساعة العميل
+  /// عندما يغيب expiresAt من استجابة Fable. لا نعيد إرسال Refresh تلقائياً.
+  static DateTime _expiresAt(Object? value,{required String context}) {
+    if(value is! String || value.length>64 ||
+       !RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(value) ||
+       !value.endsWith('Z')) {
+      throw FormatException('Missing UTC expiration in $context');
+    }
+    final time=DateTime.tryParse(value)?.toUtc();
+    if(time==null || !time.isAfter(DateTime.now().toUtc())) {
+      throw FormatException('Expired or invalid $context');
+    }
+    return time;
+  }
+
+  static bool _requiredPasswordChangeState(Map<String,dynamic> payload) {
+    final required=payload['mustChangePassword'];
+    if(required is! bool) {
+      throw const FormatException('Missing mustChangePassword in Fable login response');
+    }
+    return required;
+  }
+
   Future<bool> _saveNewSession(Map<String, dynamic> payload, {bool newLogin = false,
       required int expectedIdentity, String? expectedRefreshToken}) async {
     final access = payload['accessToken'];
     final refresh = payload['refreshToken'];
+    // فشل التاريخ يمنع حفظ أسرار جلسة منتهية؛ JWT/Session DB يظلان
+    // مصدر الصلاحية النهائي، ولا نعد هذا اختباراً لتكامل Backend الحي.
+    _expiresAt(payload['expiresAt'],context:'session');
     if (access is! String || access.isEmpty || access.length > 8192 ||
         access.contains(RegExp(r'[\r\n\x00-\x1f\x7f]')) ||
         refresh is! String || !RegExp(r'^[A-Za-z0-9_-]{64}$').hasMatch(refresh)) {
@@ -505,13 +540,18 @@ class FableSecondFactorChallenge {
 }
 
 class FableLoginOutcome {
-  const FableLoginOutcome._(this.authenticated,this.requiresTwoFactor,this.secondFactor);
-  const FableLoginOutcome.authenticated() : this._(true,false,null);
+  const FableLoginOutcome._(this.authenticated,this.requiresTwoFactor,
+      this.secondFactor,this.mustChangePassword);
+  const FableLoginOutcome.authenticated({required bool mustChangePassword}) :
+    this._(true,false,null,mustChangePassword);
   const FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge challenge) :
-    this._(false,true,challenge);
+    this._(false,true,challenge,false);
   final bool authenticated;
   final bool requiresTwoFactor;
   final FableSecondFactorChallenge? secondFactor;
+  /// Fable يسمح في هذه الحالة فقط بـchange-password/logout حتى نجاح التغيير.
+  /// هذا حقل صادر من الخادم، وليس تخميناً من Flutter أو اختياراً في Wizard.
+  final bool mustChangePassword;
 }
 
 /// Only the presentation-safe, authenticated account fields of the Fable core.

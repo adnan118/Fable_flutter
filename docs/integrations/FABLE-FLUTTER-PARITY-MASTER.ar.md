@@ -1,10 +1,21 @@
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
-> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC83 — 2026-11-01.**
+> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC84 — 2026-11-01.**
 > الباك المرجعي وقت الفحص: `adnan118/Fable@226cbcdc542ebe9c005d7445d84cc0ec10631932`.
 > الفرونت المرجعي وقت الفحص: `adnan118/Fable_flutter@94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7` (بعد RC79).
 > **هذا تقرير مصدر وعقود وفحوص CI، وليس اعتماد تشغيل حي أو تكامل إنتاج.**
 > يرجى تحديثه مع كل PR يغلق فجوة، ولا يُستبدَل بسجلات تقدم عابرة.
+
+## RC84 — قفل تغيير كلمة المرور والتحقق من انتهاء الجلسة وRefresh Replay
+
+- **بناء على سلوك Fable RC66 الحقيقي**: Login العادي و2FA يعيدان `mustChangePassword`؛ في حال تفعيل القفل يُرجع JwtAuthGuard `AUTH_PASSWORD_CHANGE_REQUIRED` / 403 للمسارات المحمية، باستثناء التغيير والخروج. طبّقنا عرضاً مقيداً وخيارات Change Password/Logout، مع منع ادعاء صلاحية Sessions العادية.
+- Gateway يرفض حفظ اعتماد جديد إن غاب `mustChangePassword` Boolean أو `expiresAt` UTC صالح ومستقبلي؛ ويحتفظ بالجلسة المحلية عند Refresh 409 داخل Grace أو 503 مؤقت، بلا تكرار Refresh token قديم. عند 401 نهائي يبطل الاعتماد الخاص بنفس الهوية فقط.
+- أضيفت اختبارات للمسار العادي، و2FA، واستعادة جلسة محفوظة، وReplay وExpiry؛ مع شرح التعليقات بالعربية.
+- **الإحصاء ثابت:** 7/40 `SOURCE_IMPLEMENTED_E2E_PENDING`، 33 `NOT_DECIDED`، و**0/17 ميزات معتمدة E2E**؛ لا تعني تقوية Login/Refresh اكتساب عملية جديدة.
+- **مفتوح:** Backend مولّد حقيقي/MySQL، جهازان، ملكية Identity والأحداث الأمنية، Android/iOS Release، عقد Other Backend مستقل، والـWizard الفعلي.
+- [دليل RC84 التفصيلي](./FABLE-AUTH-BASELINE-RC84.ar.md) · [الدفعة السابقة RC83](./FABLE-AUTH-BASELINE-RC83.ar.md).
+
+---
 
 ## RC83 — تدقيق أساس Auth وتثبيت عقد الجلسات
 

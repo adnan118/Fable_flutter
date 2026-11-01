@@ -92,7 +92,10 @@
       "regressionTests": [
         "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
         "packages/features/fable_auth/test/login_contract_smoke_test.dart",
-        "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+        "packages/fable_core/test/auth_gateway_identity_regression_test.dart",
+        "packages/fable_core/test/auth_rc84_password_and_replay_test.dart",
+        "packages/features/fable_auth/test/mandatory_password_change_page_test.dart",
+        "packages/fable_core/test/fable_second_factor_login_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -110,21 +113,25 @@
       },
       "responseModel": {
         "normal": "accessToken + 64-character rotating refreshToken + expiresAt + assuranceLevel/authenticationMethods/mustChangePassword/timeZone/user",
-        "secondFactor": "requiresTwoFactor, twoFactorToken, methods, expiresAt; MUST NOT create authenticated session until completion"
+        "secondFactor": "requiresTwoFactor, twoFactorToken, methods, expiresAt; MUST NOT create authenticated session until completion",
+        "mustChangePassword": "required boolean returned by Fable RC66 after credential login or 2FA; user may only change password or logout until successful change",
+        "expiresAt": "required explicit future UTC ISO date before storing Fable tokens"
       },
-      "backendEffect": "runtime session admission policy, installation binding, 2FA gating, failed-attempt limit and outbox alerts, new-device security notification",
+      "backendEffect": "runtime session admission policy, installation binding, 2FA gating, failed-attempt limit and outbox alerts, new-device security notification; AUTH_PASSWORD_CHANGE_REQUIRED 403 on other protected routes while mustChangePassword=true; change-password and logout remain allowed",
       "otherBackendRequired": [
         "own public sign-in operation/auth scheme and custom request/response field mapping; never reuse Fable /auth/login",
         "installation/device metadata requirements, session-binding policy, 2FA or MFA challenge state and account lockouts",
         "explicit password rule and error codes (invalid/limit/session rejected), safe credential handling and verified success response",
-        "native autofill identifiers separate from storing passwords; registration/provider enablement only if exported"
+        "native autofill identifiers separate from storing passwords; registration/provider enablement only if exported",
+        "explicit optional force-password-change flag/403 code and allowed operations when enabled; no Fable-specific mustChangePassword assumption",
+        "independent authenticated password-change endpoint required when external server locks login; reject unsupported forced login at Wizard acceptance"
       ],
       "missingGates": [
-        "generated real-project contract and full runtime DTO including assuranceLevel, mustChangePassword and expiry reconciliation",
-        "native deviceName/appVersion metadata with user privacy and notification semantics",
-        "401/409/429, lockout/2FA challenge, denied Flutter transport and 2-device end-to-end on Android/iOS",
-        "Other Backend separate sign-in operation and Wizard per-provider/mode mapping",
-        "CI results and true integration verification not yet captured"
+        "real generated-project DB 2-device test of mustChangePassword, 403 gate, change-password revoking all sessions and new login",
+        "Android/iOS tested complete UI and restart-resume with stored credentials",
+        "deviceName/appVersion and TimeZone context with privacy and authoritative FCM events",
+        "full typed auth metadata: assuranceLevel/authenticationMethods/timeZone/user, profile/managed roles",
+        "Other Backend own password-change-required semantic mapping and wizard visibility; never infer Fable guard"
       ]
     },
     {
@@ -157,7 +164,8 @@
       "regressionTests": [
         "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
         "packages/fable_core/test/auth_gateway_identity_regression_test.dart",
-        "packages/fable_core/test/session_concurrency_test.dart"
+        "packages/fable_core/test/session_concurrency_test.dart",
+        "packages/fable_core/test/auth_rc84_password_and_replay_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -172,7 +180,7 @@
       "responseModel": {
         "accessToken": "new access token",
         "refreshToken": "new one-time refresh token, 64 chars",
-        "expiresAt": "session expiry; UI metadata reconciliation not yet implemented"
+        "expiresAt": "future UTC ISO required before token persistence; server session expiry, not access JWT TTL"
       },
       "backendEffect": "atomic refresh rotation; same-installation grace returns AUTH_REFRESH_ALREADY_ROTATED 409; replay beyond grace or on wrong installation can revoke affected session",
       "otherBackendRequired": [
@@ -182,10 +190,11 @@
         "refresh token payload selectors and request headers bound to its own verified contract"
       ],
       "missingGates": [
-        "real MySQL simultaneous 401/refresh race, replay/grace/wrong-installation and two-device tests",
-        "typed handling of AUTH_REFRESH_ALREADY_ROTATED 409 and untrusted response expiry/assurance metadata",
-        "Android/iOS secure storage/recovery on app background and restart",
-        "Other Backend contract and Wizard auth mode mapping, E2E not verified"
+        "real MySQL simultaneous multi-device refresh, replay grace 409 and compromised replay 401 with logging/alerts",
+        "native secure storage recovery at app resume; server time skew and expiration semantics under clock drift",
+        "No automatic retry of 409 with old one-time refresh token; Other backend must specify independent rotation policy",
+        "Server and Flutter full 2FA/forced-password interactions and Wizard E2E",
+        "Server test of 503 timeout/retry and no destructive credential clearing"
       ]
     },
     {
@@ -988,5 +997,5 @@
       "disposition": "NOT_DECIDED"
     }
   ],
-  "snapshotUpdate": "RC83 source guard + regression tests for Login/Refresh/Sessions/Session-policy (seven source-reviewed operations, 33 NOT_DECIDED); RC82 logout/timezone; RC81 change-password. No live E2E or Other Backend acceptance."
+  "snapshotUpdate": "RC84 hardens reviewed Login/Refresh: mandatory password-change after login/2FA/saved-session 403, reject missing or expired UTC session metadata, never retry refresh 409/replay; no new Auth operation promoted. 7 SOURCE_IMPLEMENTED_E2E_PENDING, 33 NOT_DECIDED; 0 live E2E."
 }

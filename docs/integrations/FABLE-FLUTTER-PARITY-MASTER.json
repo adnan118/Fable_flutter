@@ -41,7 +41,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "RC81 تغيير كلمة المرور، RC82 Logout/Timezone، RC83 Login/Refresh/Sessions/Runtime Session Policy: سبع عمليات لديها دليل تنفيذ مصدر واختبارات ضمن الخطة، و33 لم يُتخذ قرار إغلاق بشأنها. جميع العمليات الأربعين تحتاج عقد مشروع مولّد، تكامل Backend حي وAndroid/iOS، وربط Other Backend وWizard؛ 0 E2E.",
+        "RC84: Login and Refresh hardening for mandatory password change, stored-session 403, UTC session expiry and refresh replay; 7/40 remain SOURCE_IMPLEMENTED_E2E_PENDING, 33 NOT_DECIDED. Zero project-live E2E and Other Backend/Wizard approval.",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -181,6 +181,26 @@
             "idempotencyAndReplay"
           ],
           "remaining": "runtime policy changes and admission/revoke behavior, wizard/Other state and E2E"
+        },
+        {
+          "milestone": "RC84",
+          "operationId": "auth.login + auth.refresh (hardening, no new disposition)",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc84_password_and_replay_test.dart",
+            "packages/features/fable_auth/test/mandatory_password_change_page_test.dart",
+            "packages/fable_core/test/fable_second_factor_login_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "structuredErrors",
+            "identityModel",
+            "idempotencyAndReplay"
+          ],
+          "remaining": "real password-change-required 403 on generated project, expiry drift, two devices/Replay Grace, optional Other Backend mapping and Wizard E2E"
         }
       ]
     },
@@ -645,5 +665,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC83: 7/40 Auth operations source-implemented/E2E pending, 33 NOT_DECIDED; 0 live E2E verified; Fable/Other/Wizard parity remains open"
+  "latestSlice": "RC84: 7/40 Auth SOURCE_IMPLEMENTED_E2E_PENDING, 33 NOT_DECIDED; login password-change lock, expiration and refresh replay source changes; no Backend live E2E."
 }
