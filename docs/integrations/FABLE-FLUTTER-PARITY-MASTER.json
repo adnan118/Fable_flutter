@@ -41,7 +41,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "RC84: Login and Refresh hardening for mandatory password change, stored-session 403, UTC session expiry and refresh replay; 7/40 remain SOURCE_IMPLEMENTED_E2E_PENDING, 33 NOT_DECIDED. Zero project-live E2E and Other Backend/Wizard approval.",
+        "RC85 source-reviewed auth.2fa.login.request and complete with exact contract + typed OTP metadata; 9/40 operations source-implemented E2E pending, 31 NOT_DECIDED; 0 live E2E. Other Backend MFA adapter and Wizard parity not completed.",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -49,7 +49,8 @@
         "login/register/reset/refresh/logout and sessions policy",
         "verified methods and request/response/error schemas, refresh rotation, MFA/OTP and step-up",
         "rate limits, device/IP metadata with consent, proof-bound protected changes",
-        "account identifier/autofill and native provider setup"
+        "account identifier/autofill and native provider setup",
+        "2FA pending-first-factor/request/complete operations and method/expiry/installation/OTP semantics must be independently mapped; ExternalAuthBinding currently has no generic MFA support"
       ],
       "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
       "sourceUpdates": [
@@ -201,6 +202,26 @@
             "idempotencyAndReplay"
           ],
           "remaining": "real password-change-required 403 on generated project, expiry drift, two devices/Replay Grace, optional Other Backend mapping and Wizard E2E"
+        },
+        {
+          "milestone": "RC85",
+          "operationId": "auth.2fa.login.request + auth.2fa.login.complete",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc85_two_factor_contract_test.dart",
+            "packages/fable_core/test/fable_second_factor_login_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "identityModel",
+            "clientTransport",
+            "authProviderAndOtp",
+            "structuredErrors",
+            "auditAndAbuse"
+          ],
+          "remaining": "real email/phone OTP delivery and rate limits; Android/iOS device metadata/2FA UI; full Other Backend MFA adapter and Wizard mapping; true project E2E"
         }
       ]
     },
@@ -665,5 +686,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC84: 7/40 Auth SOURCE_IMPLEMENTED_E2E_PENDING, 33 NOT_DECIDED; login password-change lock, expiration and refresh replay source changes; no Backend live E2E."
+  "latestSlice": "RC85: 9/40 Auth SOURCE_IMPLEMENTED_E2E_PENDING (2FA request+complete added); 31 NOT_DECIDED; 0 live E2E, Other Backend MFA/Wizard still unmapped."
 }

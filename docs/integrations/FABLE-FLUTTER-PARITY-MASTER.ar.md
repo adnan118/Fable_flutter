@@ -1,10 +1,20 @@
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
-> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC84 — 2026-11-01.**
+> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC85 — 2026-11-01.**
 > الباك المرجعي وقت الفحص: `adnan118/Fable@226cbcdc542ebe9c005d7445d84cc0ec10631932`.
 > الفرونت المرجعي وقت الفحص: `adnan118/Fable_flutter@94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7` (بعد RC79).
 > **هذا تقرير مصدر وعقود وفحوص CI، وليس اعتماد تشغيل حي أو تكامل إنتاج.**
 > يرجى تحديثه مع كل PR يغلق فجوة، ولا يُستبدَل بسجلات تقدم عابرة.
+
+## RC85 — عمليتا OTP/2FA كاملتان على مستوى مراجعة المصدر
+
+- **Fable RC66:** مراجعة وفصل `auth.2fa.login.request` و`auth.2fa.login.complete`؛ قبل إرسال `twoFactorToken` أو OTP يتحقق Flutter من `operationId/method/path/auth`، ويفحص طريقة التحقق والقناة والمهل وUUID.
+- **معلومات الجهاز:** `deviceName` و`appVersion` اختياريان، يُتحقق منهما قبل Login ويُعاد استخدامهما في إكمال 2FA؛ لا يُستنبط GPS/IP أو اسم هاتف غير موثوق. رسائل الحد الفاشل وجهاز آخر يصدرها Backend عبر Outbox، مع بقاء FCM اختيارياً وفق القدرة المثبتة.
+- **Other Backend:** `ExternalAuthBinding` الحالي لا يملك عقد MFA عاماً. لا نعرض 2FA لـOther تلقائياً؛ تسجيل المتطلبات والـWizard ما زال مفتوحاً لحين Adapter وعقد واختبارات مستقلة.
+- **الإحصاء:** **9/40** `SOURCE_IMPLEMENTED_E2E_PENDING`، و**31/40** `NOT_DECIDED`، و**0/17 E2E**. نجاح مصدر/CI لا يعني اختبار OTP أو Push على جهازين حقيقيين.
+- [دليل RC85 التفصيلي](./FABLE-AUTH-BASELINE-RC85.ar.md) · [جرد عمليات Auth](./FABLE-AUTH-OPERATIONS-RC80.json).
+
+---
 
 ## RC84 — قفل تغيير كلمة المرور والتحقق من انتهاء الجلسة وRefresh Replay
 

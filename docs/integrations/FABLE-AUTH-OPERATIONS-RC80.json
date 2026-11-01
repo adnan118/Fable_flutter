@@ -95,7 +95,8 @@
         "packages/fable_core/test/auth_gateway_identity_regression_test.dart",
         "packages/fable_core/test/auth_rc84_password_and_replay_test.dart",
         "packages/features/fable_auth/test/mandatory_password_change_page_test.dart",
-        "packages/fable_core/test/fable_second_factor_login_test.dart"
+        "packages/fable_core/test/fable_second_factor_login_test.dart",
+        "packages/fable_core/test/auth_rc85_two_factor_contract_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -124,14 +125,16 @@
         "explicit password rule and error codes (invalid/limit/session rejected), safe credential handling and verified success response",
         "native autofill identifiers separate from storing passwords; registration/provider enablement only if exported",
         "explicit optional force-password-change flag/403 code and allowed operations when enabled; no Fable-specific mustChangePassword assumption",
-        "independent authenticated password-change endpoint required when external server locks login; reject unsupported forced login at Wizard acceptance"
+        "independent authenticated password-change endpoint required when external server locks login; reject unsupported forced login at Wizard acceptance",
+        "native deviceName and appVersion optional field mapping when the external server explicitly permits it; no location inference"
       ],
       "missingGates": [
         "real generated-project DB 2-device test of mustChangePassword, 403 gate, change-password revoking all sessions and new login",
         "Android/iOS tested complete UI and restart-resume with stored credentials",
         "deviceName/appVersion and TimeZone context with privacy and authoritative FCM events",
         "full typed auth metadata: assuranceLevel/authenticationMethods/timeZone/user, profile/managed roles",
-        "Other Backend own password-change-required semantic mapping and wizard visibility; never infer Fable guard"
+        "Other Backend own password-change-required semantic mapping and wizard visibility; never infer Fable guard",
+        "actual app bootstrap must supply trusted package version and opt-in device label; do not invent device model or GPS"
       ]
     },
     {
@@ -749,38 +752,138 @@
       "method": "POST",
       "path": "/auth/2fa/login/request",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_REQUIRED",
       "literalOperationReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/login_page.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/two-factor-login.dto.ts",
+        "Fable-Backend-RC66/src/platform/auth/otp.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/fable_second_factor_login_test.dart",
+        "packages/fable_core/test/auth_rc85_two_factor_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/2fa/login/request",
+        "auth": "public pending-first-factor challenge (no Bearer)",
+        "body": {
+          "twoFactorToken": "32..512 chars, memory-only",
+          "clientType": "flutter",
+          "installationId": "the same installation",
+          "preferredChannel": "optional EMAIL/PHONE from server-advertised methods"
+        }
+      },
+      "responseModel": {
+        "challengeId": "UUID v4",
+        "method": "EMAIL_OTP or PHONE_OTP from first-factor list",
+        "channel": "EMAIL or PHONE matching method",
+        "requiresTwoFactor": true,
+        "expiresAt": "future UTC OTP expiry",
+        "twoFactorExpiresAt": "future UTC first-factor expiry",
+        "destination": "optional masked contact, max 191 chars",
+        "transport": "backend-delivery channel, not permission"
+      },
+      "backendEffect": "Validates first-factor user/client/installation, selects channel, enforces OTP resend limit, queues OTP delivery; never authenticates on this operation.",
+      "otherBackendRequired": [
+        "own validated pending-MFA challenge and operationId/method/path/auth scheme; no Fable route inference",
+        "own selector mappings for challenge token/channel/OTP expiry and method list",
+        "own delivery, resend/limit and masked destination/error rules",
+        "no session creation, credential persistence or client-side OTP bypass on request"
+      ],
+      "missingGates": [
+        "real Backend OTP delivery and resend/rate-limit tests with MySQL and email/phone",
+        "Android/iOS lifecycle, UI expiry and accessibility/RTL verification",
+        "full independent Other Backend 2FA binding plus Wizard operation gating",
+        "FCM and in-app notifications semantics only when capability installed"
+      ]
     },
     {
       "id": "auth.2fa.login.complete",
       "method": "POST",
       "path": "/auth/2fa/login/complete",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_REQUIRED",
       "literalOperationReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/login_page.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/two-factor-login.dto.ts",
+        "Fable-Backend-RC66/src/platform/auth/otp.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/fable_second_factor_login_test.dart",
+        "packages/fable_core/test/auth_rc85_two_factor_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/2fa/login/complete",
+        "auth": "public, bound to pending first factor",
+        "body": {
+          "twoFactorToken": "same one-time first factor token",
+          "challengeId": "UUID v4",
+          "code": "4..10 digits",
+          "installationId": "same installation",
+          "clientType": "flutter",
+          "platform": "first-factor context",
+          "deviceName": "optional <=191 chars",
+          "appVersion": "optional <=64 chars"
+        }
+      },
+      "responseModel": {
+        "accessToken": "Bearer",
+        "refreshToken": "64-char rotating secret",
+        "expiresAt": "future UTC session end",
+        "mustChangePassword": "required Boolean",
+        "assuranceLevel": "server AAL",
+        "authenticationMethods": "issued methods",
+        "timeZone": "session timezone",
+        "user": "account presentation fields"
+      },
+      "backendEffect": "Consumes verified OTP and first-factor proof once; binds identity/installation and password version, creates AuthSession only after both factors and may enqueue new-device event.",
+      "otherBackendRequired": [
+        "own MFA completion operation and verified challenge/OTP/identity binding",
+        "native success response/token storage and error mapping with no Fable route assumptions",
+        "mustChangePassword and session expiry semantics when enforced by external backend",
+        "app/device metadata and assurance methods only when its independent contract declares them"
+      ],
+      "missingGates": [
+        "live MySQL concurrent OTP use, limit, revoked/expired challenge and changed password scenarios",
+        "Android/iOS OTP autofill, background/resume and weak network E2E",
+        "Other Backend multi-provider MFA and Wizard mapping E2E not verified",
+        "full typed AAL/user/timezone context and security outbox/FCM native E2E not proven"
+      ]
     },
     {
       "id": "auth.web.2fa.login.request",
@@ -997,5 +1100,5 @@
       "disposition": "NOT_DECIDED"
     }
   ],
-  "snapshotUpdate": "RC84 hardens reviewed Login/Refresh: mandatory password-change after login/2FA/saved-session 403, reject missing or expired UTC session metadata, never retry refresh 409/replay; no new Auth operation promoted. 7 SOURCE_IMPLEMENTED_E2E_PENDING, 33 NOT_DECIDED; 0 live E2E."
+  "snapshotUpdate": "RC85: 2 additional 2FA Auth operations source-reviewed with method/route, OTP response fields, deadlines and optional device context. 9 SOURCE_IMPLEMENTED_E2E_PENDING, 31 NOT_DECIDED; no live E2E; Other Backend/Wizard still require full mapping."
 }

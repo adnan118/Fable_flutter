@@ -41,9 +41,10 @@ test('جميع عمليات Auth الأربعون موثقة بالاسم ومف
  const sourceReviewed=new Set([
    'auth.change-password','auth.logout','auth.session.timezone',
    'auth.login','auth.refresh','auth.sessions','auth.session-policy',
+   'auth.2fa.login.request','auth.2fa.login.complete',
  ]);
  assert.equal(auth.operations.filter(op=>
-   op.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,7);
+   op.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,9);
  for(const op of auth.operations){
    assert.equal(op.realE2EVerified,false);
    assert.equal(op.externalBackendMapped,false);

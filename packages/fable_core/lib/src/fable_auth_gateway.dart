@@ -65,11 +65,17 @@ class FableAuthGateway implements BackendApiGateway {
     required String identifier,
     required String password,
     required String platform,
+    String? deviceName,
+    String? appVersion,
   }) async {
     final id = identifier.trim();
     if (id.isEmpty || password.isEmpty) {
       throw ArgumentError('Credentials are required');
     }
+    // معلومات الجهاز اختيارية، لا تمثل إثبات هوية ولا موقع GPS.
+    // نتحقق منها قبل الاتصال وفق حدود LoginDto الصادرة من Fable.
+    final device=_validatedDeviceMetadata(platform:platform,
+      deviceName:deviceName,appVersion:appVersion);
     _requireAuthOperation('auth.login', 'POST', '/auth/login', requiresAuth: false);
     final identityAtStart = session.identityRevision;
     final response = await _api.request('auth.login', authorized: false, body: {
@@ -77,7 +83,7 @@ class FableAuthGateway implements BackendApiGateway {
       'password': password,
       'clientType': 'flutter',
       'installationId': await session.installationId(),
-      'platform': platform,
+      ...device,
     });
     final data = _payload(response.data);
     if (data['requiresTwoFactor'] == true) {
@@ -88,13 +94,22 @@ class FableAuthGateway implements BackendApiGateway {
       if (challenge.length < 32 || challenge.length > 512) {
         throw const FormatException('Invalid second-factor challenge');
       }
-      final methods=(data['methods'] is List)
-        ? (data['methods'] as List).whereType<String>().toList(growable:false)
-        : <String>[];
+      // لا نعرض طريقة تحقق إلا إذا أعلن عنها Backend Fable صراحة.
+      final rawMethods=data['methods'];
+      if(rawMethods is! List || rawMethods.isEmpty || rawMethods.length>2 ||
+         rawMethods.any((m)=>m is! String ||
+           !const <String>{'EMAIL_OTP','PHONE_OTP'}.contains(m)) ||
+         rawMethods.toSet().length!=rawMethods.length) {
+        throw const FormatException('Invalid second-factor method list');
+      }
+      final methods=List<String>.unmodifiable(rawMethods.cast<String>());
       final challengeExpires=_expiresAt(data['expiresAt'],
         context:'second-factor challenge');
+      if(session.identityRevision!=identityAtStart) {
+        throw FableApiException(409,'session_changed_discard_response');
+      }
       return FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge._(
-        challenge, identityAtStart, methods, platform, challengeExpires,
+        challenge, identityAtStart, methods, device, challengeExpires,
       ));
     }
     // لا نعامل Session مفروضة لتغيير كلمة المرور كدخول طبيعي.
@@ -108,10 +123,21 @@ class FableAuthGateway implements BackendApiGateway {
   /// Request an OTP bound to the pending first-factor challenge. The challenge
   /// is transient memory-only data; it must never be persisted or logged.
   Future<String> requestSecondFactor(FableSecondFactorChallenge pending,
-      {String? preferredChannel}) async {
+      {String? preferredChannel}) async =>
+    (await requestSecondFactorDetails(pending,
+      preferredChannel:preferredChannel)).challengeId;
+
+  /// تفاصيل طلب OTP المصدرية: الوقت ونوع التحقق من الخادم، بلا تخمين.
+  /// نترك واجهة String القديمة للتوافق مع المشاريع السابقة فقط.
+  Future<FableSecondFactorOtpRequest> requestSecondFactorDetails(
+      FableSecondFactorChallenge pending,{String? preferredChannel}) async {
     _checkPending(pending,'auth.2fa.login.request');
     if (preferredChannel != null && !const {'EMAIL','PHONE'}.contains(preferredChannel)) {
       throw ArgumentError('Unsupported second-factor channel');
+    }
+    if(preferredChannel!=null &&
+       !pending.methods.contains(preferredChannel=='EMAIL'?'EMAIL_OTP':'PHONE_OTP')) {
+      throw ArgumentError('Unadvertised second-factor channel');
     }
     final response=await _api.request('auth.2fa.login.request',authorized:false,body:{
       'twoFactorToken': pending._token,
@@ -129,7 +155,32 @@ class FableAuthGateway implements BackendApiGateway {
       ).hasMatch(challengeId)) {
       throw const FormatException('Invalid second-factor OTP challenge');
     }
-    return challengeId;
+    final method=data['method'];
+    if(data['requiresTwoFactor']!=true ||
+       method is! String || !pending.methods.contains(method) ||
+       (preferredChannel!=null &&
+         method!=(preferredChannel=='EMAIL'?'EMAIL_OTP':'PHONE_OTP'))) {
+      throw const FormatException('Invalid Fable OTP method/authorization');
+    }
+    final channel=data['channel'];
+    if(channel is! String ||
+       channel!=(method=='EMAIL_OTP'?'EMAIL':'PHONE')) {
+      throw const FormatException('Mismatched Fable OTP delivery channel');
+    }
+    final otpExpires=_expiresAt(data['expiresAt'],context:'OTP code');
+    final loginExpires=_expiresAt(data['twoFactorExpiresAt'],
+      context:'second-factor login');
+    // لا نقبل مهلة جديدة تتجاوز المدة الأصلية لتحدي العامل الأول.
+    if(loginExpires.isAfter(pending.expiresAt)) {
+      throw const FormatException('Unexpected extension of first-factor challenge');
+    }
+    final masked=data['destination'];
+    if(masked!=null && (masked is! String || masked.length>191 ||
+       RegExp(r'[\x00-\x1F\x7F]').hasMatch(masked))) {
+      throw const FormatException('Invalid masked OTP destination');
+    }
+    return FableSecondFactorOtpRequest._(challengeId,method,channel,
+      otpExpires,loginExpires,masked as String?);
   }
 
   /// Consume a verified OTP once and create a session only on a successful
@@ -140,13 +191,13 @@ class FableAuthGateway implements BackendApiGateway {
     if(!RegExp(r'^\d{4,10}$').hasMatch(code)) {
       throw ArgumentError('Invalid OTP format');
     }
-    if(!RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(challengeId)) {
+    if(!RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(challengeId)) {
       throw ArgumentError('Invalid OTP challenge ID');
     }
     final response=await _api.request('auth.2fa.login.complete',authorized:false,body:{
       'twoFactorToken':pending._token,'challengeId':challengeId,'code':code,
       'clientType':'flutter','installationId':await session.installationId(),
-      'platform':pending.platform,
+      ...pending.device,
     });
     final payload=_payload(response.data);
     // إكمال العامل الثاني يصدر Session كاملة؛ تنطبق عليها سياسة تغيير
@@ -159,13 +210,50 @@ class FableAuthGateway implements BackendApiGateway {
   }
 
   void _checkPending(FableSecondFactorChallenge pending,String operation){
-    if(!_contract.supports(operation))throw StateError(
-      'Second-factor operation missing from verified backend contract: $operation');
+    // لا يكفي operationId عند تمرير رمز OTP أو TwoFactorToken:
+    // يجب التحقق من طريقة ومسار العمليات العامة في RC66.
+    switch(operation){
+      case 'auth.2fa.login.request':
+        _requireAuthOperation(operation,'POST','/auth/2fa/login/request',
+          requiresAuth:false);
+        break;
+      case 'auth.2fa.login.complete':
+        _requireAuthOperation(operation,'POST','/auth/2fa/login/complete',
+          requiresAuth:false);
+        break;
+      default:
+        throw StateError('Unsupported second-factor operation: $operation');
+    }
     if(session.identityRevision!=pending._identityRevision)throw FableApiException(
       409,'session_changed_discard_response');
-    if(pending.expiresAt!=null && !pending.expiresAt!.isAfter(DateTime.now().toUtc())) {
+    if(!pending.expiresAt.isAfter(DateTime.now().toUtc())) {
       throw FableApiException(401,'second_factor_challenge_expired');
     }
+  }
+
+  // معلومات العرض لا تحل محل Installation ID المرتبط فعلياً بالجلسة.
+  static Map<String,String> _validatedDeviceMetadata({
+      required String platform,String? deviceName,String? appVersion}) {
+    if(platform.isEmpty || platform.length>64 ||
+       !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(platform)) {
+      throw ArgumentError('Invalid device platform');
+    }
+    String? optional(String? value,int max,String field){
+      if(value==null)return null;
+      final clean=value.trim();
+      if(clean.isEmpty || clean.length>max ||
+         RegExp(r'[\x00-\x1f\x7f]').hasMatch(clean)) {
+        throw ArgumentError('Invalid $field');
+      }
+      return clean;
+    }
+    final name=optional(deviceName,191,'deviceName');
+    final version=optional(appVersion,64,'appVersion');
+    return Map<String,String>.unmodifiable({
+      'platform':platform,
+      if(name!=null)'deviceName':name,
+      if(version!=null)'appVersion':version,
+    });
   }
 
   Future<bool> _refreshSession() async {
@@ -531,12 +619,22 @@ class FableAuthGateway implements BackendApiGateway {
 /// Never render/log the token. Keep this object only in the login screen state.
 class FableSecondFactorChallenge {
   const FableSecondFactorChallenge._(this._token,this._identityRevision,
-    this.methods,this.platform,this.expiresAt);
+    this.methods,this.device,this.expiresAt);
   final String _token;
   final int _identityRevision;
   final List<String> methods;
-  final String platform;
-  final DateTime? expiresAt;
+  /// نحتفظ بنفس بيانات الجهاز للعامل الثاني. لا نخزن Password أو OTP.
+  final Map<String,String> device;
+  final DateTime expiresAt;
+}
+
+/// بيانات تحدي OTP لا تتضمن الرمز نفسه، ونحتفظ بالعنوان المقنّع فقط.
+class FableSecondFactorOtpRequest {
+  const FableSecondFactorOtpRequest._(this.challengeId,this.method,this.channel,
+    this.expiresAt,this.twoFactorExpiresAt,this.maskedDestination);
+  final String challengeId,method,channel;
+  final DateTime expiresAt,twoFactorExpiresAt;
+  final String? maskedDestination;
 }
 
 class FableLoginOutcome {
