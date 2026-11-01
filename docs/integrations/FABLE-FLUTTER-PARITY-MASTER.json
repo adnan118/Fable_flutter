@@ -41,7 +41,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "RC81 password change; RC82 logout acknowledgment + session timezone: source/Flutter UI tests only. All 40 operations need pinned contract/runtime/E2E review; 37 undecided, three SOURCE_IMPLEMENTED_E2E_PENDING.",
+        "RC81 تغيير كلمة المرور، RC82 Logout/Timezone، RC83 Login/Refresh/Sessions/Runtime Session Policy: سبع عمليات لديها دليل تنفيذ مصدر واختبارات ضمن الخطة، و33 لم يُتخذ قرار إغلاق بشأنها. جميع العمليات الأربعين تحتاج عقد مشروع مولّد، تكامل Backend حي وAndroid/iOS، وربط Other Backend وWizard؛ 0 E2E.",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -105,6 +105,82 @@
             "clientTransport"
           ],
           "remaining": "live IANA validation and AuthSession persistence, multi-session isolation, Other backend binding"
+        },
+        {
+          "milestone": "RC83",
+          "operationId": "auth.login",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+            "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "identityModel",
+            "structuredErrors",
+            "idempotencyAndReplay"
+          ],
+          "remaining": "Login request + 2FA response, optional device details, authenticated session metadata, failed-limit and policy states"
+        },
+        {
+          "milestone": "RC83",
+          "operationId": "auth.refresh",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+            "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "identityModel",
+            "structuredErrors",
+            "idempotencyAndReplay"
+          ],
+          "remaining": "rotation/replay and grace, rejected/expired sessions, session metadata, E2E on two devices"
+        },
+        {
+          "milestone": "RC83",
+          "operationId": "auth.sessions",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "identityModel",
+            "structuredErrors",
+            "idempotencyAndReplay"
+          ],
+          "remaining": "session list/revoke consistency, securityState, 2 devices, native UI and independent Other mapping"
+        },
+        {
+          "milestone": "RC83",
+          "operationId": "auth.session-policy",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+            "packages/fable_core/test/session_policy_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "identityModel",
+            "structuredErrors",
+            "idempotencyAndReplay"
+          ],
+          "remaining": "runtime policy changes and admission/revoke behavior, wizard/Other state and E2E"
         }
       ]
     },
@@ -569,5 +645,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC82: three Auth operations SOURCE_IMPLEMENTED_E2E_PENDING; 37 operations NOT_DECIDED; no feature E2E accepted"
+  "latestSlice": "RC83: 7/40 Auth operations source-implemented/E2E pending, 33 NOT_DECIDED; 0 live E2E verified; Fable/Other/Wizard parity remains open"
 }
