@@ -9,6 +9,7 @@
 ## 1. المرجعية وكيف لا نعود إلى دوامة الإصلاحات
 
 - **المصدر الآلي:** [FABLE-FLUTTER-PARITY-MASTER.json](./FABLE-FLUTTER-PARITY-MASTER.json) = 17 ميزة مرجعية، مع ملفات تنفيذ حقيقية ومتطلبات Backend خارجي ونواقص. لا توجد ميزة عليها `complete=true` أو `liveE2EVerified=true`.
+- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات ومؤشرات مواضعها في المصدر. مؤشرات النصوص ليست إثباتاً للتنفيذ؛ `disposition=NOT_DECIDED` حتى يراجع كل طلب/رد/شاشة/حالة خطأ والـWizard. يتحقق CI من هذه القائمة، والفاحص يقارنها بأسماء المسارات في Backend عند تمرير `--backend-root`.
 - **الفحص:** `node tools/verify-feature-parity-master.mjs` يحرس عدد الميزات والملفات وملكية القرار والـWizard/Other Backend. عند توفر نسخة محلية من Fable Backend نفّذ `node tools/verify-feature-parity-master.mjs --backend-root ../Fable --output ./parity-review.json` لفهرسة **كل عملية في كل Manifest**؛ كل عملية تظهر `NOT_DECIDED` حتى يراجعها المسؤول يدوياً. الخيار `--require-exhaustive` يُبقي بوابة إكمال النقل حمراء حتى يتوفر إثبات عمليات كامل.
 - **مرجع النواقص على GitHub:** [Issue #15](https://github.com/adnan118/Fable_flutter/issues/15) لا يُغلق بالتقدم في عدد PR؛ يُغلق فقط بالاختبارات الحية لجميع الميزات المطلوبة في مشروع محدد.
 - **التوثيق التعليمي:** [FLUTTER-BLOC-LEARNING.ar.md](./FLUTTER-BLOC-LEARNING.ar.md)، و[Wizard](./FRONTEND-SETUP-WIZARD.ar.md).
