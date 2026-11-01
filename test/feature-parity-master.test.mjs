@@ -36,11 +36,39 @@ test('جميع عمليات Auth الأربعون موثقة بالاسم ومف
  assert.ok(auth.operations.some(x=>x.id==='auth.contact.phone.change'));
  assert.ok(auth.operations.some(x=>x.id==='auth.web.login'));
  for(const op of auth.operations){
-   assert.equal(op.disposition,'NOT_DECIDED');
    assert.equal(op.realE2EVerified,false);
-   assert.equal(op.uiFlowReviewed,false);
-   assert.equal(op.modelAndDtoReviewed,false);
+   if(op.id==='auth.change-password'){
+     assert.equal(op.disposition,'SOURCE_IMPLEMENTED_E2E_PENDING');
+     assert.equal(op.modelAndDtoReviewed,true);
+     assert.equal(op.uiFlowReviewed,true);
+     assert.equal(op.permissionAndErrorReviewed,true);
+     assert.ok(op.missingGates.length>=3);
+     assert.ok(op.otherBackendRequired.length>=3);
+   }else{
+     assert.equal(op.disposition,'NOT_DECIDED');
+     assert.equal(op.uiFlowReviewed,false);
+     assert.equal(op.modelAndDtoReviewed,false);
+   }
  }
+});
+
+test('23 قراراً عاماً عابراً للميزات، ولا صلاحية مُفترضة في Other Backend',()=>{
+ const shared=JSON.parse(readFileSync(join(root,
+   'docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json'),'utf8'));
+ assert.equal(shared.decisions.length,23);
+ assert.equal(new Set(shared.decisions.map(x=>x.id)).size,23);
+ for(const row of shared.decisions){
+   assert.ok(row.otherBackendRequirement.length>15);
+   assert.equal(row.fullParityVerified,false);
+   assert.equal(row.projectContractVerified,false);
+ }
+ const broken=structuredClone(shared);
+ broken.decisions.splice(broken.decisions.findIndex(x=>x.id==='sessionPolicy'),1);
+ const temp=mkdtempSync(join(tmpdir(),'shared-policy-'));
+ try{
+   // اختبارات البنية ضمن سجل الميزات وليس عقداً إنتاجياً مزوراً.
+   assert.equal(broken.decisions.length,22);
+ }finally{rmSync(temp,{force:true,recursive:true});}
 });
 
 test('كشف فقدان ملف أو ميزة أو تغيير الملكية أو ادعاء اكتمال زائف',()=>{
