@@ -161,7 +161,11 @@ class _FableLoginPageState extends State<FableLoginPage> {
         return;
       }
       if (result.authenticated) {
+        final signedRevision=_client().session.identityRevision;
         await _saveLoginHint();
+        // قد يتغير الحساب أثناء حفظ اسم الدخول الاختياري؛ لا نعرض
+        // نتيجة الجلسة القديمة لحساب آخر ولا نحفظ كلمة المرور هنا.
+        if(!mounted || _client().session.identityRevision!=signedRevision)return;
         TextInput.finishAutofillContext(shouldSave:true);
         _password.clear();
         setState(() {
@@ -202,10 +206,12 @@ class _FableLoginPageState extends State<FableLoginPage> {
     try {
       final outcome=await _client().completeSecondFactor(
         pending,challengeId:id,code:_otp.text.trim());
+      final signedRevision=_client().session.identityRevision;
       await _saveLoginHint();
+      if(!mounted || _client().session.identityRevision!=signedRevision)return;
       // Do not save after the first factor: only a confirmed full login.
       TextInput.finishAutofillContext(shouldSave:true);
-      if(mounted)setState(() {
+      setState(() {
         _otp.clear();_challenge=null;_challengeId=null;_signedIn=true;
         _passwordChangeRequired=outcome.mustChangePassword;_savedSessionAvailable=false;
         _message=outcome.mustChangePassword
@@ -348,7 +354,7 @@ class _FableLoginPageState extends State<FableLoginPage> {
               const Text('Sign in')),
         ]))),
         if(_message!=null)Padding(padding:const EdgeInsets.only(top:20),child:Text(_message!,textAlign:TextAlign.center)),
-        if(_url.isEmpty)const Padding(padding:EdgeInsets.only(top:14),child:Text(
+        if(_url.isEmpty && widget.gateway==null)const Padding(padding:EdgeInsets.only(top:14),child:Text(
           'Configure with --dart-define=FABLE_API_BASE_URL=https://your-api.example',textAlign:TextAlign.center)),
       ])))));
   }
