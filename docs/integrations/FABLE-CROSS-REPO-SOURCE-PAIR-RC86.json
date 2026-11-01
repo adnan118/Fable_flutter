@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.cross-repo-source-pair",
+  "revision": "RC86",
+  "auditDate": "2026-11-01",
+  "backend": {
+    "repository": "adnan118/Fable",
+    "visibility": "private",
+    "sourceCommitAtAudit": "226cbcdc542ebe9c005d7445d84cc0ec10631932",
+    "sourceFolder": "Fable-Backend-RC66",
+    "authBlueprint": "Fable-Backend-RC66/blueprints/capabilities/auth/manifest.json",
+    "authBlueprintBlobSha": "c300b2ca68172799d005cb5432b8a32e121102d7",
+    "authCapabilityVersion": "4.6.0"
+  },
+  "frontend": {
+    "repository": "adnan118/Fable_flutter",
+    "visibility": "public",
+    "sourceCommitAtAudit": "368cae59e78b4e9244845c344c45aa83804f7b28",
+    "authLedger": "docs/integrations/FABLE-AUTH-OPERATIONS-RC80.json",
+    "masterLedger": "docs/integrations/FABLE-FLUTTER-PARITY-MASTER.json",
+    "wizard": "tools/flutter-setup-wizard.mjs"
+  },
+  "counts": {
+    "authBackendOperations": 40,
+    "authSourceReviewed": 9,
+    "authUndecided": 31,
+    "featureFamilies": 17,
+    "liveE2EAccepted": 0
+  },
+  "validation": {
+    "backendAuthOperationIdsAndMethodPaths": "verify against pinned backend blueprint, not starter demo",
+    "backendContentHash": "exact auth manifest Git blob hash",
+    "frontendSourceGate": "node --test + Flutter CI",
+    "backendActualCode": "Backend source behavior audit; no live generated project acceptance",
+    "otherBackend": "distinct gateway and mapping, no Fable auth route imports",
+    "zip": "GitHub Actions artifact in private Backend repository only; ZIP contains git-tracked source, ledger, provenance and hashes"
+  },
+  "disclaimer": "Source-sync integrity is not a claim of Backend+database+FCM+Android+iOS real E2E parity; do not export production credentials, private .env, key stores, node_modules or caches."
+}
