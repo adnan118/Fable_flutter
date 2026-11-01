@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Flutter setup wizard: import a Backend-generated handoff, or manually draft
-// UI decisions for a non-Fable Backend. Never invent auth/security policy.
+// Wizard: القرار الأول هو Fable أم Backend خارجي، مع فصل العقود تماماً.
+// لا نخترع Auth/OTP/Provider/Sessions ولا نفعّل ميزة شبكة بلا عقد مثبت.
+// الشرح: docs/integrations/FRONTEND-SETUP-WIZARD.ar.md
+// خطة كل الميزات: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,copyFileSync,rmSync,existsSync} from 'node:fs';
 import {resolve,join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
