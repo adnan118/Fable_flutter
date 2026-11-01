@@ -96,6 +96,7 @@ class _AppState extends State<FableStarterApp> {
   @override void dispose() {
     unawaited(_fablePushIdentityEvents?.cancel());
     FableNotificationNavigation.instance.reset();
+    _managedEntities.dispose();
     super.dispose();
   }
   // FABLE_PUSH_ROUTES_END
@@ -104,6 +105,9 @@ class _AppState extends State<FableStarterApp> {
   // UI locale belongs to the app, not to an optional Fable/Other Backend.
   // Never persist a locale the generated policy has not explicitly declared.
   final FableLocalePreferenceStore _localeStore=FableLocalePreferenceStore();
+  // In-memory only: auth identity events invalidate this selection. Other
+  // Backend apps are never wrapped in the Fable-specific context scope.
+  final FableManagedEntityStore _managedEntities=FableManagedEntityStore();
   final GlobalKey<ScaffoldMessengerState> _localeMessengerKey=
     GlobalKey<ScaffoldMessengerState>();
   Locale? _locale; // null = follow device language
@@ -163,6 +167,8 @@ class _AppState extends State<FableStarterApp> {
     if (!backend.canUseFableContract) return _Bootstrap(backend,null,null,null,null);
     // Fable-specific contracts are never loaded for an external Backend.
     final contract=await FableContract.fromAssets(rootBundle);
+    const apiBase=String.fromEnvironment('FABLE_API_BASE_URL');
+    if(mounted)_managedEntities.bindBackend('${contract.contractHash}|$apiBase');
     return _Bootstrap(backend,contract,null,null,null);
   }
 
@@ -184,11 +190,15 @@ class _AppState extends State<FableStarterApp> {
       child:MaterialUiCompatibilityBridge(
         child:FutureBuilder<_Bootstrap>(future:_bootstrap,builder:(context,state) {
         final connection=state.data;
-        return connection==null ? child! : FableAccessBootstrap(
+        final surface=connection==null ? child! : FableAccessBootstrap(
           fableContract:connection.fableContract,
           externalCatalog:connection.externalContract,
           child:child!,
         );
+        // Only a verified Fable Backend can expose managed entity context.
+        // The scope does not insert request headers; each feature must opt in.
+        return connection?.fableContract==null?surface:
+          FableManagedEntityScope(store:_managedEntities,child:surface);
         })),
     ),
     // FABLE_ACCESS_BUILDER_END
