@@ -38,7 +38,7 @@ test('جميع عمليات Auth الأربعون موثقة بالاسم ومف
  assert.ok(auth.operations.some(x=>x.id==='auth.web.login'));
  for(const op of auth.operations){
    assert.equal(op.realE2EVerified,false);
-   if(op.id==='auth.change-password'){
+   if(['auth.change-password','auth.logout','auth.session.timezone'].includes(op.id)){
      assert.equal(op.disposition,'SOURCE_IMPLEMENTED_E2E_PENDING');
      assert.equal(op.modelAndDtoReviewed,true);
      assert.equal(op.uiFlowReviewed,true);
