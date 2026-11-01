@@ -59,7 +59,7 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     frontendGitHead:existsSync(join(front,'.git'))?gitHead(front):null,
     backendGitHead:null,authSourceBlobVerified:false,
     backendRouteCount:null,backendCapabilityCount:null,
-    backendRoutesAbsent:[],backendRouteMismatches:[],
+    backendCapabilityInventory:[],backendRoutesAbsent:[],backendRouteMismatches:[],
     sourceReviewed:counts.sourceReviewed,notDecided:counts.undecided,
     featureFamilies:master.features.length,liveE2EAccepted:0,
     otherBackendMfaApproved:false,projectGeneratedLiveTested:false,
@@ -99,8 +99,20 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     // This never claims feature parity. Inventory is provided for manual review.
     const capabilities=join(back,'Fable-Backend-RC66/blueprints/capabilities');
     const rows=readdirSync(capabilities,{withFileTypes:true})
-      .filter(x=>x.isDirectory()).map(x=>x.name);
+      .filter(x=>x.isDirectory()).map(x=>x.name).sort();
     report.backendCapabilityCount=rows.length;
+    report.backendCapabilityInventory=rows.map(name=>{
+      const manifestFile=join(capabilities,name,'manifest.json');
+      if(!existsSync(manifestFile))return{name,manifestPresent:false,operations:null};
+      const capability=json(manifestFile);
+      assert(capability.name===name && Array.isArray(capability.routes),
+        'invalid Backend capability blueprint: '+name);
+      const ids=capability.routes.map(o=>o.id);
+      assert(ids.every(x=>typeof x==='string') &&
+        ids.length===new Set(ids).size,'duplicate Backend operations in '+name);
+      return{name,manifestPresent:true,version:capability.version??null,
+        operations:ids.length,routeIds:ids,liveE2EVerified:false};
+    });
     report.sourceOnly=false;
   }
   return report;
