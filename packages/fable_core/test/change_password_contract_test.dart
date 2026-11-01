@@ -9,6 +9,7 @@ class _Session extends FableSecureSession {
   var clearCount=0;
   @override Future<String?> get accessToken async=>token;
   @override Future<String?> get refreshToken async=>null;
+  @override Future<String> installationId()async=>'0123456789abcdef0123456789abcdef';
   @override Future<bool> clearSessionIfIdentity(int expectedIdentity,{
     String? expectedAccessToken,String? expectedRefreshToken,
   })async{
