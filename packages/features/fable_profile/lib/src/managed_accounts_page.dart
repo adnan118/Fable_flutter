@@ -156,6 +156,31 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       setState(()=>_busy=false);}
   }
 
+  Future<void> _publicPreview(FableManagedAccount entity)async{
+    if(_busy||entity.status!='ACTIVE'||entity.visibility!='PUBLIC'||
+       entity.slug==null||!_repo.canViewPublic)return;
+    final revision=widget.gateway.session.identityRevision;
+    setState((){_busy=true;_message=null;});
+    try{
+      final publicEntity=await _repo.publicBySlug(entity.slug!);
+      if(!mounted||revision!=widget.gateway.session.identityRevision)return;
+      await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
+        title:Text(_ar?'الملف العام':'Public entity preview'),
+        content:Column(mainAxisSize:MainAxisSize.min,
+          crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(publicEntity.nameAr),Text(publicEntity.nameEn),
+          Text(publicEntity.type),Text(publicEntity.slug),
+        ]),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx),
+          child:Text(_ar?'إغلاق':'Close'))]));
+    }catch(_){
+      if(mounted&&revision==widget.gateway.session.identityRevision)
+        setState(()=>_message=_ar?'تعذّر جلب الملف العام للكيان.':
+          'Backend did not confirm public visibility.');
+    }finally{if(mounted&&revision==widget.gateway.session.identityRevision)
+      setState(()=>_busy=false);}
+  }
+
   Future<void> _edit(FableManagedAccount entity)async{
     if(_busy||!entity.isOwner||!_repo.canUpdateDetails||
        !const {'ACTIVE','DISABLED'}.contains(entity.status))return;
@@ -391,6 +416,11 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
             TextButton.icon(icon:const Icon(Icons.info_outline),
               onPressed:_busy?null:()=>unawaited(_details(entity)),
               label:Text(ar?'التفاصيل':'Details')),
+          if(entity.status=='ACTIVE'&&entity.visibility=='PUBLIC'&&
+             entity.slug!=null&&_repo.canViewPublic)
+            TextButton.icon(icon:const Icon(Icons.public),
+              onPressed:_busy?null:()=>unawaited(_publicPreview(entity)),
+              label:Text(ar?'معاينة الملف العام':'Public preview')),
           if(entity.isOwner&&const {'ACTIVE','DISABLED'}.contains(entity.status)&&
              _repo.canUpdateDetails)
             TextButton.icon(icon:const Icon(Icons.edit_outlined),
