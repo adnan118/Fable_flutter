@@ -9,8 +9,14 @@ import 'change_password_page.dart';
 /// نجاح هذه الشاشة لا يعني نقل تغيير البريد/الهاتف/كلمة المرور وOTP كلها.
 /// لفهم انتقال الحالات: docs/integrations/FLUTTER-BLOC-LEARNING.ar.md
 class FableLoginPage extends StatefulWidget {
-  const FableLoginPage({super.key,required this.contract,this.gateway});
+  const FableLoginPage({super.key,required this.contract,this.gateway,
+    this.deviceName,this.appVersion});
   final FableContract contract;
+  /// اسم الجهاز اختياري ويُمرره التطبيق فقط بعد موافقة/سياسة خصوصية واضحة.
+  /// لا نخترع موديل جهاز أو مدينة من المنطقة الزمنية.
+  final String? deviceName;
+  /// يُمرر إصدار الحزمة الفعلي من Bootstrap أو --dart-define، لا من Backend.
+  final String? appVersion;
   /// حقن Gateway يسهّل Widget tests من دون افتراض URL أو Backend حي.
   /// ملكية هذا المورد تبقى للمستدعي، لذا لا تتخلص منه الشاشة عند الخروج.
   final FableAuthGateway? gateway;
@@ -142,6 +148,10 @@ class _FableLoginPageState extends State<FableLoginPage> {
         identifier: _user.text,
         password: _password.text,
         platform: defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
+        deviceName:widget.deviceName,
+        appVersion:widget.appVersion ??
+          (const String.fromEnvironment('FABLE_APP_VERSION').isEmpty
+            ? null:const String.fromEnvironment('FABLE_APP_VERSION')),
       );
       if (!mounted) return;
       if (result.requiresTwoFactor) {
