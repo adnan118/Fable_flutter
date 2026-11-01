@@ -26,7 +26,7 @@ class FableLocalePreferenceStore {
  Future<String?> load(Iterable<String> allowed) async {
   final supported=_approved(allowed);
   final stored=_readForTest!=null
-    ?await _readForTest!():await _storage.read(key:_key);
+    ?await _readForTest():await _storage.read(key:_key);
   // Invalid/removed locales fall back to the platform preference. Do not
   // erase unknown data silently when project language settings change.
   return stored!=null&&supported.contains(stored)?stored:null;
@@ -35,7 +35,7 @@ class FableLocalePreferenceStore {
   final supported=_approved(allowed);
   if(locale!=null&&!supported.contains(locale))
    throw ArgumentError.value(locale,'locale','Not in generated UI languages');
-  if(_writeForTest!=null){await _writeForTest!(locale);return;}
+  if(_writeForTest!=null){await _writeForTest(locale);return;}
   if(locale==null)await _storage.delete(key:_key);
   else await _storage.write(key:_key,value:locale);
  }
