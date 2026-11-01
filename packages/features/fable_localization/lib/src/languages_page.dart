@@ -62,14 +62,28 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
  @override void dispose(){_client?.dispose();super.dispose();}
  @override Widget build(BuildContext context){
   final ar=Localizations.localeOf(context).languageCode=='ar';
+  final uiLocale=FableAppLocaleScope.maybeOf(context);
   return Scaffold(appBar:AppBar(title:Text(_copy?.text('languages.title',ar?'اللغات المدعومة':'Supported languages')??(ar?'اللغات المدعومة':'Supported languages'))),
    body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
     if(!supported)Text(ar?'كتالوج اللغات غير متاح في عقد هذا الخادم.':'Language catalog is not in the imported contract.'),
     if(_busy)const LinearProgressIndicator(),
     if(_error!=null)Text(ar?'تعذر جلب قائمة اللغات.':_error!),
+    if(uiLocale!=null)TextButton(
+      onPressed:uiLocale.selectedTag==null?null:()=>uiLocale.onSelect(null),
+      child:Text(ar?'استخدام لغة الجهاز':'Use device language')),
     for(final language in _languages??<FableLanguage>[])ListTile(
-     title:Text(language.name),subtitle:Text(language.code),
-     trailing:language.isDefault?Icon(Icons.check_circle,semanticLabel:ar?'الافتراضية':'Default'):null),
+     title:Text(language.name),
+     subtitle:Text(uiLocale==null||uiLocale.supports(language.code)
+       ?language.code
+       :ar?'هذه اللغة متاحة في الخادم وليست ضمن لغات واجهة التطبيق':
+         'Available in Backend, but not bundled in this app UI'),
+     onTap:uiLocale?.supports(language.code)==true
+       ?()=>uiLocale!.onSelect(language.code):null,
+     trailing:uiLocale?.selectedTag==language.code
+       ?Icon(Icons.check_circle,semanticLabel:ar?'المحددة':'Selected')
+       :language.isDefault
+         ?Icon(Icons.info_outline,semanticLabel:ar?'افتراضية الخادم':'Backend default')
+         :null),
     if(supported)FilledButton(onPressed:_busy?null:load,child:Text(ar?'تحميل اللغات':'Load languages')),
     if(copySupported)...[
       const SizedBox(height:12),
@@ -82,7 +96,7 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
       OutlinedButton(onPressed:_checkingCopy?null:()=>checkCopy(force:true),
         child:Text(ar?'فحص تحديثات النصوص':'Check for copy updates')),
     ],
-    const SizedBox(height:12),Text(ar?'هذه اللغات مدعومة في الخادم؛ تغيير لغة الواجهة يتم عبر إعدادات التطبيق.':'These languages are supported by the backend; app language is managed separately.'),
+    const SizedBox(height:12),Text(ar?'يعرض الخادم اللغات التي يدعمها؛ لا يمكن اختيار لغة للواجهة إلا إذا أدرجها إعداد التطبيق.':'The Backend lists its languages. Only bundled app UI languages can be selected.'),
    ])),
   );
  }
