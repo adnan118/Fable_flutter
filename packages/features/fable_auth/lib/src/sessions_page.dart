@@ -36,7 +36,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
       _clearSensitive();
       _selectedSessionIds.clear();
       setState((){
-        _sessions=null;_policy=null;_loading=false;
+        _sessions=null;_policy=null;_loading=false;_actionBusy=false;
         _timeZoneStatus=null;_timeZoneController.clear();
         _error='The authentication session changed. Sign in again to refresh devices.';
       });
