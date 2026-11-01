@@ -10,56 +10,183 @@
       "method": "GET",
       "path": "/auth/session-policy",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_REQUIRED",
       "literalOperationReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/sessions_page.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+        "packages/fable_core/test/session_policy_contract_test.dart",
+        "test/session-policy-for-wizard.test.mjs"
+      ],
+      "requestModel": {
+        "method": "GET",
+        "path": "/auth/session-policy",
+        "auth": "public",
+        "body": "none"
+      },
+      "responseModel": {
+        "mode": "single|multi",
+        "maxActive": "integer 0..100; 0 unlimited in multi; 1 in single",
+        "overflow": "revoke-oldest|reject-new",
+        "onePerInstallation": "boolean required by Fable runtime RC66"
+      },
+      "backendEffect": "server runtime environment overrides generator defaults; single mode revokes older sessions; multi reject-new may fail Login with AUTH_SESSION_LIMIT_REACHED 409",
+      "otherBackendRequired": [
+        "own runtime-authoritative policy endpoint or documented explicit no-policy state, never borrow Fable defaults",
+        "verified mode/maxActive/overflow/per-installation meanings, no guessed multi-device indicator",
+        "server retains final enforcement; UI displays policy only after validated response",
+        "Wizard must distinguish build-time hints from actual runtime policy and re-read upon relevant changes"
+      ],
+      "missingGates": [
+        "dynamic runtime policy changes and two-device Login limit behavior on real Backend DB",
+        "Android/iOS UI with no policy, reject-new and old-session revocation outcomes",
+        "Other Backend policy binding or explicit unsupported state in Wizard",
+        "CI and live project tests pending"
+      ]
     },
     {
       "id": "auth.login",
       "method": "POST",
       "path": "/auth/login",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_REQUIRED",
       "literalOperationReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/login_page.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/login.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+        "packages/features/fable_auth/test/login_contract_smoke_test.dart",
+        "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/login",
+        "auth": "public (no access token)",
+        "body": {
+          "identifier": "string 1..191",
+          "password": "string 1..128",
+          "installationId": "16..191 allowed chars, stable random per installation",
+          "clientType": "flutter",
+          "platform": "platform hint <=64",
+          "deviceName": "optional <=191; not currently populated in Flutter",
+          "appVersion": "optional <=64; not currently populated in Flutter"
+        }
+      },
+      "responseModel": {
+        "normal": "accessToken + 64-character rotating refreshToken + expiresAt + assuranceLevel/authenticationMethods/mustChangePassword/timeZone/user",
+        "secondFactor": "requiresTwoFactor, twoFactorToken, methods, expiresAt; MUST NOT create authenticated session until completion"
+      },
+      "backendEffect": "runtime session admission policy, installation binding, 2FA gating, failed-attempt limit and outbox alerts, new-device security notification",
+      "otherBackendRequired": [
+        "own public sign-in operation/auth scheme and custom request/response field mapping; never reuse Fable /auth/login",
+        "installation/device metadata requirements, session-binding policy, 2FA or MFA challenge state and account lockouts",
+        "explicit password rule and error codes (invalid/limit/session rejected), safe credential handling and verified success response",
+        "native autofill identifiers separate from storing passwords; registration/provider enablement only if exported"
+      ],
+      "missingGates": [
+        "generated real-project contract and full runtime DTO including assuranceLevel, mustChangePassword and expiry reconciliation",
+        "native deviceName/appVersion metadata with user privacy and notification semantics",
+        "401/409/429, lockout/2FA challenge, denied Flutter transport and 2-device end-to-end on Android/iOS",
+        "Other Backend separate sign-in operation and Wizard per-provider/mode mapping",
+        "CI results and true integration verification not yet captured"
+      ]
     },
     {
       "id": "auth.refresh",
       "method": "POST",
       "path": "/auth/refresh",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_REQUIRED",
       "literalOperationReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/refresh.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/fable_core/lib/src/fable_api.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+        "packages/fable_core/test/auth_gateway_identity_regression_test.dart",
+        "packages/fable_core/test/session_concurrency_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/refresh",
+        "auth": "public (rotating refresh secret in body, no Bearer)",
+        "body": {
+          "refreshToken": "64 base64url chars",
+          "installationId": "stable per-installation id",
+          "clientType": "flutter"
+        }
+      },
+      "responseModel": {
+        "accessToken": "new access token",
+        "refreshToken": "new one-time refresh token, 64 chars",
+        "expiresAt": "session expiry; UI metadata reconciliation not yet implemented"
+      },
+      "backendEffect": "atomic refresh rotation; same-installation grace returns AUTH_REFRESH_ALREADY_ROTATED 409; replay beyond grace or on wrong installation can revoke affected session",
+      "otherBackendRequired": [
+        "own confirmed refresh operation and semantics, or documented single-Bearer/no refresh; never call Fable route",
+        "rotation, replay, expiry and concurrency behavior; compare-and-swap storage and account isolation",
+        "exact 401/403/409/error codes, safe GET retry only; mutations must NOT repeat automatically",
+        "refresh token payload selectors and request headers bound to its own verified contract"
+      ],
+      "missingGates": [
+        "real MySQL simultaneous 401/refresh race, replay/grace/wrong-installation and two-device tests",
+        "typed handling of AUTH_REFRESH_ALREADY_ROTATED 409 and untrusted response expiry/assurance metadata",
+        "Android/iOS secure storage/recovery on app background and restart",
+        "Other Backend contract and Wizard auth mode mapping, E2E not verified"
+      ]
     },
     {
       "id": "auth.logout",
@@ -122,20 +249,70 @@
       "method": "GET",
       "path": "/auth/sessions",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_REQUIRED",
       "literalOperationReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/login_page.dart",
         "packages/features/fable_auth/lib/src/sessions_page.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_baseline_rc83_contract_test.dart",
+        "packages/fable_core/test/active_sessions_contract_test.dart",
+        "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+      ],
+      "requestModel": {
+        "method": "GET",
+        "path": "/auth/sessions",
+        "auth": "Bearer of current account",
+        "body": "none"
+      },
+      "responseModel": {
+        "type": "array of active server sessions",
+        "fields": [
+          "id UUID",
+          "isCurrent bool",
+          "createdAt",
+          "expiresAt",
+          "lastUsedAt optional",
+          "deviceName optional",
+          "displayName optional",
+          "platform optional",
+          "clientType optional",
+          "appVersion optional",
+          "securityState ACTIVE/SUSPICIOUS/COMPROMISED (presentation)"
+        ],
+        "excluded": "refresh and access tokens must never be returned"
+      },
+      "backendEffect": "server filters revoked and expired sessions and sets isCurrent using authenticated sessionId; list is never derived from a local device count",
+      "otherBackendRequired": [
+        "independently declared authenticated list-of-devices operation, response field mapping and pagination/limit semantics",
+        "current-device identity, timestamps/timezone, optional security state, scope/authorization and error response",
+        "strictly no client-side invented device lists or Fable routes; safe refresh only on verified GET",
+        "Wizard must only render sessions UI if external backend verifies this operation and field selectors"
+      ],
+      "missingGates": [
+        "real two-device state and securityState surface with revocation race and live runtime contract",
+        "verified empty/error/authorization UX Android/iOS plus App Lifecycle tests",
+        "Other Backend session list + field binding and Wizard eligibility",
+        "test source CI pending; backend securityState vocabulary versioning"
+      ]
     },
     {
       "id": "auth.session.timezone",
@@ -811,5 +988,5 @@
       "disposition": "NOT_DECIDED"
     }
   ],
-  "snapshotUpdate": "RC82 logout acknowledgement and session.timezone source+UI tests; auth.change-password RC81; all other 37 operations not verified"
+  "snapshotUpdate": "RC83 source guard + regression tests for Login/Refresh/Sessions/Session-policy (seven source-reviewed operations, 33 NOT_DECIDED); RC82 logout/timezone; RC81 change-password. No live E2E or Other Backend acceptance."
 }
