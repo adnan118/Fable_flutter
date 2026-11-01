@@ -2,3 +2,7 @@
 
 Read `.fable/agent/CONTRACT.md` and `.fable/agent/context.md`; read assigned `.fable/skills/**/SKILL.md`.
 Never replace a manual file, invent operations, bypass app-scoped Backend settings, or rely on UI visibility for server access.
+
+## Mandatory continuity / استمرارية الخطة
+Read `docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md` and its JSON ledger before adding a capability; update both with per-operation gaps and Other Backend requirements. Do not mark any of the 17 features complete without a separately pinned project contract, live role/permission and Android/iOS E2E evidence. Write concise Arabic comments explaining security/contract decisions or link to `docs/integrations/FLUTTER-BLOC-LEARNING.ar.md`. Do not silently conflate Backend Fable's ~50 capabilities with Flutter's 17 feature families; use the manual/Wizard contract split.
+
