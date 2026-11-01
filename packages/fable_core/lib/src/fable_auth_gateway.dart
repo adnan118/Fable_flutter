@@ -249,11 +249,11 @@ class FableAuthGateway implements BackendApiGateway {
     }
     final name=optional(deviceName,191,'deviceName');
     final version=optional(appVersion,64,'appVersion');
-    return <String,String>{
+    return Map<String,String>.unmodifiable({
       'platform':platform,
       if(name!=null)'deviceName':name,
       if(version!=null)'appVersion':version,
-    };
+    });
   }
 
   Future<bool> _refreshSession() async {
