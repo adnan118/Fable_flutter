@@ -69,19 +69,52 @@ export function validateMaster(root,master){
  }
  if(!seen.has('auth')||!seen.has('managed-accounts')||!seen.has('financial-platform'))
    errors.push('Critical Auth/Managed/Finance capability coverage missing');
+ const decisionPath=resolve(root,'docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json');
+ if(!existsSync(decisionPath))errors.push('Missing cross-cutting Backend decision register');
+ else {
+   const inventory=JSON.parse(readFileSync(decisionPath,'utf8'));
+   const rows=inventory.decisions;
+   const required=['clientTransport','sessionPolicy','identityModel','managedEntitiesPolicy',
+     'authProviderAndOtp','structuredErrors','idempotencyAndReplay','conditionalWrite',
+     'cacheConsistency','dataOwnershipAndDeletion','featureAccessAndCommercial',
+     'capabilityInstalledVsBlueprint','languageAndTime','roleBasedUiAndFeatures'];
+   if(inventory.schemaVersion!==1||inventory.kind!=='fable.backend-wide-decision-register'||
+      !Array.isArray(rows)||rows.length!==23||!noDuplicates(rows.map(x=>x.id))||
+      required.some(x=>!rows.some(r=>r.id===x))||
+      rows.some(r=>!isNonempty(r.backendSource)||!isNonempty(r.behavior)||
+        !isNonempty(r.otherBackendRequirement)||!isNonempty(r.flutterAction)||
+        r.fullParityVerified!==false||r.projectContractVerified!==false||
+        r.liveE2EVerified!==false))
+     errors.push('Missing/mutated shared Backend/Wizard/Other decision policy');
+ }
  const authPath=resolve(root,AUTH_INVENTORY);
  if(!existsSync(authPath))errors.push('Missing Auth 40-operation checklist');
  else {
    const inventory=JSON.parse(readFileSync(authPath,'utf8'));
    const operations=inventory.operations;
+   // يسمح بنقل عملية مصدرية واحدة دون أن تصبح معتمدة إنتاجياً:
+   // كل عملية SOURCE_IMPLEMENTED يلزمها أدلة ملفات واختبارات،
+   // بينما كل عملية NOT_DECIDED لا يجوز نسب تنفيذ/اختبار إليها.
    if(inventory.schemaVersion!==1||inventory.operationCount!==40||
       !Array.isArray(operations)||operations.length!==40||
       !noDuplicates(operations.map(o=>o.id))||
-      operations.some(o=>!o.id.startsWith('auth.')||
-        !isNonempty(o.method)||!isNonempty(o.path)||
-        o.disposition==='DONE'||o.realE2EVerified!==false||
-        o.modelAndDtoReviewed!==false||o.uiFlowReviewed!==false))
-     errors.push('Auth 40-operation checklist is missing or falsely declared complete');
+      operations.some(o=>{
+        if(!o.id.startsWith('auth.')||!isNonempty(o.method)||
+           !isNonempty(o.path)||o.realE2EVerified!==false)return true;
+        if(o.disposition==='NOT_DECIDED')
+          return o.modelAndDtoReviewed!==false||o.uiFlowReviewed!==false;
+        if(o.disposition!=='SOURCE_IMPLEMENTED_E2E_PENDING'||
+           o.modelAndDtoReviewed!==true||o.uiFlowReviewed!==true||
+           o.permissionAndErrorReviewed!==true)return true;
+        if(!Array.isArray(o.flutterEvidence)||o.flutterEvidence.length<2||
+           !Array.isArray(o.regressionTests)||o.regressionTests.length<2||
+           !Array.isArray(o.missingGates)||o.missingGates.length<3||
+           !Array.isArray(o.otherBackendRequired)||o.otherBackendRequired.length<3)
+           return true;
+        return [...o.flutterEvidence,...o.regressionTests].some(path=>
+          !isNonempty(path)||!existsSync(resolve(root,path)));
+      }))
+     errors.push('Auth operation checklist has unsupported or unverified completeness claims');
  }
  const paths=[
  'tools/flutter-setup-wizard.mjs',
