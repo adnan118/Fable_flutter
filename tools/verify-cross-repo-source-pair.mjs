@@ -105,9 +105,12 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
       const manifestFile=join(capabilities,name,'manifest.json');
       if(!existsSync(manifestFile))return{name,manifestPresent:false,operations:null};
       const capability=json(manifestFile);
-      assert(capability.name===name && Array.isArray(capability.routes),
+      // Some capabilities are non-route decisions/services. Inventory them
+      // without inventing HTTP operations, but reject malformed route arrays.
+      assert(capability.name===name && (capability.routes==null ||
+        Array.isArray(capability.routes)),
         'invalid Backend capability blueprint: '+name);
-      const ids=capability.routes.map(o=>o.id);
+      const ids=(capability.routes??[]).map(o=>o.id);
       assert(ids.every(x=>typeof x==='string') &&
         ids.length===new Set(ids).size,'duplicate Backend operations in '+name);
       return{name,manifestPresent:true,version:capability.version??null,
