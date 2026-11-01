@@ -4,7 +4,7 @@ import 'package:fable_core/fable_core.dart';
 import 'package:fable_auth/src/change_password_page.dart';
 
 FableContract _catalog(bool enabled)=>FableContract(
- contractHash:'a'*64,projectName:'fable-ui-test',
+ contractHash:List<String>.filled(64,'a').join(),projectName:'fable-ui-test',
  selectionMode:'explicit',featureIds:const <String>{},
  operations:enabled?const {
  'auth.change-password':FableOperation('auth.change-password',
