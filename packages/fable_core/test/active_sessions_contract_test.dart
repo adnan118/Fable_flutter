@@ -7,6 +7,7 @@ void main(){
     'id':sessionId,'isCurrent':true,
     'displayName':'Work laptop','deviceName':'Laptop',
     'clientType':'flutter','platform':'android','appVersion':'2.1',
+    'securityState':'SUSPICIOUS',
     'createdAt':'2026-10-01T12:00:00.000Z',
     'lastUsedAt':'2026-10-20T10:20:00.000Z',
     'expiresAt':'2026-11-01T12:00:00.000Z',
@@ -17,6 +18,7 @@ void main(){
     expect(record.isCurrent,true);
     expect(record.displayName,'Work laptop');
     expect(record.platform,'android');
+    expect(record.securityState,'SUSPICIOUS');
     expect(record.createdAt.toUtc().month,10);
     expect(record.expiresAt.toUtc().month,11);
     expect(record.lastUsedAt,isNotNull);
@@ -30,6 +32,7 @@ void main(){
     expect(record.displayName,isNull);
     expect(record.isCurrent,false);
     expect(record.lastUsedAt,isNull);
+    expect(record.securityState,isNull);
   });
   test('Malformed session records fail closed',(){
     for(final bad in <Map<String,dynamic>>[
@@ -41,6 +44,8 @@ void main(){
       {...valid,'deviceName':'device\u0000hidden'},
       {...valid,'displayName':List<String>.filled(200,'a').join()},
       {...valid,'platform':42},
+      {...valid,'securityState':'UNKNOWN'},
+      {...valid,'securityState':17},
     ]){
       expect(()=>FableActiveSession.fromMap(bad),throwsFormatException);
     }
