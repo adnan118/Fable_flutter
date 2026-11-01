@@ -54,6 +54,38 @@ class FableManagedAccount {
   }
 }
 
+/// Public presentation is strictly smaller than the authenticated entity
+/// model; never deserialize memberships, owner identifiers or private flags.
+class FableManagedPublicEntity {
+  const FableManagedPublicEntity({
+    required this.id,required this.type,required this.nameAr,
+    required this.nameEn,required this.slug,this.createdAt,
+  });
+  final String id,type,nameAr,nameEn,slug;
+  final DateTime? createdAt;
+  factory FableManagedPublicEntity.fromPayload(Object? raw){
+    if(raw is! Map||raw['visibility']!='PUBLIC')
+      throw const FormatException('Not a public managed entity');
+    String requiredString(String key,{int max=191}){
+      final v=raw[key];
+      if(v is! String||v.isEmpty||v.length>max||
+         RegExp(r'[\x00-\x1f\x7f<>]').hasMatch(v))
+        throw FormatException('Invalid public entity field: $key');
+      return v;
+    }
+    final id=requiredString('id',max:36),slug=requiredString('slug');
+    if(!FableManagedAccount._uuid.hasMatch(id)||
+       !RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(slug))
+      throw const FormatException('Invalid public entity identity');
+    final created=raw['createdAt'];
+    if(created!=null&&(created is! String||DateTime.tryParse(created)==null))
+      throw const FormatException('Invalid public entity createdAt');
+    return FableManagedPublicEntity(id:id,type:requiredString('type',max:64),
+      nameAr:requiredString('nameAr'),nameEn:requiredString('nameEn'),
+      slug:slug,createdAt:created is String?DateTime.parse(created).toUtc():null);
+  }
+}
+
 /// Volatile selection, validated against the activation response.
 /// Backend remains the final authority for every subsequent scoped request.
 class FableManagedAccountSelection {
@@ -181,6 +213,29 @@ class FableManagedAccountsRepository {
   bool get canCreate=>can('/managed-entities','POST');
   bool get canInvite=>can('/managed-entities/{id}/invitations','POST');
   bool get canReadInvitations=>can('/managed-entities/invitations/me','GET');
+  String _publicOperation(){
+    final exported=contract.operations.values.where((operation)=>
+      operation.method=='GET'&&operation.path=='/managed-entities/public/{slug}'&&
+      !operation.requiresAuth&&operation.credentialHeader==null).toList();
+    if(exported.length!=1)
+      throw StateError('Public managed entity operation is not exported');
+    return exported.single.id;
+  }
+  bool get canViewPublic {
+    try {_publicOperation();return true;}catch(_){return false;}
+  }
+  Future<FableManagedPublicEntity> publicBySlug(String slug)async{
+    if(!RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(slug))
+      throw ArgumentError('Invalid public entity slug');
+    final revision=gateway.session.identityRevision;
+    final response=await gateway.execute(_publicOperation(),path:{'slug':slug});
+    if(revision!=gateway.session.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final item=FableManagedPublicEntity.fromPayload(_unwrap(response.data));
+    if(item.slug!=slug)
+      throw const FormatException('Backend returned different public entity');
+    return item;
+  }
 
   static Object? _unwrap(Object? raw){
     if(raw is Map && raw.containsKey('data'))return raw['data'];
