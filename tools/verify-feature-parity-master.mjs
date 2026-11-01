@@ -12,6 +12,7 @@ import {pathToFileURL} from 'node:url';
 import {FEATURE_IDS,FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
 
 const MASTER='docs/integrations/FABLE-FLUTTER-PARITY-MASTER.json';
+const AUTH_INVENTORY='docs/integrations/FABLE-AUTH-OPERATIONS-RC80.json';
 const EXPECTED_CAPABILITIES=Object.freeze([
 'access-control','account-integrity','account-lifecycle','ai-assistant',
 'asvs-security','audit','auth-assurance','auth','availability-governance',
@@ -68,6 +69,20 @@ export function validateMaster(root,master){
  }
  if(!seen.has('auth')||!seen.has('managed-accounts')||!seen.has('financial-platform'))
    errors.push('Critical Auth/Managed/Finance capability coverage missing');
+ const authPath=resolve(root,AUTH_INVENTORY);
+ if(!existsSync(authPath))errors.push('Missing Auth 40-operation checklist');
+ else {
+   const inventory=JSON.parse(readFileSync(authPath,'utf8'));
+   const operations=inventory.operations;
+   if(inventory.schemaVersion!==1||inventory.operationCount!==40||
+      !Array.isArray(operations)||operations.length!==40||
+      !noDuplicates(operations.map(o=>o.id))||
+      operations.some(o=>!o.id.startsWith('auth.')||
+        !isNonempty(o.method)||!isNonempty(o.path)||
+        o.disposition==='DONE'||o.realE2EVerified!==false||
+        o.modelAndDtoReviewed!==false||o.uiFlowReviewed!==false))
+     errors.push('Auth 40-operation checklist is missing or falsely declared complete');
+ }
  const paths=[
  'tools/flutter-setup-wizard.mjs',
  'packages/fable_core/lib/src/external_operation_catalog.dart',
@@ -156,6 +171,19 @@ export function checkParity(root,{backendRoot=null}={}){
    const audit=report.backendManifestAudit;
    report.errors.push(...audit.invalid,...audit.newCapabilities.map(x=>'NEW_BACKEND_CAPABILITY: '+x),
      ...audit.missingCapabilities.map(x=>'BACKEND_CAPABILITY_REMOVED: '+x));
+   // المقارنة بأسماء عمليات Auth الأربعين، وليس فقط رقم 40.
+   // أي عملية مضافة أو محذوفة من Blueprint تفتح Gap ولا تمر بصمت.
+   const expected=JSON.parse(readFileSync(resolve(project,AUTH_INVENTORY),'utf8'));
+   const recorded=new Set(expected.operations.map(op=>op.id));
+   const actual=new Set(audit.routes.filter(op=>op.capability==='auth').map(op=>op.id));
+   report.authOperationDrift={
+     newAuthOperations:[...actual].filter(id=>!recorded.has(id)),
+     removedAuthOperations:[...recorded].filter(id=>!actual.has(id)),
+   };
+   for(const id of report.authOperationDrift.newAuthOperations)
+     report.errors.push('AUTH_ROUTE_ADDED_REQUIRES_REVIEW: '+id);
+   for(const id of report.authOperationDrift.removedAuthOperations)
+     report.errors.push('AUTH_ROUTE_REMOVED_REQUIRES_REVIEW: '+id);
  }
  return report;
 }
