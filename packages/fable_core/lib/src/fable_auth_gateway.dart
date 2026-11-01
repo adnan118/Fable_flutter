@@ -169,8 +169,10 @@ class FableAuthGateway implements BackendApiGateway {
     var revokedOnServer = false;
     try {
       if (await session.accessToken != null) {
-        await _api.request('auth.logout');
-        revokedOnServer = true;
+        final response=await _api.request('auth.logout');
+        // الوصول إلى HTTP 200 لا يثبت إبطال الجلسة. Fable يعيد revoked.
+        // لا نخلط نجاح حذف اعتماد الهاتف مع نجاح الخادم.
+        revokedOnServer=_payload(response.data)['revoked']==true;
       }
     } catch (_) {
       // Device sign-out is still necessary even when the server is unreachable.
@@ -247,6 +249,37 @@ class FableAuthGateway implements BackendApiGateway {
     }
     final response=await _api.request('auth.session-policy',authorized:false);
     return FableSessionPolicy.fromMap(_payload(response.data));
+  }
+
+  /// المنطقة الزمنية تخص عرض الجلسة الحالية فقط، لا الحجز أو المواعيد.
+  /// Fable يفرض التحقق الفعلي من IANA timezone، ولا نخمنه من جهاز المستخدم.
+  /// docs/integrations/FABLE-AUTH-BASELINE-RC82.ar.md
+  bool get supportsSessionTimeZone {
+    final op=_contract.operations['auth.session.timezone'];
+    return op!=null&&op.method=='POST'&&
+      op.path=='/auth/session/timezone'&&op.requiresAuth&&
+      op.credentialHeader==null;
+  }
+
+  Future<String> updateSessionTimeZone(String zone) async {
+    if(!supportsSessionTimeZone)
+      throw StateError('Backend did not export authenticated auth.session.timezone');
+    // يفحص العميل شكل الإدخال فقط. المرجع النهائي لـIANA هو Backend.
+    final value=zone.trim();
+    if(value.isEmpty||value.length>64||
+       !RegExp(r'^[A-Za-z0-9_+./-]+$').hasMatch(value)||
+       value.contains('..')||value.startsWith('/')||value.endsWith('/')){
+      throw ArgumentError('Invalid time zone input');
+    }
+    final revision=session.identityRevision;
+    final response=await _api.request('auth.session.timezone',
+      body:{'timeZone':value});
+    if(session.identityRevision!=revision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final result=_payload(response.data);
+    if(result['updated']!=true||result['timeZone']!=value)
+      throw const FormatException('Backend did not confirm session time zone');
+    return value;
   }
 
   Future<Object?> sessions() async {
