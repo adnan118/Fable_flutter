@@ -6,9 +6,9 @@ import 'fable_api.dart';
 import 'fable_contract.dart';
 import 'fable_session.dart';
 
-/// An authenticated Fable mobile session uses only the exported backend Auth contract.
-/// Refresh rotation is single-flight in FableApiClient. Network errors during refresh
-/// never destroy the local session; only definitive authorization failures do.
+/// المصادقة هنا تخص Fable فقط وتستخدم عمليات Auth المصدّرة لا مسارات متوقعة.
+/// لا نحذف الجلسة عند Timeout/5xx، بل عند فشل صلاحية نهائي موثّق.
+/// تفاصيل الأربعين عملية المتبقية: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
 class FableAuthGateway implements BackendApiGateway {
   FableAuthGateway({
     required Uri baseUri,
