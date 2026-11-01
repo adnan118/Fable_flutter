@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'sessions_page.dart';
+import 'change_password_page.dart';
 
 /// شاشة الدخول الخاصة بـFable تعتمد عقد مصادقة الموبايل ومعرّف الجهاز.
 /// نجاح هذه الشاشة لا يعني نقل تغيير البريد/الهاتف/كلمة المرور وOTP كلها.
@@ -221,6 +222,24 @@ class _FableLoginPageState extends State<FableLoginPage> {
         Text(enabled?'Fable account':'Login contract missing',style:Theme.of(context).textTheme.headlineSmall),
         if (_signedIn) Padding(padding: const EdgeInsets.symmetric(vertical: 16),
           child: FilledButton.tonal(onPressed:_busy?null:_logout,child:const Text('Sign out'))),
+        if(_signedIn && widget.contract.supports('auth.change-password'))
+          Padding(padding:const EdgeInsets.only(bottom:12),
+            child:OutlinedButton.icon(
+              onPressed:_busy?null:()async{
+                final changed=await Navigator.of(context).push<bool>(
+                  MaterialPageRoute<bool>(builder:(_)=>FableChangePasswordPage(
+                    gateway:_client(),contract:widget.contract)));
+                if(changed==true&&mounted){
+                  // عند تغيير كلمة المرور ألغى الباك كل الجلسات، لا نُظهر Login صالحاً.
+                  setState((){
+                    _signedIn=false;_savedSessionAvailable=false;_challenge=null;
+                    _message='Password updated. Sign in again on every device.';
+                  });
+                }
+              },
+              icon:const Icon(Icons.password),
+              label:const Text('Change password'),
+            )),
         if(_signedIn && widget.contract.supports('auth.sessions'))
           Padding(padding:const EdgeInsets.only(bottom:12),
             child:OutlinedButton.icon(

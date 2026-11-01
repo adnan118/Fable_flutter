@@ -32,7 +32,8 @@
       "frontendEvidence": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/login_page.dart",
-        "packages/features/fable_auth/lib/src/sessions_page.dart"
+        "packages/features/fable_auth/lib/src/sessions_page.dart",
+        "packages/features/fable_auth/lib/src/change_password_page.dart"
       ],
       "sourceStatus": "source_and_selected_ui",
       "externalStatus": "mapped_partial",
@@ -40,7 +41,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "تدقيق جميع عمليات Auth الأربعين؛ واجهات تغيير الاسم/البريد/الهاتف/كلمة المرور وإعادة التعيين وسياسات الجلسات و2FA وإلغاء الأجهزة وسيناريوهات الإغلاق",
+        "Auth 40 operations: auth.change-password now has source+UI tests (RC81), but real policy, two-device E2E, and all other Auth operations remain unapproved",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -50,7 +51,27 @@
         "rate limits, device/IP metadata with consent, proof-bound protected changes",
         "account identifier/autofill and native provider setup"
       ],
-      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "sourceUpdates": [
+        {
+          "milestone": "RC81",
+          "operationId": "auth.change-password",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/change_password_page.dart",
+          "tests": [
+            "packages/fable_core/test/change_password_contract_test.dart",
+            "packages/features/fable_auth/test/change_password_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "clientTransport",
+            "idempotencyAndReplay",
+            "structuredErrors"
+          ],
+          "remaining": "live two-device/backend E2E; Other mapping; dynamic policy and security notifications"
+        }
+      ]
     },
     {
       "id": "profile",
@@ -511,5 +532,7 @@
       ],
       "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT"
     }
-  ]
+  ],
+  "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
+  "latestSlice": "RC81 — 23 global decisions and Fable change-password source implementation; no feature E2E accepted"
 }

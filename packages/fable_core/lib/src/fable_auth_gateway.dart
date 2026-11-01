@@ -180,6 +180,42 @@ class FableAuthGateway implements BackendApiGateway {
     return revokedOnServer;
   }
 
+  /// تغيير كلمة المرور عملية حساسة في عقد Fable؛ ليست تعديل ملف شخصي.
+  /// يتحقق الخادم من كلمة المرور الحالية ومن سياسة التعقيد وتاريخ الإعادة،
+  /// وعند نجاحه يلغي جميع الجلسات بما فيها الحالية. لذلك نمسح محلياً فقط
+  /// جلسة الهوية التي بدأت العملية، ولا نمسح جلسة مستخدم دخل أثناء الطلب.
+  /// المصدر: docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final operation=_contract.operations['auth.change-password'];
+    if(operation==null||operation.method!='POST'||
+       operation.path!='/auth/change-password'||!operation.requiresAuth||
+       operation.credentialHeader!=null) {
+      throw StateError('Authenticated change-password operation not exported by Fable');
+    }
+    // لا نفرض سياسة تعقيد محلية: سياسة الخادم قابلة للتغيير؛ تُعرض أخطاؤه.
+    if(currentPassword.isEmpty||newPassword.isEmpty||
+       currentPassword.length>1024||newPassword.length>1024||
+       currentPassword==newPassword) {
+      throw ArgumentError('Password fields are invalid or unchanged');
+    }
+    final revision=session.identityRevision;
+    final response=await _api.request(operation.id,body:{
+      'currentPassword':currentPassword,'newPassword':newPassword,
+    });
+    if(session.identityRevision!=revision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final payload=_payload(response.data);
+    if(payload['changed']!=true)
+      throw const FormatException('Backend did not confirm password change');
+    // لا يوجد Refresh أو إعادة تسجيل تلقائي: Backend ألغى كل الجلسات.
+    final cleared=await session.clearSessionIfIdentity(revision);
+    if(!cleared)
+      throw FableApiException(409,'session_changed_discard_response');
+  }
+
   /// Contract-declared account snapshot, distinct from project-specific Profile.
   /// Presentation-only change; no email/phone/username/security edits.
   Future<FableAccountSummary> updateAccountDisplayName(String name) async {
