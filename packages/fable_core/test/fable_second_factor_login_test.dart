@@ -76,7 +76,7 @@ void main(){
   final session=_Session();
   final dio=_mock((request)async=>_response(request,{
     'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join(),
-    'expiresAt':'2099-01-01T00:00:00Z'}));
+    'expiresAt':'2099-01-01T00:00:00Z','methods':['EMAIL_OTP']}));
   final gateway=FableAuthGateway(baseUri:Uri.parse('https://example.test'),
     contract:_contract({'auth.login':_ops['auth.login']!}),secureSession:session,client:dio);
   addTearDown(gateway.dispose);
@@ -88,7 +88,7 @@ void main(){
   final session=_Session();
   final dio=_mock((request)async=>_response(request,{
     'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join(),
-    'expiresAt':'2099-01-01T00:00:00Z'}));
+    'expiresAt':'2099-01-01T00:00:00Z','methods':['EMAIL_OTP']}));
   final gateway=FableAuthGateway(baseUri:Uri.parse('https://example.test'),
     contract:_contract(),secureSession:session,client:dio);
   addTearDown(gateway.dispose);
