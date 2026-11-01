@@ -16,3 +16,4 @@ export 'src/fable_financial_freshness.dart';
 export 'src/fable_immutable_payload.dart';
 export 'src/fable_remembered_identifier.dart';
 export 'src/fable_locale_preference.dart';
+export 'src/fable_app_locale_scope.dart';
