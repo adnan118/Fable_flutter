@@ -477,7 +477,7 @@ class FableAuthGateway implements BackendApiGateway {
   /// عندما يغيب expiresAt من استجابة Fable. لا نعيد إرسال Refresh تلقائياً.
   static DateTime _expiresAt(Object? value,{required String context}) {
     if(value is! String || value.length>64 ||
-       !RegExp(r'^\\d{4}-\\d{2}-\\d{2}T').hasMatch(value) ||
+       !RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(value) ||
        !value.endsWith('Z')) {
       throw FormatException('Missing UTC expiration in $context');
     }
