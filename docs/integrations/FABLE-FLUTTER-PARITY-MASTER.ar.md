@@ -1,16 +1,25 @@
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
-> **مرجع الخطة الموحّد، RC80 — 2026-11-01.**
+> **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC83 — 2026-11-01.**
 > الباك المرجعي وقت الفحص: `adnan118/Fable@226cbcdc542ebe9c005d7445d84cc0ec10631932`.
 > الفرونت المرجعي وقت الفحص: `adnan118/Fable_flutter@94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7` (بعد RC79).
 > **هذا تقرير مصدر وعقود وفحوص CI، وليس اعتماد تشغيل حي أو تكامل إنتاج.**
 > يرجى تحديثه مع كل PR يغلق فجوة، ولا يُستبدَل بسجلات تقدم عابرة.
 
+## RC83 — تدقيق أساس Auth وتثبيت عقد الجلسات
+
+- **الجديد على فرع RC83:** تدقيق `auth.login`, `auth.refresh`, `auth.sessions`, `auth.session-policy` مقابل طريقة ومسار ومصادقة Fable الحقيقية؛ منع الاتصال عند اختلاف العقد، وحماية Refresh Token، وعرض سياسة الأجهزة من Runtime لا من Wizard، ونقل حالة أمن الجلسة إلى DTO وواجهة المراجعة.
+- **الإحصاء المرحلي:** 7 من 40 عملية Auth لديها تطبيق/مراجعة مصدرية واختبارات مكتوبة، و33 عملية `NOT_DECIDED`؛ ما زال عدد ميزات Flutter المعتمدة E2E **0 من 17**. لا تساوي كتابة الاختبار نجاح CI؛ ولا يساوي نجاح CI اعتماد Backend حقيقي.
+- **مرجع الفحص والتصميم:** [RC83 التفصيلي](./FABLE-AUTH-BASELINE-RC83.ar.md) و[جرد العمليات الـ40](./FABLE-AUTH-OPERATIONS-RC80.json).
+- **الخطوات المفتوحة:** تشغيل اختبارات CI، اختبار توليد عقد مشروع فايبل فعلي مع DB/جهازين Android+iOS، 401/409/429 و2FA/Refresh Replay/Session Limits، وربط عمليات Other Backend في Wizard بشكل مستقل. لا إعلان اكتمال Auth قبل تحققها.
+
+---
+
 ## 1. المرجعية وكيف لا نعود إلى دوامة الإصلاحات
 
 - **المصدر الآلي:** [FABLE-FLUTTER-PARITY-MASTER.json](./FABLE-FLUTTER-PARITY-MASTER.json) = 17 ميزة مرجعية، مع ملفات تنفيذ حقيقية ومتطلبات Backend خارجي ونواقص. لا توجد ميزة عليها `complete=true` أو `liveE2EVerified=true`.
-- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات. أغلبها `NOT_DECIDED`، و3 عمليات (`auth.change-password` في RC81 و`auth.logout` و`auth.session.timezone` في RC82) أصبحت `SOURCE_IMPLEMENTED_E2E_PENDING` فقط؛ و37 عملية أخرى ما زالت `NOT_DECIDED`. يحظر CI إعلان اكتمال دون دليل E2E.
-- **RC82 أساس Auth:** [فروق Logout وSession Timezone ومتطلبات Other Backend](./FABLE-AUTH-BASELINE-RC82.ar.md).
+- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات. أغلبها `NOT_DECIDED`، و7 عمليات (RC81: `auth.change-password`؛ RC82: `auth.logout`, `auth.session.timezone`؛ RC83: `auth.login`, `auth.refresh`, `auth.sessions`, `auth.session-policy`) أصبحت `SOURCE_IMPLEMENTED_E2E_PENDING` فقط؛ و33 عملية أخرى ما زالت `NOT_DECIDED`. يحظر CI إعلان اكتمال دون دليل E2E.
+- **RC82 أساس Auth:** [فروق Logout وSession Timezone ومتطلبات Other Backend](./FABLE-AUTH-BASELINE-RC82.ar.md). **RC83:** [Login/Refresh/Sessions/Runtime Session Policy ومطابقة الباك الآخر](./FABLE-AUTH-BASELINE-RC83.ar.md).
 - **23 قراراً عاماً يؤثر على جميع الميزات:** [الجرد الآلي](./FABLE-BACKEND-WIDE-DECISIONS-RC81.json) و[الشرح بالعربية](./FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md). هذه السياسات تشمل هوية المستخدم والجلسات وHTTP والتكرار الآمن وحفظ البيانات والصلاحيات والكاش؛ منها ما يُستورد من العقد ومنها ما يجب قراءته من Runtime أو يبقى Backend-only.
 - **الفحص:** `node tools/verify-feature-parity-master.mjs` يحرس عدد الميزات والملفات وملكية القرار والـWizard/Other Backend. عند توفر نسخة محلية من Fable Backend نفّذ `node tools/verify-feature-parity-master.mjs --backend-root ../Fable --output ./parity-review.json` لفهرسة **كل عملية في كل Manifest**؛ كل عملية تظهر `NOT_DECIDED` حتى يراجعها المسؤول يدوياً. الخيار `--require-exhaustive` يُبقي بوابة إكمال النقل حمراء حتى يتوفر إثبات عمليات كامل.
 - **مرجع النواقص على GitHub:** [Issue #15](https://github.com/adnan118/Fable_flutter/issues/15) لا يُغلق بالتقدم في عدد PR؛ يُغلق فقط بالاختبارات الحية لجميع الميزات المطلوبة في مشروع محدد.
@@ -45,7 +54,7 @@
 
 | الميزة / ملكية القرار | ما نُفّذ ويمكن إثبات مصدره | ما لم يثبت أو يجب إكماله |
 |---|---|---|
-| **Auth** — Server | Login/Refresh والجلسات جزئية؛ **RC81 تغيير كلمة المرور** و**RC82 تأكيد Logout وتحديث IANA timezone للجلسة** مع اختبارات مصدر وواجهة | **3 من 40** عمليات عليها دليل مصدر وWidget فقط؛ **37** بحاجة مراجعة، وE2E/Other/Wizard لم تعتمد بعد |
+| **Auth** — Server | Login/Refresh وجلسات الموبايل جزئياً؛ **RC81** تغيير كلمة المرور، **RC82** تأكيد Logout وتحديث المنطقة الزمنية، **RC83** تدقيق طريقة/مسار/مصادقة Login/Refresh/Sessions/Session-policy وعرض سياسة Runtime وحالة أمن الجلسة | **7 من 40** عمليات لديها شيفرة/اختبارات مصدرية بانتظار تشغيل التحقق؛ **33** لم تُحسم، وE2E/Other/Wizard غير معتمدة |
 | **Profile** — Hybrid | الحساب الأساسي/اسم العرض؛ RC71 تفاصيل الكيان وتعديله؛ RC78 إنشاء الكيان والدعوات العامة ومدير/مشاهد؛ RC79 سياق الكيان المتطاير؛ أعضاء/دعوات/OTP متوفرة في المصدر | الـ18 عملية وسلوك العضويات والكيانات الحقيقية، تفعيل سياق الكيان في **كل** عملية مشروع تحتاجه، مستخدمون حقيقيون وصلاحيات Admin/multi-profile |
 | **Notifications** — Hybrid | Inbox/Read، ربط تنقل إشعار، تسجيل Push وتخزين التوكن وربطه بجلسة من بعض الأجزاء | ترحيب/سياسة/جهاز جديد/حد فشل ضمن DB/Outbox/FCM، إلغاء التوكن واللغة والخلفية/المقدمة وPush فعلي |
 | **Media** — Hybrid | Repository للرفع والأجزاء والحالة والقراءة وواجهة رفع | كل 16 عملية بما فيها protected playback/refresh/end، التخزين R2 وتجربة استئناف، أذونات وحصص وعمل على الأجهزة |
