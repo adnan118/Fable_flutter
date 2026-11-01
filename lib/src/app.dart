@@ -177,15 +177,20 @@ class _AppState extends State<FableStarterApp> {
     localizationsDelegates:AppLocalizations.localizationsDelegates,
     // FABLE_ACCESS_BUILDER_BEGIN
 
-    builder:(context,child)=>MaterialUiCompatibilityBridge(
-      child:FutureBuilder<_Bootstrap>(future:_bootstrap,builder:(context,state) {
+    builder:(context,child)=>FableAppLocaleScope(
+      allowedTags:FableLanguagePolicy.localeTags,
+      selectedTag:_locale?.toLanguageTag(),
+      onSelect:(tag)=>unawaited(_selectLocale(tag??'device')),
+      child:MaterialUiCompatibilityBridge(
+        child:FutureBuilder<_Bootstrap>(future:_bootstrap,builder:(context,state) {
         final connection=state.data;
         return connection==null ? child! : FableAccessBootstrap(
           fableContract:connection.fableContract,
           externalCatalog:connection.externalContract,
           child:child!,
         );
-      })),
+        })),
+    ),
     // FABLE_ACCESS_BUILDER_END
     theme:FableTokens.theme(Brightness.light),
     darkTheme:FableTokens.theme(Brightness.dark),
