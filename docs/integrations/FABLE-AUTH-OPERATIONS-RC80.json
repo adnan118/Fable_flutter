@@ -120,16 +120,61 @@
       "method": "POST",
       "path": "/auth/change-password",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/change_password_page.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/dto/change-password.dto.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/change_password_page.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/change_password_contract_test.dart",
+        "packages/features/fable_auth/test/change_password_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/change-password",
+        "auth": "Bearer",
+        "body": {
+          "currentPassword": "string nonempty",
+          "newPassword": "string nonempty"
+        }
+      },
+      "responseModel": {
+        "changed": "true exactly"
+      },
+      "backendEffect": "all current and other user sessions revoked; session and second factor challenges invalidated",
+      "missingGates": [
+        "real generated project contract fingerprint",
+        "runtime password policy and server 400/409/429 cases",
+        "live test with two devices and real AuthSession DB",
+        "Android/iOS native keychain/autofill and action notifications",
+        "optional Other Backend feature binding + full session-revocation semantics",
+        "Wizard per-operation effect confirmation"
+      ],
+      "otherBackendRequired": [
+        "explicit authenticated password-change endpoint and current/new password body selectors",
+        "verified success response or server-side status confirmation",
+        "logout/revoke session policy and account identity scope",
+        "error codes for policy/reuse/current-password/limits and reliable network ambiguity behavior"
+      ]
     },
     {
       "id": "auth.social.challenge",
@@ -689,5 +734,6 @@
       "realE2EVerified": false,
       "disposition": "NOT_DECIDED"
     }
-  ]
+  ],
+  "snapshotUpdate": "RC81 password change source+widget tests; all other Auth operations remain unreviewed"
 }
