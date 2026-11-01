@@ -269,6 +269,21 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
       appBar:AppBar(title:Text(ar?'أجهزتي والجلسات النشطة':'My devices & sessions')),
       body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
         Text(mode,style:Theme.of(context).textTheme.titleMedium),
+        // يعرض الخادم السياسة الفعلية؛ لا نستنتج السماح بعدة أجهزة من
+        // عدد الجلسات الظاهر أو من إعداد قديم في Wizard.
+        if(policy!=null && policy.mode=='multi')...[
+          const SizedBox(height:4),
+          Text(policy.overflow=='reject-new'
+            ? (ar?'عند بلوغ الحد يجب إنهاء جلسة قبل إضافة جهاز جديد.'
+              :'When the limit is reached, sign out a session before adding a device.')
+            : (ar?'عند بلوغ الحد، يمكن للخادم إلغاء الجلسة الأقدم.'
+              :'At the limit, the server may revoke the oldest session.')),
+        ],
+        if(policy?.onePerInstallation==true)...[
+          const SizedBox(height:4),
+          Text(ar?'يسمح الخادم بجلسة فعالة واحدة لكل تثبيت للتطبيق.'
+            :'The server allows one active session per app installation.'),
+        ],
         const SizedBox(height:8),
         Text(ar?'هذه البيانات مصدرها الخادم مباشرة، وليست قائمة أجهزة محفوظة على الهاتف.'
           :'This list comes from the active Backend, not from stored phone credentials.'),
@@ -310,6 +325,9 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
             subtitle:Text([
               if(session.platform?.isNotEmpty==true)session.platform!,
               if(session.clientType?.isNotEmpty==true)session.clientType!,
+              if(session.securityState=='SUSPICIOUS')
+                (ar?'تنبيه: يوصى بمراجعة هذه الجلسة'
+                  :'Security notice: review this session'),
               '${ar?'آخر نشاط':'Last active'}: ${session.lastUsedAt?.toLocal().toString()??(ar?'غير متاح':'Unavailable')}',
               '${ar?'تنتهي':'Expires'}: ${session.expiresAt.toLocal()}',
             ].join(' · ')),
