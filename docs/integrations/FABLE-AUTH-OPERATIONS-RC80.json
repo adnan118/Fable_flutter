@@ -71,13 +71,51 @@
         "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_baseline_logout_timezone_test.dart",
+        "packages/fable_core/test/auth_gateway_identity_regression_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/logout",
+        "auth": "Bearer current session",
+        "body": "none"
+      },
+      "responseModel": {
+        "revoked": "true confirms remote revocation; false does not",
+        "clientActions": [
+          "DELETE_LOCAL_PUSH_TOKEN"
+        ],
+        "sessionId": "UUID of session, when returned"
+      },
+      "backendEffect": "revoke current session only; queue revocation and server cleanup; local credentials always cleared even if network unknown",
+      "otherBackendRequired": [
+        "separate logout operation with explicit session-revocation confirmation semantics",
+        "contract declaring whether identity or device push token must be unregistered",
+        "secure local credential clear on any logout failure; old response cannot clear a newer user",
+        "known error envelope; own endpoint and auth mechanism"
+      ],
+      "missingGates": [
+        "real Fable Backend/DB verification for revocation, notification/FCM cleanup",
+        "Android/iOS secure storage and notification token expiry integration",
+        "other Backend matching logout acknowledgement and session expiry handling",
+        "full live concurrent logout and refresh race testing"
+      ]
     },
     {
       "id": "auth.sessions",
@@ -107,13 +145,51 @@
       "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/update-session-timezone.dto.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_baseline_logout_timezone_test.dart",
+        "packages/features/fable_auth/test/session_timezone_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/session/timezone",
+        "auth": "Bearer current session",
+        "body": {
+          "timeZone": "IANA timezone string max 64"
+        }
+      },
+      "responseModel": {
+        "updated": "true required",
+        "timeZone": "must exactly equal submitted value"
+      },
+      "backendEffect": "update current AuthSession timezone for presentation; not stored UTC or business scheduling",
+      "otherBackendRequired": [
+        "optional contract-bound authenticated session timezone operation and request field mapping",
+        "server validation against IANA timezone database; stable accepted-value response",
+        "exactly defined presentation-only timezone scope vs scheduled event timezone",
+        "401/403/400/errors/unknown operation and session-change semantics"
+      ],
+      "missingGates": [
+        "verified live contract and runtime with timezone persistence across refresh",
+        "backend response validation on malformed/expired IANA zones",
+        "Other Backend semantic mapping and Wizard capability availability",
+        "Android/iOS UI and multi-session timezone isolation E2E"
+      ]
     },
     {
       "id": "auth.change-password",
@@ -735,5 +811,5 @@
       "disposition": "NOT_DECIDED"
     }
   ],
-  "snapshotUpdate": "RC81 password change source+widget tests; all other Auth operations remain unreviewed"
+  "snapshotUpdate": "RC82 logout acknowledgement and session.timezone source+UI tests; auth.change-password RC81; all other 37 operations not verified"
 }
