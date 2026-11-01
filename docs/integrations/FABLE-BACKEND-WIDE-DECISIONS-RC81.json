@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.backend-wide-decision-register",
+  "generatedAt": "2026-11-01",
+  "backendMainAtAudit": "226cbcdc542ebe9c005d7445d84cc0ec10631932",
+  "sourceRoot": "Fable-Backend-RC66/",
+  "scope": "Design guidance and source-derived behavior only; runtime values vary per generated project. No production project contract or live runtime provided.",
+  "rules": {
+    "backendAuthority": "Project-pinned generated contract + runtime policy; never infer it from Blueprints",
+    "otherAuthority": "Separate Other backend catalog, semantic bindings and own runtime contract",
+    "disposition": "No row complete unless source, exported decision, runtime effect, UX, error, tests and E2E proven"
+  },
+  "decisions": [
+    {
+      "id": "clientTransport",
+      "backendSource": "docs/TECHNICAL-DECISIONS.ar.md",
+      "behavior": "Web HttpOnly cookie, Flutter Bearer+Secure Storage; one Backend, separate client transport",
+      "flutterAction": "enforce",
+      "otherBackendRequirement": "Other: credential mechanism, secure token lifecycle, cookie/CSRF rules if any",
+      "reviewStatus": "native_transport_isolated",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "cliModeAndPresets",
+      "backendSource": "lib/decision-guidance.mjs",
+      "behavior": "guided/command produce same validated generator; preset is a starting point",
+      "flutterAction": "document_only",
+      "otherBackendRequirement": "Other: no Fable generator dependency; own configuration schema",
+      "reviewStatus": "source_reviewed",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "identityModel",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "single or multi-profile; User remains authentication identity not domain profile",
+      "flutterAction": "wizard_declarations",
+      "otherBackendRequirement": "Other: user-vs-profile separation, profile types/relations",
+      "reviewStatus": "runtime_not_verified",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "personAccountIntegrity",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "standard/single-person-account/limited-person-accounts/unlimited-person-accounts; device/IP not person proof",
+      "flutterAction": "wizard_declarations",
+      "otherBackendRequirement": "Other: account linking/verified identifiers and limits if supported",
+      "reviewStatus": "runtime_not_verified",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "managedEntitiesPolicy",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "owned by personal User, role membership, owner immutable, OTP on sensitive lifecycle, delete recovery and onDelete=Restrict",
+      "flutterAction": "wizard_declarations",
+      "otherBackendRequirement": "Other: subaccounts/owner/member/invite/step-up/version/recovery policy",
+      "reviewStatus": "runtime_not_verified",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "sessionPolicy",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "build-time session hints; GET /auth/session-policy runtime authority, single/multi/overflow",
+      "flutterAction": "runtime_read",
+      "otherBackendRequirement": "Other: runtime session policy, device list/limits/revocation semantics",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "authProviderAndOtp",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "enabled providers, OTP policy/channel, verified contact, no username OTP",
+      "flutterAction": "wizard_declarations",
+      "otherBackendRequirement": "Other: provider choices/MFA/OTP challenge, verification and recovery contract",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "languageAndTime",
+      "backendSource": "src/core/http/request-policy.ts",
+      "behavior": "Accept-Language validated; X-Time-Zone untrusted hint; after auth session timezone authority",
+      "flutterAction": "per_request",
+      "otherBackendRequirement": "Other: locale/timezone header semantics, authoritative server timestamp",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "requestIdAndTrace",
+      "backendSource": "src/core/http/request-policy.ts",
+      "behavior": "X-Request-Id and traceparent optional validated observability only",
+      "flutterAction": "client_transport",
+      "otherBackendRequirement": "Other: correlation ID and redaction conventions",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "idempotencyAndReplay",
+      "backendSource": "src/core/http/request-policy.ts",
+      "behavior": "Idempotency-Key validated 8..128, sensitive retryable mutation only",
+      "flutterAction": "per_operation",
+      "otherBackendRequirement": "Other: idempotency scope/expiry/replay/error and safe retry rules",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "conditionalWrite",
+      "backendSource": "src/core/http/request-policy.ts",
+      "behavior": "If-Match optimistic concurrency when supported by operation",
+      "flutterAction": "per_operation",
+      "otherBackendRequirement": "Other: ETag/revision/412 or 409 and conflict merge rules",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "httpAuthCorsCsrf",
+      "backendSource": "lib/http-policy.mjs",
+      "behavior": "native Flutter does not send Web-only CSRF; Origin not Auth; trusted proxy controls forwarded headers",
+      "flutterAction": "transport_policy",
+      "otherBackendRequirement": "Other: CORS/CSRF boundary and allowed header policy",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "structuredErrors",
+      "backendSource": "lib/http-policy.mjs",
+      "behavior": "validation rules/fields; 400 invalid key, abuse/rate limits, 401/403/404/429, retry signals",
+      "flutterAction": "error_adapter",
+      "otherBackendRequirement": "Other: stable error code, fields, rate limits and retry/denial semantics",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "cacheConsistency",
+      "backendSource": "docs/TECHNICAL-DECISIONS.ar.md",
+      "behavior": "DB source of truth; cached reads must invalidate after mutations; sensitive outputs no shared cache",
+      "flutterAction": "per_resource",
+      "otherBackendRequirement": "Other: TTL, ETag/version, invalidation and private/no-store response behavior",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "dataOwnershipAndDeletion",
+      "backendSource": "lib/data-ownership-policy.mjs",
+      "behavior": "explicit block-delete/cascade/detach/retain/anonymize; legal retention; Restrict on managed domains",
+      "flutterAction": "wizard_contract",
+      "otherBackendRequirement": "Other: delete/recovery/retention/export/tombstones policy",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "capabilityInstalledVsBlueprint",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "installed capability from a pinned project only, not global Blueprint inventory",
+      "flutterAction": "contract_gate",
+      "otherBackendRequirement": "Other: signed/versioned per-project operation inventory and feature availability",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "featureAccessAndCommercial",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "runtime authorization/entitlement authoritative; no roles from client guesses",
+      "flutterAction": "runtime_read",
+      "otherBackendRequirement": "Other: /me permissions/entitlements, revocation/events, billing state",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "offlineAndSync",
+      "backendSource": "docs/TECHNICAL-DECISIONS.ar.md",
+      "behavior": "local feature decision; never imply safe offline writes without version/idempotency",
+      "flutterAction": "per_operation",
+      "otherBackendRequirement": "Other: delta/sync/revision/idempotent mutations and price confirmation",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "auditAndAbuse",
+      "backendSource": "lib/http-policy.mjs",
+      "behavior": "source/IP untrusted; HMAC fingerprints for abuse, no secrets/raw IP in logs",
+      "flutterAction": "server_only_and_client_errors",
+      "otherBackendRequirement": "Other: 429 responses, retry-after, security alerts, secure audit IDs",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "clientVersionPolicy",
+      "backendSource": "blueprints/capabilities/client-version-governance/manifest.json",
+      "behavior": "optional minimum/supported app version, no fake mandatory update endpoints",
+      "flutterAction": "runtime_when_installed",
+      "otherBackendRequirement": "Other: compatible version check, upgrades and safe-link metadata",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "requestPressureAndAvailability",
+      "backendSource": "src/core/http/runtime-pressure.service.ts",
+      "behavior": "overload/rate/maintenance may deny requests; do not show success from failures",
+      "flutterAction": "error_adapter",
+      "otherBackendRequirement": "Other: transient 503/429/Retry-After and bounded recovery",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "roleBasedUiAndFeatures",
+      "backendSource": "lib/frontend-setup-decisions.mjs",
+      "behavior": "runtime permissions not local admin flag, user role distinct from profile/managed entity",
+      "flutterAction": "runtime_gate",
+      "otherBackendRequirement": "Other: verified operation permissions and role changes",
+      "reviewStatus": "partial",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    },
+    {
+      "id": "protectedFieldsAndRelations",
+      "backendSource": "docs/TECHNICAL-DECISIONS.ar.md",
+      "behavior": "@ProtectedAuth, @SensitiveFilterSort and onDelete affect filtering/field visibility, not decoration",
+      "flutterAction": "generated_dto_schema",
+      "otherBackendRequirement": "Other: per-field read/write grants, masked fields and relation deletion behavior",
+      "reviewStatus": "not_audited",
+      "fullParityVerified": false,
+      "projectContractVerified": false,
+      "liveE2EVerified": false
+    }
+  ]
+}
