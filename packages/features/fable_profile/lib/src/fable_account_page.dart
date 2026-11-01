@@ -109,6 +109,8 @@ class _FableAccountPageState extends State<FableAccountPage> {
     _displayName.dispose();_gateway?.dispose();super.dispose();}
   @override Widget build(BuildContext context) {
     final ar=_isAr;
+    final managed=FableManagedEntityScope.maybeOf(context);
+    final currentEntity=managed?.selected;
     return Scaffold(appBar:AppBar(title:Text(ar?'الحساب':'Account')),
       body:SafeArea(child:ListView(padding:const EdgeInsets.all(24),children:[
         const Icon(Icons.account_circle_outlined,size:64),
@@ -144,8 +146,18 @@ class _FableAccountPageState extends State<FableAccountPage> {
           FilledButton.tonal(
             onPressed:_busy?null:()=>Navigator.of(context).push(
               MaterialPageRoute<void>(builder:(_)=>FableManagedAccountsPage(
-                gateway:_gateway!,contract:widget.contract))),
+                gateway:_gateway!,contract:widget.contract,
+                onActivated:(verified)=>managed?.activate(verified),
+                onCleared:()=>managed?.clear()))),
             child:Text(ar?'إدارة الكيانات التابعة لي':'My managed entities')),
+        if(currentEntity!=null)...[
+          const SizedBox(height:8),
+          Text((ar?'الكيان المحدد: ':'Selected entity: ')+
+            (ar?currentEntity.nameAr:currentEntity.nameEn)+
+            ' ('+currentEntity.access+')'),
+          TextButton(onPressed:()=>managed?.clear(),
+            child:Text(ar?'إلغاء تحديد الكيان':'Clear selected entity')),
+        ],
         const SizedBox(height:12),
         Text(ar?'هذا عرض الحساب الأساسي فقط. بيانات الملف الشخصي الخاصة بالمشروع تتطلب عقد Profile منفصلًا.'
           :'This is the core account only. Project-specific Profile fields require a separate backend contract.',
