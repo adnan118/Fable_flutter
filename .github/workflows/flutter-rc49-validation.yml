@@ -32,6 +32,7 @@ jobs:
           node tools/verify-fable-contract.mjs --mode source
           # RC80: حراسة سجل الميزات؛ لا نعلن اكتمالاً لمجرد نجاح CI.
           node --test test/feature-parity-master.test.mjs
+          node --test test/backend-wide-decision-review.test.mjs
           node tools/verify-feature-parity-master.mjs
       - uses: subosito/flutter-action@v2
         with:
