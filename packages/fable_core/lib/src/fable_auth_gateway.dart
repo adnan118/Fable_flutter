@@ -91,9 +91,10 @@ class FableAuthGateway implements BackendApiGateway {
       final methods=(data['methods'] is List)
         ? (data['methods'] as List).whereType<String>().toList(growable:false)
         : <String>[];
+      final challengeExpires=_expiresAt(data['expiresAt'],
+        context:'second-factor challenge');
       return FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge._(
-        challenge, identityAtStart, methods, platform,
-        DateTime.tryParse(data['expiresAt']?.toString() ?? ''),
+        challenge, identityAtStart, methods, platform, challengeExpires,
       ));
     }
     // لا نعامل Session مفروضة لتغيير كلمة المرور كدخول طبيعي.
@@ -472,6 +473,21 @@ class FableAuthGateway implements BackendApiGateway {
     return Map<String, dynamic>.from(candidate);
   }
 
+  /// يجب رفض اعتماد انتهت مدته بالفعل، ولا نتخيل انتهاءً من ساعة العميل
+  /// عندما يغيب expiresAt من استجابة Fable. لا نعيد إرسال Refresh تلقائياً.
+  static DateTime _expiresAt(Object? value,{required String context}) {
+    if(value is! String || value.length>64 ||
+       !RegExp(r'^\\d{4}-\\d{2}-\\d{2}T').hasMatch(value) ||
+       !value.endsWith('Z')) {
+      throw FormatException('Missing UTC expiration in $context');
+    }
+    final time=DateTime.tryParse(value)?.toUtc();
+    if(time==null || !time.isAfter(DateTime.now().toUtc())) {
+      throw FormatException('Expired or invalid $context');
+    }
+    return time;
+  }
+
   static bool _requiredPasswordChangeState(Map<String,dynamic> payload) {
     final required=payload['mustChangePassword'];
     if(required is! bool) {
@@ -484,6 +500,9 @@ class FableAuthGateway implements BackendApiGateway {
       required int expectedIdentity, String? expectedRefreshToken}) async {
     final access = payload['accessToken'];
     final refresh = payload['refreshToken'];
+    // فشل التاريخ يمنع حفظ أسرار جلسة منتهية؛ JWT/Session DB يظلان
+    // مصدر الصلاحية النهائي، ولا نعد هذا اختباراً لتكامل Backend الحي.
+    _expiresAt(payload['expiresAt'],context:'session');
     if (access is! String || access.isEmpty || access.length > 8192 ||
         access.contains(RegExp(r'[\r\n\x00-\x1f\x7f]')) ||
         refresh is! String || !RegExp(r'^[A-Za-z0-9_-]{64}$').hasMatch(refresh)) {
