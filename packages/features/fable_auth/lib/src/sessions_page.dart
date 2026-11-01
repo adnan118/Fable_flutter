@@ -25,6 +25,8 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
   final Set<String> _selectedSessionIds=<String>{};
   bool _pendingLogoutAll=false;
   final _otpController=TextEditingController();
+  final _timeZoneController=TextEditingController();
+  String? _timeZoneStatus;
   String? _error;
 
   @override void initState(){
@@ -34,7 +36,8 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
       _clearSensitive();
       _selectedSessionIds.clear();
       setState((){
-        _sessions=null;_policy=null;_loading=false;
+        _sessions=null;_policy=null;_loading=false;_actionBusy=false;
+        _timeZoneStatus=null;_timeZoneController.clear();
         _error='The authentication session changed. Sign in again to refresh devices.';
       });
     });
@@ -79,6 +82,34 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     }finally{
       if(mounted && widget.gateway.session.identityRevision==revision)
         setState(()=>_loading=false);
+    }
+  }
+
+  /// لا تخلط IANA time zone بوقت الجهاز الظاهر أو بتوقيت المواعيد.
+  /// الخادم وحده يقرر صلاحية المنطقة الزمنية ويحفظها للجلسة الحالية.
+  /// docs/integrations/FABLE-AUTH-BASELINE-RC82.ar.md
+  Future<void> _updateTimeZone() async {
+    if(_actionBusy||_loading||!widget.gateway.supportsSessionTimeZone)return;
+    final zone=_timeZoneController.text.trim();
+    if(zone.isEmpty||zone.length>64)return;
+    final revision=widget.gateway.session.identityRevision;
+    setState((){_actionBusy=true;_error=null;_timeZoneStatus=null;});
+    try{
+      final applied=await widget.gateway.updateSessionTimeZone(zone);
+      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      setState(()=>_timeZoneStatus=
+        'Backend confirmed this session time zone: $applied');
+    }on FableApiException catch(error){
+      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      setState(()=>_error=error.status==401||error.status==403
+        ?'Sign in again before changing session time zone.'
+        :'Time zone update was not confirmed by Backend.');
+    }catch(_){
+      if(mounted&&widget.gateway.session.identityRevision==revision)
+        setState(()=>_error='Time zone update was not confirmed by Backend.');
+    }finally{
+      if(mounted&&widget.gateway.session.identityRevision==revision)
+        setState(()=>_actionBusy=false);
     }
   }
 
@@ -221,6 +252,7 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
   @override void dispose(){
     unawaited(_identityEvents?.cancel());
     _otpController.dispose();
+    _timeZoneController.dispose();
     super.dispose();
   }
   @override Widget build(BuildContext context){
@@ -240,6 +272,22 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
         const SizedBox(height:8),
         Text(ar?'هذه البيانات مصدرها الخادم مباشرة، وليست قائمة أجهزة محفوظة على الهاتف.'
           :'This list comes from the active Backend, not from stored phone credentials.'),
+        if(widget.gateway.supportsSessionTimeZone)...[
+          const SizedBox(height:12),
+          TextField(
+            controller:_timeZoneController,maxLength:64,
+            decoration:InputDecoration(
+              labelText:ar?'المنطقة الزمنية للجلسة (IANA)':'Session time zone (IANA)',
+              hintText:'Asia/Damascus',
+              helperText:ar?'للعرض فقط؛ لا يغير مواعيد العمل أو UTC':
+                'Display only; does not change scheduling or stored UTC'),
+          ),
+          FilledButton.tonal(
+            onPressed:_actionBusy||_loading?null:()=>unawaited(_updateTimeZone()),
+            child:Text(ar?'حفظ توقيت الجلسة':'Save session time zone'),
+          ),
+          if(_timeZoneStatus!=null)Text(_timeZoneStatus!),
+        ],
         const SizedBox(height:14),
         OutlinedButton.icon(
           onPressed:_loading?null:()=>unawaited(_refresh()),

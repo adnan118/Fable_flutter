@@ -9,7 +9,8 @@
 ## 1. المرجعية وكيف لا نعود إلى دوامة الإصلاحات
 
 - **المصدر الآلي:** [FABLE-FLUTTER-PARITY-MASTER.json](./FABLE-FLUTTER-PARITY-MASTER.json) = 17 ميزة مرجعية، مع ملفات تنفيذ حقيقية ومتطلبات Backend خارجي ونواقص. لا توجد ميزة عليها `complete=true` أو `liveE2EVerified=true`.
-- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات. أغلبها `NOT_DECIDED`، وأول عملية `auth.change-password` في RC81 هي `SOURCE_IMPLEMENTED_E2E_PENDING` فقط؛ يحظر CI إعلان اكتمال دون دليل E2E.
+- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات. أغلبها `NOT_DECIDED`، و3 عمليات (`auth.change-password` في RC81 و`auth.logout` و`auth.session.timezone` في RC82) أصبحت `SOURCE_IMPLEMENTED_E2E_PENDING` فقط؛ و37 عملية أخرى ما زالت `NOT_DECIDED`. يحظر CI إعلان اكتمال دون دليل E2E.
+- **RC82 أساس Auth:** [فروق Logout وSession Timezone ومتطلبات Other Backend](./FABLE-AUTH-BASELINE-RC82.ar.md).
 - **23 قراراً عاماً يؤثر على جميع الميزات:** [الجرد الآلي](./FABLE-BACKEND-WIDE-DECISIONS-RC81.json) و[الشرح بالعربية](./FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md). هذه السياسات تشمل هوية المستخدم والجلسات وHTTP والتكرار الآمن وحفظ البيانات والصلاحيات والكاش؛ منها ما يُستورد من العقد ومنها ما يجب قراءته من Runtime أو يبقى Backend-only.
 - **الفحص:** `node tools/verify-feature-parity-master.mjs` يحرس عدد الميزات والملفات وملكية القرار والـWizard/Other Backend. عند توفر نسخة محلية من Fable Backend نفّذ `node tools/verify-feature-parity-master.mjs --backend-root ../Fable --output ./parity-review.json` لفهرسة **كل عملية في كل Manifest**؛ كل عملية تظهر `NOT_DECIDED` حتى يراجعها المسؤول يدوياً. الخيار `--require-exhaustive` يُبقي بوابة إكمال النقل حمراء حتى يتوفر إثبات عمليات كامل.
 - **مرجع النواقص على GitHub:** [Issue #15](https://github.com/adnan118/Fable_flutter/issues/15) لا يُغلق بالتقدم في عدد PR؛ يُغلق فقط بالاختبارات الحية لجميع الميزات المطلوبة في مشروع محدد.
@@ -44,7 +45,7 @@
 
 | الميزة / ملكية القرار | ما نُفّذ ويمكن إثبات مصدره | ما لم يثبت أو يجب إكماله |
 |---|---|---|
-| **Auth** — Server | Login/Refresh/Logout، جلسات/OTP جزئية؛ **RC81 تغيير كلمة المرور** مع إبطال جميع الجلسات وواجهة واختبارات مصدر | **40 عملية**: لا يزال الاسترداد والاسم/البريد/الهاتف و2FA والإشعارات وE2E وأغلب المسارات غير معتمدة؛ RC81 غير معتمد حيًا |
+| **Auth** — Server | Login/Refresh والجلسات جزئية؛ **RC81 تغيير كلمة المرور** و**RC82 تأكيد Logout وتحديث IANA timezone للجلسة** مع اختبارات مصدر وواجهة | **3 من 40** عمليات عليها دليل مصدر وWidget فقط؛ **37** بحاجة مراجعة، وE2E/Other/Wizard لم تعتمد بعد |
 | **Profile** — Hybrid | الحساب الأساسي/اسم العرض؛ RC71 تفاصيل الكيان وتعديله؛ RC78 إنشاء الكيان والدعوات العامة ومدير/مشاهد؛ RC79 سياق الكيان المتطاير؛ أعضاء/دعوات/OTP متوفرة في المصدر | الـ18 عملية وسلوك العضويات والكيانات الحقيقية، تفعيل سياق الكيان في **كل** عملية مشروع تحتاجه، مستخدمون حقيقيون وصلاحيات Admin/multi-profile |
 | **Notifications** — Hybrid | Inbox/Read، ربط تنقل إشعار، تسجيل Push وتخزين التوكن وربطه بجلسة من بعض الأجزاء | ترحيب/سياسة/جهاز جديد/حد فشل ضمن DB/Outbox/FCM، إلغاء التوكن واللغة والخلفية/المقدمة وPush فعلي |
 | **Media** — Hybrid | Repository للرفع والأجزاء والحالة والقراءة وواجهة رفع | كل 16 عملية بما فيها protected playback/refresh/end، التخزين R2 وتجربة استئناف، أذونات وحصص وعمل على الأجهزة |
