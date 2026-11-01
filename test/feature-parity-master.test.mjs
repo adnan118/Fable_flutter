@@ -4,7 +4,8 @@ import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
-import {checkParity,validateMaster,auditBackendManifests} from '../tools/verify-feature-parity-master.mjs';
+import {checkParity,validateMaster,auditBackendManifests,auditBackendWideDecisionSources} from '../tools/verify-feature-parity-master.mjs';
+import {createHash} from 'node:crypto';
 
 const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
 const load=()=>JSON.parse(readFileSync(join(root,
@@ -106,5 +107,33 @@ test('كشف Capability جديد ومسار لم يُصنف وتغيير Bluepri
    assert.equal(review.mappedCandidateRoutes,2);
    assert.equal(review.unclassifiedForMobile,1);
    assert.equal(review.routes.every(x=>x.disposition==='NOT_DECIDED'),true);
+ }finally{rmSync(temp,{recursive:true,force:true});}
+});
+
+
+test('تغيّر قرار Backend عام يُكشف بالبصمة ولو لم يتغير أي مسار API',()=>{
+ const temp=mkdtempSync(join(tmpdir(),'rc81-policy-'));
+ try{
+  const root=join(temp,'Fable-Backend-RC66');
+  const path=join(root,'lib','http-policy.mjs');
+  mkdirSync(join(root,'lib'),{recursive:true});
+  const content='export const REQUEST_HEADERS=[];\n';
+  writeFileSync(path,content);
+  const sourceGitBlobSha=createHash('sha1')
+    .update('blob '+Buffer.byteLength(content)+'\x00')
+    .update(content).digest('hex');
+  const policies=[{id:'httpPolicy',backendSource:'lib/http-policy.mjs',sourceGitBlobSha}];
+  const clean=auditBackendWideDecisionSources(temp,policies);
+  assert.equal(clean.trackedSources,1);
+  assert.deepEqual(clean.changed,[]);
+  assert.deepEqual(clean.missing,[]);
+  writeFileSync(path,content+'// changed\n');
+  const altered=auditBackendWideDecisionSources(temp,policies);
+  assert.equal(altered.changed.length,1);
+  assert.equal(altered.changed[0].path,'lib/http-policy.mjs');
+  const missing=auditBackendWideDecisionSources(temp,[{
+    id:'missing',backendSource:'lib/no-policy.mjs',sourceGitBlobSha
+  }]);
+  assert.deepEqual(missing.missing,['lib/no-policy.mjs']);
  }finally{rmSync(temp,{recursive:true,force:true});}
 });
