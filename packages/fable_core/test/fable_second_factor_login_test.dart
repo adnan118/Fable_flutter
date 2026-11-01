@@ -46,7 +46,11 @@ void main(){
      'requiresTwoFactor':true,'twoFactorToken':List<String>.filled(64,'t').join(),
      'methods':['EMAIL_OTP'], 'expiresAt':'2099-01-01T00:00:00Z'});
    if(request.uri.path=='/auth/2fa/login/request')return _response(request,{
-     'challengeId':'11111111-1111-4111-8111-111111111111'});
+     'challengeId':'11111111-1111-4111-8111-111111111111',
+     'requiresTwoFactor':true,'method':'EMAIL_OTP','channel':'EMAIL',
+     'expiresAt':'2099-01-01T00:00:00Z',
+     'twoFactorExpiresAt':'2099-01-01T00:00:00Z',
+     'destination':'d***@example.test'});
    if(request.uri.path=='/auth/2fa/login/complete')return _response(request,{
      'accessToken':'new-access','refreshToken':List<String>.filled(64,'r').join(),
      'expiresAt':'2099-12-01T12:00:00Z','mustChangePassword':true});
