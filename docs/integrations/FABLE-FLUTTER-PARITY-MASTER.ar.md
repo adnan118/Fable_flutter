@@ -9,7 +9,8 @@
 ## 1. المرجعية وكيف لا نعود إلى دوامة الإصلاحات
 
 - **المصدر الآلي:** [FABLE-FLUTTER-PARITY-MASTER.json](./FABLE-FLUTTER-PARITY-MASTER.json) = 17 ميزة مرجعية، مع ملفات تنفيذ حقيقية ومتطلبات Backend خارجي ونواقص. لا توجد ميزة عليها `complete=true` أو `liveE2EVerified=true`.
-- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات ومؤشرات مواضعها في المصدر. مؤشرات النصوص ليست إثباتاً للتنفيذ؛ `disposition=NOT_DECIDED` حتى يراجع كل طلب/رد/شاشة/حالة خطأ والـWizard. يتحقق CI من هذه القائمة، والفاحص يقارنها بأسماء المسارات في Backend عند تمرير `--backend-root`.
+- **جرد Auth التفصيلي:** [FABLE-AUTH-OPERATIONS-RC80.json](./FABLE-AUTH-OPERATIONS-RC80.json) = 40 عملية بأسمائها وأساليبها ومساراتها والصلاحيات. أغلبها `NOT_DECIDED`، وأول عملية `auth.change-password` في RC81 هي `SOURCE_IMPLEMENTED_E2E_PENDING` فقط؛ يحظر CI إعلان اكتمال دون دليل E2E.
+- **23 قراراً عاماً يؤثر على جميع الميزات:** [الجرد الآلي](./FABLE-BACKEND-WIDE-DECISIONS-RC81.json) و[الشرح بالعربية](./FABLE-BACKEND-WIDE-DECISIONS-RC81.ar.md). هذه السياسات تشمل هوية المستخدم والجلسات وHTTP والتكرار الآمن وحفظ البيانات والصلاحيات والكاش؛ منها ما يُستورد من العقد ومنها ما يجب قراءته من Runtime أو يبقى Backend-only.
 - **الفحص:** `node tools/verify-feature-parity-master.mjs` يحرس عدد الميزات والملفات وملكية القرار والـWizard/Other Backend. عند توفر نسخة محلية من Fable Backend نفّذ `node tools/verify-feature-parity-master.mjs --backend-root ../Fable --output ./parity-review.json` لفهرسة **كل عملية في كل Manifest**؛ كل عملية تظهر `NOT_DECIDED` حتى يراجعها المسؤول يدوياً. الخيار `--require-exhaustive` يُبقي بوابة إكمال النقل حمراء حتى يتوفر إثبات عمليات كامل.
 - **مرجع النواقص على GitHub:** [Issue #15](https://github.com/adnan118/Fable_flutter/issues/15) لا يُغلق بالتقدم في عدد PR؛ يُغلق فقط بالاختبارات الحية لجميع الميزات المطلوبة في مشروع محدد.
 - **التوثيق التعليمي:** [FLUTTER-BLOC-LEARNING.ar.md](./FLUTTER-BLOC-LEARNING.ar.md)، و[Wizard](./FRONTEND-SETUP-WIZARD.ar.md).
@@ -43,7 +44,7 @@
 
 | الميزة / ملكية القرار | ما نُفّذ ويمكن إثبات مصدره | ما لم يثبت أو يجب إكماله |
 |---|---|---|
-| **Auth** — Server | بوابة Login/Refresh/Logout، صفحات Login/Sessions، 2FA ضمن بعض التدفقات، حساب الجلسات والسياسة، تذكّر معرّف المستخدم | **40 عملية** تحتاج تصنيفاً؛ Email/Phone/Username/Password/reset و2FA إدارة وتمكين/تعطيل وOTP وStep-up وrate-limit ودخول أجهزة متعددة وتنبيهاتها وE2E |
+| **Auth** — Server | Login/Refresh/Logout، جلسات/OTP جزئية؛ **RC81 تغيير كلمة المرور** مع إبطال جميع الجلسات وواجهة واختبارات مصدر | **40 عملية**: لا يزال الاسترداد والاسم/البريد/الهاتف و2FA والإشعارات وE2E وأغلب المسارات غير معتمدة؛ RC81 غير معتمد حيًا |
 | **Profile** — Hybrid | الحساب الأساسي/اسم العرض؛ RC71 تفاصيل الكيان وتعديله؛ RC78 إنشاء الكيان والدعوات العامة ومدير/مشاهد؛ RC79 سياق الكيان المتطاير؛ أعضاء/دعوات/OTP متوفرة في المصدر | الـ18 عملية وسلوك العضويات والكيانات الحقيقية، تفعيل سياق الكيان في **كل** عملية مشروع تحتاجه، مستخدمون حقيقيون وصلاحيات Admin/multi-profile |
 | **Notifications** — Hybrid | Inbox/Read، ربط تنقل إشعار، تسجيل Push وتخزين التوكن وربطه بجلسة من بعض الأجزاء | ترحيب/سياسة/جهاز جديد/حد فشل ضمن DB/Outbox/FCM، إلغاء التوكن واللغة والخلفية/المقدمة وPush فعلي |
 | **Media** — Hybrid | Repository للرفع والأجزاء والحالة والقراءة وواجهة رفع | كل 16 عملية بما فيها protected playback/refresh/end، التخزين R2 وتجربة استئناف، أذونات وحصص وعمل على الأجهزة |
