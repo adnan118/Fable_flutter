@@ -18,7 +18,7 @@ class _Session extends FableSecureSession {
   }
 }
 FableContract _contract({bool supported=true})=>FableContract(
-  contractHash:'a'*64,projectName:'rc81-test',selectionMode:'explicit',
+  contractHash:List<String>.filled(64,'a').join(),projectName:'rc81-test',selectionMode:'explicit',
   featureIds:const <String>{},
   operations: supported?const {
     'auth.change-password':FableOperation('auth.change-password',
