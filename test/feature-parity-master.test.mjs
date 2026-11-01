@@ -25,6 +25,24 @@ test('ثبت 17 ميزة ولا تدّعي اكتمالاً دون عقد مشر
  }
 });
 
+test('جميع عمليات Auth الأربعون موثقة بالاسم ومفتوحة للمراجعة لا للاكتمال',()=>{
+ const auth=JSON.parse(readFileSync(join(root,
+   'docs/integrations/FABLE-AUTH-OPERATIONS-RC80.json'),'utf8'));
+ assert.equal(auth.operationCount,40);
+ assert.equal(auth.operations.length,40);
+ assert.equal(new Set(auth.operations.map(x=>x.id)).size,40);
+ assert.ok(auth.operations.some(x=>x.id==='auth.change-password'));
+ assert.ok(auth.operations.some(x=>x.id==='auth.2fa.enable'));
+ assert.ok(auth.operations.some(x=>x.id==='auth.contact.phone.change'));
+ assert.ok(auth.operations.some(x=>x.id==='auth.web.login'));
+ for(const op of auth.operations){
+   assert.equal(op.disposition,'NOT_DECIDED');
+   assert.equal(op.realE2EVerified,false);
+   assert.equal(op.uiFlowReviewed,false);
+   assert.equal(op.modelAndDtoReviewed,false);
+ }
+});
+
 test('كشف فقدان ملف أو ميزة أو تغيير الملكية أو ادعاء اكتمال زائف',()=>{
  const original=load();
  for(const alter of [
