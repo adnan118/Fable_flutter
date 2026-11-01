@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +13,6 @@ import 'package:fable_access_control/fable_access_control.dart';
 
 // FABLE_PUSH_IMPORT_BEGIN
 import 'package:fable_notifications/fable_notifications.dart';
-import 'dart:async';
 // FABLE_PUSH_IMPORT_END
 /// A new project has NO implicit Backend. The CLI creates an explicit
 /// assets/config/backend.json, and a network capability remains unavailable
