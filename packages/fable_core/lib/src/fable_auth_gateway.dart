@@ -548,13 +548,15 @@ class FableActiveSession {
   const FableActiveSession({
     required this.id,required this.isCurrent,required this.createdAt,
     required this.expiresAt,this.lastUsedAt,this.displayName,this.deviceName,
-    this.platform,this.clientType,this.appVersion,
+    this.platform,this.clientType,this.appVersion,this.securityState,
   });
   final String id;
   final bool isCurrent;
   final DateTime createdAt,expiresAt;
   final DateTime? lastUsedAt;
   final String? displayName,deviceName,platform,clientType,appVersion;
+  /// حالة حماية الجلسة من Backend، وليست حكماً أمنياً محلياً من Flutter.
+  final String? securityState;
 
   factory FableActiveSession.fromMap(Map<String,dynamic> source){
     final id=source['id'];
@@ -581,12 +583,18 @@ class FableActiveSession {
     }
     final createdAt=parseDate('createdAt'),expiresAt=parseDate('expiresAt');
     final lastUsed=source['lastUsedAt']==null ? null : parseDate('lastUsedAt');
+    final security=source['securityState'];
+    if(security!=null && (security is! String ||
+        !const <String>{'ACTIVE','SUSPICIOUS','COMPROMISED'}.contains(security))) {
+      throw const FormatException('Invalid backend session security state');
+    }
     return FableActiveSession(
       id:id,isCurrent:source['isCurrent'] as bool,
       createdAt:createdAt,expiresAt:expiresAt,lastUsedAt:lastUsed,
       displayName:optional('displayName',191),
       deviceName:optional('deviceName',191),platform:optional('platform',64),
       clientType:optional('clientType',64),appVersion:optional('appVersion',64),
+      securityState:security as String?,
     );
   }
 }
