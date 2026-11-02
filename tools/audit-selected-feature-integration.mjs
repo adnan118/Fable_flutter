@@ -158,12 +158,15 @@ export function managedAccessContextBindingGaps(root) {
   const managedPage=source('packages/features/fable_profile/lib/src/managed_accounts_page.dart');
   const checks=[
     ['APP_STORE_NAMESPACE',app.includes('FableManagedEntityStore(session:FableSecureSession(')],
+    ['APP_STORE_BACKEND_PIN',app.includes('FableAuthGateway.managedEntityBackendIdentityFor(baseUri,contract)')],
     ['APP_STORE_SCOPE',app.includes('managedEntityStore:managedStore')&&app.includes('FableManagedEntityScope(store:managedStore')],
     ['BOOTSTRAP_STORE_BINDING',bootstrap.includes('managedEntityStore: widget.managedEntityStore')&&bootstrap.includes('managedStore.isBoundToBackend(auth.managedEntityBackendIdentity)')],
+    ['ACCESS_SESSION_BINDING',bootstrap.includes('access.bindToCredentials(credentials,')&&bootstrap.includes('managedEntityStore: widget.managedEntityStore')],
     ['ACCESS_SESSION_INVALIDATION',session.includes('managedEntityStore?.addListener(_onManagedSelectionChanged)')&&session.includes('store.selectionRevision')&&session.includes('value = null;')],
     ['SHARED_IDENTITY_NAMESPACE',store.includes('_session.sharesIdentityNamespaceWith(credentials)')&&auth.includes('sessionNamespaceFor')],
     ['BACKEND_IDENTITY_PIN',store.includes('isBoundToBackend(String identity)')&&auth.includes('managedEntityBackendIdentityFor')],
     ['SCOPED_REPOSITORY_GUARD',managedRepo.includes('store.isBoundToBackend(gateway.managedEntityBackendIdentity)')],
+    ['SCOPED_DENIAL_CLEAR',managedRepo.includes('error.status==403')&&managedRepo.includes('store.clear()')],
     ['MANAGED_ROLE_RESUME_REFRESH',managedPage.includes('WidgetsBindingObserver')&&managedPage.includes('AppLifecycleState.resumed')&&managedPage.includes('unawaited(_reload())')],
     ['GLOBAL_PERMISSION_BOUNDARY',accessRepo.includes('Deliberately user-global')&&accessRepo.includes('gateway.execute(operationId)')],
   ];
