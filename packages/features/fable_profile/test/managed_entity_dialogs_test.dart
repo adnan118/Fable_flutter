@@ -167,12 +167,13 @@ void main(){
   await tester.tap(find.text('Select'));
   await tester.pumpAndSettle();
   expect(find.textContaining('Selected: '),findsOneWidget);
+  final clearedBeforeResume=cleared; // Activation itself clears any prior context once.
 
   access='VIEWER';
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   await tester.pumpAndSettle();
-  expect(cleared,1);
+  expect(cleared,clearedBeforeResume+1);
   expect(find.textContaining('Selected: '),findsNothing);
  });
 
