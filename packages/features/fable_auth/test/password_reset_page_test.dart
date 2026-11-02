@@ -37,7 +37,12 @@ void main(){
     await tester.pumpWidget(MaterialApp(
       home:FableLoginPage(contract:contract,gateway:gateway)));
     expect(find.text('Forgot password? Verify by OTP'),findsOneWidget);
+    // The reset action is below the first fold on the standard 800x600
+    // widget-test viewport. Scroll the actual ListView before tapping.
+    await tester.drag(find.byType(ListView).first,const Offset(0,-260));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Forgot password? Verify by OTP'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Forgot password? Verify by OTP'));
     await tester.pumpAndSettle();
     expect(find.text('Password recovery'),findsOneWidget);
