@@ -9,6 +9,7 @@ part 'fable_auth_security.dart';
 part 'fable_auth_contact.dart';
 part 'fable_auth_username.dart';
 part 'fable_auth_otp_login.dart';
+part 'fable_auth_social_handoff.dart';
 part 'fable_auth_security_types.dart';
 
 /// المصادقة هنا تخص Fable فقط وتستخدم عمليات Auth المصدّرة لا مسارات متوقعة.
