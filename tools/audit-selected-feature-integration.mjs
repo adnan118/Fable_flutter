@@ -155,6 +155,7 @@ export function managedAccessContextBindingGaps(root) {
   const auth=source('packages/fable_core/lib/src/fable_auth_gateway.dart');
   const accessRepo=source('packages/features/fable_access_control/lib/src/access_repository.dart');
   const managedRepo=source('packages/features/fable_profile/lib/src/managed_accounts_repository.dart');
+  const managedPage=source('packages/features/fable_profile/lib/src/managed_accounts_page.dart');
   const checks=[
     ['APP_STORE_NAMESPACE',app.includes('FableManagedEntityStore(session:FableSecureSession(')],
     ['APP_STORE_SCOPE',app.includes('managedEntityStore:managedStore')&&app.includes('FableManagedEntityScope(store:managedStore')],
@@ -163,6 +164,7 @@ export function managedAccessContextBindingGaps(root) {
     ['SHARED_IDENTITY_NAMESPACE',store.includes('_session.sharesIdentityNamespaceWith(credentials)')&&auth.includes('sessionNamespaceFor')],
     ['BACKEND_IDENTITY_PIN',store.includes('isBoundToBackend(String identity)')&&auth.includes('managedEntityBackendIdentityFor')],
     ['SCOPED_REPOSITORY_GUARD',managedRepo.includes('store.isBoundToBackend(gateway.managedEntityBackendIdentity)')],
+    ['MANAGED_ROLE_RESUME_REFRESH',managedPage.includes('WidgetsBindingObserver')&&managedPage.includes('AppLifecycleState.resumed')&&managedPage.includes('unawaited(_reload())')],
     ['GLOBAL_PERMISSION_BOUNDARY',accessRepo.includes('Deliberately user-global')&&accessRepo.includes('gateway.execute(operationId)')],
   ];
   return checks.filter(([,ok])=>!ok).map(([code])=>code);
