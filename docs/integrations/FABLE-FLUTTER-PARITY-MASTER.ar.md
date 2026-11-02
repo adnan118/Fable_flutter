@@ -1,5 +1,7 @@
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
+> **RC90 — التدقيق في Terminal:** بمجرد اعتماد خدمات Flutter أو تغيير اختياراتها، يعرض الـWizard تقرير نقص الربط **لكل خدمة مختارة** (Fable أو Backend آخر) بحسب العمليات المعروفة: Missing/Partial/Source-mapped E2E Pending. الفحص المستقل: `pnpm wizard:check` أو `pnpm wizard:check:strict`، مع تقرير JSON اختياري. لا نختلق مسارات Backend غير معلنة ولا نعتبر نجاح CI اكتمالاً حياً. [دليل RC90](./FABLE-SELECTED-FEATURE-GAPS-RC90.ar.md).
+
 > **قرار RC88 المعتمد للتخطيط فقط (2026-11-02):** Offline مفعّل في إعداد Fable المرجعي مع SQLite/Drift، والمزامنة عند فتح/استعادة التطبيق ومحاولات خلفية Best Effort عبر Android/iOS وفق قيودهما. **لم نغير أي سلوك تنفيذي، ولم نفعّل الـWizard برمجياً؛ لا موعد خلفياً مضموناً ولا عمليات كتابة Offline دون عقد Backend.** التفاصيل والمتطلبات لـFable/Other والـWizard في [ADR RC88](./FABLE-OFFLINE-BACKGROUND-SYNC-ADR-RC88.ar.md).  
 
 
