@@ -15,7 +15,10 @@ abstract interface class FableOfflineCommandExecutor {
   Future<FableSyncAck> submit(OfflineOutboxRow row,{required String idempotencyKey});
 }
 abstract interface class FableVerifiedSyncContext {
-  /// Null when logged out, offline, credentials stale, or scope changed.
+  /// Null when logged out, identity no longer locally verifiable, or scope changed.
+  /// Offline cache/queue remain available for a safely persisted local identity;
+  /// networkAvailable() separately gates any remote replay. The server must
+  /// recheck session validity and current permissions before accepting writes.
   /// Scope must include Backend origin, Project, User, Managed Entity.
   Future<String?> verifiedScope();
   Future<bool> networkAvailable();
