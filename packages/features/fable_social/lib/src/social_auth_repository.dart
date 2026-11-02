@@ -102,8 +102,24 @@ class FableSocialOperations {
     'unlink':'auth.social.unlink',
   };
   static const _authorized = {'googleLink','appleLink','unlink'};
-  factory FableSocialOperations.fable(FableContract catalog) =>
-    FableSocialOperations._checked(catalog, fableIds);
+  factory FableSocialOperations.fable(FableContract catalog) {
+    const expectedPaths = <String, String>{
+      'challenge': '/auth/social/challenge',
+      'google': '/auth/social/google',
+      'apple': '/auth/social/apple',
+      'googleLink': '/auth/social/google/link',
+      'appleLink': '/auth/social/apple/link',
+      'unlink': '/auth/social/:provider',
+    };
+    for (final entry in fableIds.entries) {
+      final op = catalog.operations[entry.value];
+      if (op == null || op.path != expectedPaths[entry.key] ||
+          !op.enforceAuth) {
+        throw const FormatException('Fable social contract operation mismatch');
+      }
+    }
+    return FableSocialOperations._checked(catalog, fableIds);
+  }
   factory FableSocialOperations.external(ExternalOperationCatalog catalog,
       Map<String, String> bindings) => FableSocialOperations._checked(catalog, bindings);
   factory FableSocialOperations._checked(OperationCatalog catalog, Map<String, String> bindings) {
@@ -120,7 +136,7 @@ class FableSocialOperations {
           op.credentialHeader != null || op.path.contains('?') || op.path.contains('#') ||
           (!op.path.startsWith('/')) ||
           (binding.key != 'unlink' && (op.path.contains('{') || op.path.contains(':'))) ||
-          (binding.key == 'unlink' && !op.path.contains('{provider}'))) {
+          (binding.key == 'unlink' && !op.path.contains(':provider'))) {
         throw const FormatException('Unsafe social contract binding');
       }
       result[binding.key] = op.id;
@@ -152,7 +168,7 @@ class FableSocialRepository {
 
   Future<FableSocialAuthResult?> signIn(FableSocialProvider provider) => _run(provider, link: false);
   Future<bool?> link(FableSocialProvider provider, {required String securityChallengeId}) async {
-    if (!RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(securityChallengeId)) {
+    if (!RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(securityChallengeId)) {
       throw ArgumentError('Recent authentication proof required');
     }
     final outcome = await _run(provider, link: true, securityChallengeId: securityChallengeId);
@@ -182,7 +198,7 @@ class FableSocialRepository {
     final payload = adapter.parseAuthResponse(response.data);
     if (payload is! Map) throw const FormatException('Malformed social auth response');
     if (link) {
-      if (payload['linked'] != true || payload['provider'] != provider.wireName) {
+      if (payload['linked'] != true || payload['provider'] != provider.wireName.toUpperCase()) {
         throw const FormatException('Link not confirmed by backend');
       }
       return const FableSocialAuthResult(signedIn: true, requiresTwoFactor: false);
