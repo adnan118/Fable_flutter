@@ -26,19 +26,13 @@ test('ثبت 17 ميزة ولا تدّعي اكتمالاً دون عقد مشر
  }
 });
 
-test('جميع عمليات Auth الأربعون موثقة بالاسم ومفتوحة للمراجعة لا للاكتمال',()=>{
+test('RC97: classify all forty Auth IDs by owner and source evidence; no fake E2E claims',()=>{
  const auth=JSON.parse(readFileSync(join(root,
    'docs/integrations/FABLE-AUTH-OPERATIONS-RC80.json'),'utf8'));
  assert.equal(auth.operationCount,40);
  assert.equal(auth.operations.length,40);
  assert.equal(new Set(auth.operations.map(x=>x.id)).size,40);
- assert.ok(auth.operations.some(x=>x.id==='auth.change-password'));
- assert.ok(auth.operations.some(x=>x.id==='auth.2fa.enable'));
- assert.ok(auth.operations.some(x=>x.id==='auth.contact.phone.change'));
- assert.ok(auth.operations.some(x=>x.id==='auth.web.login'));
- // أي انتقال إلى SOURCE_IMPLEMENTED يبقى مقترناً بدليل Flutter/اختبارات
- // ولا يتحول إلى اعتماد E2E. عدّل هذه القائمة عند كل دفعة مراجعة فعلية.
- const sourceReviewed=new Set([
+ const mobile=new Set([
    'auth.change-password','auth.logout','auth.session.timezone',
    'auth.login','auth.refresh','auth.sessions','auth.session-policy',
    'auth.2fa.login.request','auth.2fa.login.complete',
@@ -47,26 +41,46 @@ test('جميع عمليات Auth الأربعون موثقة بالاسم ومف
    'auth.sessions.revoke-selected','auth.logout-all',
    'auth.2fa.status','auth.2fa.enable','auth.2fa.disable',
    'auth.contact.email.change','auth.contact.phone.change',
+   'auth.social.challenge','auth.social.google','auth.social.apple',
+   'auth.username.availability','auth.username.update','auth.otp.login.complete',
+   'auth.social.google.link','auth.social.apple.link','auth.social.unlink',
  ]);
- assert.equal(auth.operations.filter(op=>
-   op.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,22);
+ const web=new Set([
+   'auth.web.login','auth.web.refresh','auth.web.social.google',
+   'auth.web.social.apple','auth.web.2fa.login.request',
+   'auth.web.2fa.login.complete','auth.web.otp.login.complete',
+ ]);
+ const admin=new Set(['auth.password-policy.get','auth.password-policy.update']);
+ assert.equal(mobile.size,31);
+ assert.equal(web.size,7);
+ assert.equal(admin.size,2);
  for(const op of auth.operations){
    assert.equal(op.realE2EVerified,false);
    assert.equal(op.externalBackendMapped,false);
    assert.equal(op.wizardDecisionReviewed,false);
-   if(sourceReviewed.has(op.id)){
+   assert.equal(op.modelAndDtoReviewed,true);
+   assert.equal(op.permissionAndErrorReviewed,true);
+   assert.ok(Array.isArray(op.missingGates) && op.missingGates.length>=3);
+   assert.ok(Array.isArray(op.otherBackendRequired) && op.otherBackendRequired.length>=3);
+   if(mobile.has(op.id)){
      assert.equal(op.disposition,'SOURCE_IMPLEMENTED_E2E_PENDING');
-     assert.equal(op.modelAndDtoReviewed,true);
      assert.equal(op.uiFlowReviewed,true);
-     assert.equal(op.permissionAndErrorReviewed,true);
-     assert.ok(op.missingGates.length>=3);
-     assert.ok(op.otherBackendRequired.length>=3);
-   }else{
-     assert.equal(op.disposition,'NOT_DECIDED');
-     assert.equal(op.uiFlowReviewed,false);
-     assert.equal(op.modelAndDtoReviewed,false);
-   }
+     assert.ok(op.flutterEvidence.length>=2);
+     assert.ok(op.regressionTests.length>=2);
+   }else if(web.has(op.id)||admin.has(op.id)){
+     assert.equal(op.disposition,web.has(op.id)
+       ?'WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING'
+       :'ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING');
+     assert.equal(op.clientFlowReviewed,true);
+     assert.equal(op.uiFlowReviewed,false); // No host-specific Web/Admin screens invented.
+     assert.equal(op.clientEvidence.length,2);
+     assert.equal(op.regressionTests.length,2);
+   }else assert.fail('Unclassified Auth route '+op.id);
  }
+ assert.equal(auth.operations.filter(x=>x.disposition==='NOT_DECIDED').length,0);
+ assert.equal(auth.operations.filter(x=>x.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,31);
+ assert.equal(auth.operations.filter(x=>x.disposition==='WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING').length,7);
+ assert.equal(auth.operations.filter(x=>x.disposition==='ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING').length,2);
 });
 
 test('23 قراراً عاماً عابراً للميزات، ولا صلاحية مُفترضة في Other Backend',()=>{
