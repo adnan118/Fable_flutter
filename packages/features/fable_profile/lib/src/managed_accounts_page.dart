@@ -32,7 +32,11 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
   @override void initState(){
     super.initState();
     _events=widget.gateway.session.identityEvents.listen((_){
-      if(mounted)setState((){
+      if(!mounted)return;
+      // External project context must be cleared on logout/account switch too,
+      // even when this page is no longer the current route.
+      widget.onCleared?.call();
+      setState((){
         _entities=null;_invitations=null;_selected=null;_busy=false;
         _pendingLifecycle=null;_lifecycleOtp.clear();
         _message='Login identity changed. Refresh the new account.';
@@ -50,13 +54,24 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       if(!mounted||epoch!=widget.gateway.session.identityRevision)return;
       setState((){
         _entities=entities;_invitations=invites;
-        if(!entities.any((e)=>e.id==_selected?.id&&e.status=='ACTIVE')){
-          if(_selected!=null)widget.onCleared?.call();
+        // A managed context is never preserved solely because its entity
+        // still exists. Refresh must confirm the *same user's* active role.
+        final selected=_selected;
+        if(selected!=null && !entities.any((e)=>
+            e.id==selected.id && e.status=='ACTIVE' &&
+            e.effectiveAccess==selected.access)) {
+          widget.onCleared?.call();
           _selected=null;
         }
       });
-    }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision)
-      setState(()=>_message='Backend did not authorize reading managed entities.');}
+    }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision){
+      // A failed role refresh cannot preserve a privileged entity selection.
+      if(_selected!=null)widget.onCleared?.call();
+      setState((){
+        _selected=null;_entities=null;_invitations=null;
+        _message='Backend did not confirm current managed membership.';
+      });
+    }}
     finally{if(mounted&&epoch==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
   }
   Future<void> _activate(FableManagedAccount entity)async{
