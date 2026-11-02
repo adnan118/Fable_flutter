@@ -620,36 +620,112 @@
       "method": "POST",
       "path": "/auth/otp/request",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
+      ],
       "literalPathReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/otp.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/otp.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/sensitive_session_contract_test.dart",
+        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/otp/request",
+        "auth": "Bearer with enforced contract, user-owned action; no cookie secrets",
+        "fields": "authenticated OTP request with purpose SENSITIVE_ACTION, optional preferredChannel (verified contact), challengeId/expiry/channel/transport/masked destination, per-user throttle; no new login session"
+      },
+      "responseModel": {
+        "meaning": "authenticated OTP request with purpose SENSITIVE_ACTION, optional preferredChannel (verified contact), challengeId/expiry/channel/transport/masked destination, per-user throttle; no new login session",
+        "authority": "server-authoritative; validate purpose/IDs and revocation outcome; not evidence of push token deletion"
+      },
+      "backendEffect": "authenticated OTP request with purpose SENSITIVE_ACTION, optional preferredChannel (verified contact), challengeId/expiry/channel/transport/masked destination, per-user throttle; no new login session",
+      "otherBackendRequired": [
+        "Declare independent protected operations and MFA/OTP step-up proof transport, not Fable path/header assumptions",
+        "Define exact routes/methods/auth scheme and request/response DTOs, session ownership and current-device semantics",
+        "Document rate limit/expiry/replay protection, 401/403/429 errors and local session/token/push cleanup confirmation",
+        "Provide security proof consumption/nonce binding and refusal behavior for cross-account/device use"
+      ],
+      "missingGates": [
+        "Real device A/B, generated Backend, live session database revocation and authorization 401/403 tests",
+        "Real OTP email/SMS/provider, expiration, 429 cooldown and concurrent/replayed proof consumption",
+        "Verify push device token unregistration on current-session/logout-all with full lifecycle across devices",
+        "Other Backend-specific MFA/session revocation adapter and Wizard mapping; independent contract tests"
+      ]
     },
     {
       "id": "auth.otp.verify",
       "method": "POST",
       "path": "/auth/otp/verify",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
+      ],
       "literalPathReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/otp.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/otp.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/sensitive_session_contract_test.dart",
+        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/otp/verify",
+        "auth": "Bearer with enforced contract, user-owned action; no cookie secrets",
+        "fields": "verified purpose SENSITIVE_ACTION, bound to authenticated user and challenge; code 6–10 digits; no session minted; downstream protected operation consumes proof"
+      },
+      "responseModel": {
+        "meaning": "verified purpose SENSITIVE_ACTION, bound to authenticated user and challenge; code 6–10 digits; no session minted; downstream protected operation consumes proof",
+        "authority": "server-authoritative; validate purpose/IDs and revocation outcome; not evidence of push token deletion"
+      },
+      "backendEffect": "verified purpose SENSITIVE_ACTION, bound to authenticated user and challenge; code 6–10 digits; no session minted; downstream protected operation consumes proof",
+      "otherBackendRequired": [
+        "Declare independent protected operations and MFA/OTP step-up proof transport, not Fable path/header assumptions",
+        "Define exact routes/methods/auth scheme and request/response DTOs, session ownership and current-device semantics",
+        "Document rate limit/expiry/replay protection, 401/403/429 errors and local session/token/push cleanup confirmation",
+        "Provide security proof consumption/nonce binding and refusal behavior for cross-account/device use"
+      ],
+      "missingGates": [
+        "Real device A/B, generated Backend, live session database revocation and authorization 401/403 tests",
+        "Real OTP email/SMS/provider, expiration, 429 cooldown and concurrent/replayed proof consumption",
+        "Verify push device token unregistration on current-session/logout-all with full lifecycle across devices",
+        "Other Backend-specific MFA/session revocation adapter and Wizard mapping; independent contract tests"
+      ]
     },
     {
       "id": "auth.web.login",
@@ -720,56 +796,166 @@
       "method": "POST",
       "path": "/auth/logout-all",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [
-        "packages/fable_core/lib/src/fable_auth_gateway.dart",
-        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/sensitive_session_contract_test.dart",
+        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/logout-all",
+        "auth": "Bearer with enforced contract, user-owned action; no cookie secrets",
+        "fields": "POST /auth/logout-all, authenticated and recent AAL2 or verified step-up as required; revokes all sessions; local credentials purged only after confirmed server success"
+      },
+      "responseModel": {
+        "meaning": "POST /auth/logout-all, authenticated and recent AAL2 or verified step-up as required; revokes all sessions; local credentials purged only after confirmed server success",
+        "authority": "server-authoritative; validate purpose/IDs and revocation outcome; not evidence of push token deletion"
+      },
+      "backendEffect": "POST /auth/logout-all, authenticated and recent AAL2 or verified step-up as required; revokes all sessions; local credentials purged only after confirmed server success",
+      "otherBackendRequired": [
+        "Declare independent protected operations and MFA/OTP step-up proof transport, not Fable path/header assumptions",
+        "Define exact routes/methods/auth scheme and request/response DTOs, session ownership and current-device semantics",
+        "Document rate limit/expiry/replay protection, 401/403/429 errors and local session/token/push cleanup confirmation",
+        "Provide security proof consumption/nonce binding and refusal behavior for cross-account/device use"
+      ],
+      "missingGates": [
+        "Real device A/B, generated Backend, live session database revocation and authorization 401/403 tests",
+        "Real OTP email/SMS/provider, expiration, 429 cooldown and concurrent/replayed proof consumption",
+        "Verify push device token unregistration on current-session/logout-all with full lifecycle across devices",
+        "Other Backend-specific MFA/session revocation adapter and Wizard mapping; independent contract tests"
+      ]
     },
     {
       "id": "auth.sessions.revoke-selected",
       "method": "POST",
       "path": "/auth/sessions/revoke-selected",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
+      ],
       "literalPathReferences": [
         "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/revoke-sessions.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/sensitive_session_contract_test.dart",
+        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/sessions/revoke-selected",
+        "auth": "Bearer with enforced contract, user-owned action; no cookie secrets",
+        "fields": "POST /auth/sessions/revoke-selected, 1–100 UUID v4; one server transaction, one step-up proof for selected devices; response revoked/count and currentSessionRevoked; no per-device loop"
+      },
+      "responseModel": {
+        "meaning": "POST /auth/sessions/revoke-selected, 1–100 UUID v4; one server transaction, one step-up proof for selected devices; response revoked/count and currentSessionRevoked; no per-device loop",
+        "authority": "server-authoritative; validate purpose/IDs and revocation outcome; not evidence of push token deletion"
+      },
+      "backendEffect": "POST /auth/sessions/revoke-selected, 1–100 UUID v4; one server transaction, one step-up proof for selected devices; response revoked/count and currentSessionRevoked; no per-device loop",
+      "otherBackendRequired": [
+        "Declare independent protected operations and MFA/OTP step-up proof transport, not Fable path/header assumptions",
+        "Define exact routes/methods/auth scheme and request/response DTOs, session ownership and current-device semantics",
+        "Document rate limit/expiry/replay protection, 401/403/429 errors and local session/token/push cleanup confirmation",
+        "Provide security proof consumption/nonce binding and refusal behavior for cross-account/device use"
+      ],
+      "missingGates": [
+        "Real device A/B, generated Backend, live session database revocation and authorization 401/403 tests",
+        "Real OTP email/SMS/provider, expiration, 429 cooldown and concurrent/replayed proof consumption",
+        "Verify push device token unregistration on current-session/logout-all with full lifecycle across devices",
+        "Other Backend-specific MFA/session revocation adapter and Wizard mapping; independent contract tests"
+      ]
     },
     {
       "id": "auth.sessions.revoke-one",
       "method": "POST",
       "path": "/auth/sessions/:id/revoke",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [
-        "packages/fable_core/lib/src/fable_auth_gateway.dart",
-        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
       ],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/sensitive_session_contract_test.dart",
+        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/sessions/:id/revoke",
+        "auth": "Bearer with enforced contract, user-owned action; no cookie secrets",
+        "fields": "POST /auth/sessions/:id/revoke (Flutter exported path uses {id}), per-user UUID v4; currentSessionRevoked bool controls local token purge; other-device actions require recent AAL2 or verified SENSITIVE_ACTION step-up proof"
+      },
+      "responseModel": {
+        "meaning": "POST /auth/sessions/:id/revoke (Flutter exported path uses {id}), per-user UUID v4; currentSessionRevoked bool controls local token purge; other-device actions require recent AAL2 or verified SENSITIVE_ACTION step-up proof",
+        "authority": "server-authoritative; validate purpose/IDs and revocation outcome; not evidence of push token deletion"
+      },
+      "backendEffect": "POST /auth/sessions/:id/revoke (Flutter exported path uses {id}), per-user UUID v4; currentSessionRevoked bool controls local token purge; other-device actions require recent AAL2 or verified SENSITIVE_ACTION step-up proof",
+      "otherBackendRequired": [
+        "Declare independent protected operations and MFA/OTP step-up proof transport, not Fable path/header assumptions",
+        "Define exact routes/methods/auth scheme and request/response DTOs, session ownership and current-device semantics",
+        "Document rate limit/expiry/replay protection, 401/403/429 errors and local session/token/push cleanup confirmation",
+        "Provide security proof consumption/nonce binding and refusal behavior for cross-account/device use"
+      ],
+      "missingGates": [
+        "Real device A/B, generated Backend, live session database revocation and authorization 401/403 tests",
+        "Real OTP email/SMS/provider, expiration, 429 cooldown and concurrent/replayed proof consumption",
+        "Verify push device token unregistration on current-session/logout-all with full lifecycle across devices",
+        "Other Backend-specific MFA/session revocation adapter and Wizard mapping; independent contract tests"
+      ]
     },
     {
       "id": "auth.password-policy.get",
@@ -1231,5 +1417,5 @@
       "disposition": "NOT_DECIDED"
     }
   ],
-  "snapshotUpdate": "RC91: public OTP request/verify and PASSWORD_RESET source DTO/routes/UI/tests reviewed (3 additional operations). 12 SOURCE_IMPLEMENTED_E2E_PENDING, 28 NOT_DECIDED, zero live E2E. No Other Backend implicit routes or Wizard approval."
+  "snapshotUpdate": "RC92: 5 further authenticated sensitive OTP and device session revocation operations source-reviewed with gateway proof binding/self-revocation safety and UI regressions. Auth 17/40 SOURCE_IMPLEMENTED_E2E_PENDING, 23 NOT_DECIDED, 0 real live E2E, Other Backend remains separately unmapped."
 }
