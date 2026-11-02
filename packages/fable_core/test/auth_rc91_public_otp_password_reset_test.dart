@@ -66,6 +66,9 @@ void main(){
     expect(result.sessionsRevoked,3);
     expect(result.twoFactorPreserved,true);
     expect(session.identityRevision,0);
+    await expectLater(gateway.completePasswordReset(proof,
+      newPassword:'repeat-check'),throwsStateError);
+    expect(requests.length,3);
     expect(requests.map((x)=>x.path),[
       '/auth/otp/public/request','/auth/otp/public/verify','/auth/password/reset']);
     for(final req in requests){
