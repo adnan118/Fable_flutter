@@ -22,8 +22,8 @@
   },
   "counts": {
     "authBackendOperations": 40,
-    "authSourceReviewed": 17,
-    "authUndecided": 23,
+    "authSourceReviewed": 22,
+    "authUndecided": 18,
     "featureFamilies": 17,
     "liveE2EAccepted": 0,
     "backendCapabilityBlueprints": 50
@@ -35,7 +35,7 @@
     "backendActualCode": "Backend source behavior audit; no live generated project acceptance",
     "otherBackend": "distinct gateway and mapping, no Fable auth route imports",
     "zip": "GitHub Actions artifact in private Backend repository only; ZIP contains git-tracked source, ledger, provenance and hashes",
-    "authSourceReviewSlice": "RC92: 5 authenticated sensitive OTP and session revocation operations source-reviewed, now 17/40, real live E2E still zero"
+    "authSourceReviewSlice": "RC93: verified TWO_FACTOR status/enable/disable and destination-bound email/phone contact changes added to source-reviewed operations. 22/40 reviewed, 18 pending; zero real E2E."
   },
   "disclaimer": "Source-sync integrity is not a claim of Backend+database+FCM+Android+iOS real E2E parity; do not export production credentials, private .env, key stores, node_modules or caches."
 }
