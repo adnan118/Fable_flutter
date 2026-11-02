@@ -15,13 +15,14 @@
 4. Every managed selection change invalidates the permission UI snapshot immediately and starts a fresh user-global permissions read. In-flight earlier snapshots are discarded by the existing generation epoch. Foreground and 403 revalidation remain intact.
 5. The permission endpoint is deliberately called without a managed-entity header. Managed role checks remain separate and are revalidated by the Backend on entity-scoped operations.
 6. `FableManagedAccountsRepository.executeUsingStore` now checks both shared identity namespace and exact Backend identity. A 403 or `MANAGED_ACCOUNT_NOT_FOUND` on an explicitly scoped operation clears the selected context.
-7. The Wizard's selected-feature audit now detects missing app/store/bootstrap/session/repository wiring when both Profile and Access Control are selected and the imported Fable contract contains managed-entity operations.
+7. `FableManagedAccountsPage` re-reads the signed-in user's memberships when the app resumes; a role downgrade or revoked membership clears the selected entity and propagates invalidation to Access Control.
+8. The Wizard's selected-feature audit now detects missing app/store/bootstrap/session/repository wiring when both Profile and Access Control are selected and the imported Fable contract contains managed-entity operations.
 
 ## Regression coverage
 
 - Core store tests verify that distinct gateway objects may share only the same identity namespace and exact Backend binding.
 - Access Control lifecycle tests verify immediate snapshot invalidation, refetch on selection changes, and rejection of late prior snapshots.
-- Managed repository tests verify stale A/B/A responses remain discarded and a scoped 403 clears the selected entity.
+- Managed repository tests verify stale A/B/A responses remain discarded a scoped 403 clears the selected entity, and resume refresh handles role downgrade.
 - `test/managed-access-context-wizard.test.mjs` verifies the Wizard audit passes on the starter and fails closed when binding code is absent.
 
 ## Remaining work
