@@ -8,12 +8,15 @@ class FableManagedAccount {
     required this.id,required this.type,required this.nameAr,
     required this.nameEn,required this.status,required this.visibility,
     required this.collaborationEnabled,required this.managersCanInvite,
-    this.isOwner=false,this.slug,
+    this.isOwner=false,this.slug,this.effectiveAccess,
   });
   final String id,type,nameAr,nameEn,status,visibility;
   final String? slug;
   final bool collaborationEnabled,managersCanInvite;
   final bool isOwner;
+  /// Role in the latest authenticated listMine snapshot (not an authorization).
+  /// Missing/inactive membership never validates a previously selected role.
+  final String? effectiveAccess;
 
   static final _uuid=RegExp(
     r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
@@ -35,13 +38,27 @@ class FableManagedAccount {
       throw const FormatException('Invalid managed entity status or visibility');
     if(raw['collaborationEnabled'] is! bool||raw['managersCanInvite'] is! bool)
       throw const FormatException('Invalid managed entity collaboration settings');
-    // listMine only returns the requester's memberships. Never infer OWNER
-    // from a visible entity or from the owner's public identifier.
+    // listMine contains only the current user's memberships, not everyone.
+    // A previous MANAGER selection must be revoked when Backend now reports
+    // VIEWER, inactive membership, or no trustworthy membership at all.
     final memberships=raw['memberships'];
-    final isOwner=memberships is List &&
-      memberships.length<=100 &&
-      memberships.any((membership)=>membership is Map &&
-        membership['access']=='OWNER' && membership['active']==true);
+    String? effectiveAccess;
+    if(memberships!=null) {
+      if(memberships is! List || memberships.length>100)
+        throw const FormatException('Invalid managed membership list');
+      for(final membership in memberships) {
+        if(membership is! Map || membership['active'] is! bool ||
+            !const {'OWNER','MANAGER','VIEWER'}.contains(membership['access'])) {
+          throw const FormatException('Invalid managed membership role');
+        }
+        if(membership['active']==true) {
+          if(effectiveAccess!=null)
+            throw const FormatException('Conflicting active managed memberships');
+          effectiveAccess=membership['access'] as String;
+        }
+      }
+    }
+    final isOwner=effectiveAccess=='OWNER';
     final rawSlug=raw['slug'];
     if(rawSlug!=null&&(rawSlug is! String||
        !RegExp(r'^[a-z0-9][a-z0-9-]{1,189}[a-z0-9]$').hasMatch(rawSlug)))
@@ -51,7 +68,7 @@ class FableManagedAccount {
       status:status,visibility:visibility,
       collaborationEnabled:raw['collaborationEnabled'] as bool,
       managersCanInvite:raw['managersCanInvite'] as bool,isOwner:isOwner,
-      slug:rawSlug as String?);
+      effectiveAccess:effectiveAccess,slug:rawSlug as String?);
   }
 }
 
