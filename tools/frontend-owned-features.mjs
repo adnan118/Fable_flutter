@@ -10,6 +10,7 @@ import {createInterface} from 'node:readline/promises';
 import {pathToFileURL} from 'node:url';
 import {FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
 import {readFrontendOwnedDecisions,updateFrontendOwnedChoice} from './frontend-owned-decisions.mjs';
+import {auditSelectedFeatureIntegration,formatIntegrationGapReport} from './audit-selected-feature-integration.mjs';
 
 function resolveProjectId(root) {
   const file=resolve(root,'.fable/frontend-setup.json');
@@ -45,6 +46,13 @@ export async function chooseFrontendFeature(root,projectId,{
     return {applied:false,cancelled:true};
   }
   updateFrontendOwnedChoice(root,projectId,feature,choices[state],{apply:true});
+  try{
+    const audit=auditSelectedFeatureIntegration(root);
+    if(audit.selectedFeatureCount>0)show(formatIntegrationGapReport(audit));
+  }catch(error){
+    show('⚠ تعذر تدقيق الخدمة المختارة: '+String(error?.message??error)+
+      ' — شغّل pnpm wizard:check لمراجعة العقد');
+  }
   return {applied:true,feature,state,backendPermissions:'unchanged',deletesPackages:false};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
