@@ -43,7 +43,11 @@ class FableManagedEntityStore extends ChangeNotifier {
      throw ArgumentError('Invalid authenticated Backend identity');
    if(_backendIdentity==identity)return;
    _backendIdentity=identity;
-   clear();
+   // Backend identity replacement invalidates the context generation even
+   // when no entity was selected, so listeners cannot retain old snapshots.
+   _active=null;
+   _selectionRevision++;
+   notifyListeners();
  }
  FableManagedEntitySelection? get selected{
    final current=_active;
