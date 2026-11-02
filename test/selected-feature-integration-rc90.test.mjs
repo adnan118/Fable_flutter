@@ -89,7 +89,7 @@ test('RC90 gives method/path and per-DTO exact deficits on partially mapped serv
     assert.ok(f.missing.some(x=>x.code==='REQUIRED_OPERATION_MISSING'&&
       x.operationId==='external.notices.mark-read'&&x.detail.includes('PATCH /notices/{id}/read')));
     assert.ok(f.missing.some(x=>x.code==='EVIDENCE_FILE_NOT_FOUND'));
-    assert.ok(f.missing.some(x=>x.code==='REQUIRED_OPERATION_UNBOUND'===false));
+    assert.equal(f.missing.some(x=>x.code==='REQUIRED_OPERATION_UNBOUND' && x.operationId==='external.notices.list'),false);
     assert.ok(!f.missing.some(x=>x.code==='REQUIRED_OPERATION_MISSING'&&
       x.operationId==='external.notices.list'));
   }finally{rmSync(root,{recursive:true,force:true});}
