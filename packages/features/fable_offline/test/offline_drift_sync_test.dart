@@ -65,6 +65,23 @@ void main(){
     expect(remote.keys,[id]);
     expect(await sync.pendingCount,0);
   });
+  test('offline cache and local queue are usable with a verified local identity',()async{
+    final db=FableOfflineDriftStore(NativeDatabase.memory());
+    addTearDown(db.close);
+    final context=VerifiedContext(scope),sync=engine(db,context);
+    context.online=false;
+    await sync.cacheApprovedRead(operationId:'public.posts.get',
+      cacheKey:'feed',response:{'items':[1,2]},ttl:const Duration(hours:1));
+    expect(await sync.cachedRead(operationId:'public.posts.get',
+      cacheKey:'feed'),{'items':[1,2]});
+    await sync.enqueueApprovedWrite(operationId:'social.react',resourceId:'post1',
+      body:{'liked':true},baseVersion:'v1');
+    final executor=FakeExecutor(const FableSyncAck(
+      FableSyncDisposition.acknowledged,serverVersion:'v2'));
+    expect(await sync.flush(executor),0);
+    expect(executor.keys,isEmpty);
+    expect(await sync.pendingCount,1);
+  });
   test('unknown outcome retries same idempotency ID; no false ack',()async{
     final db=FableOfflineDriftStore(NativeDatabase.memory());
     addTearDown(db.close);
