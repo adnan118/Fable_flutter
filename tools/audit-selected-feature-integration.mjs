@@ -8,7 +8,7 @@
  * unknown contract requirements from verified missing API operations.
  */
 import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
-import {resolve,join,dirname} from 'node:path';
+import {resolve,join,dirname,relative,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {FEATURE_IDS,FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
@@ -35,7 +35,9 @@ const safePath=(root,name)=>{
     name.split('/').some(s=>s==='..'||s==='.')||
     !/^[a-zA-Z0-9/_\-.]+$/.test(name))return null;
   const full=resolve(root,name);
-  if(full===root||!full.startsWith(root+'/'))return null;
+  const relativePath=relative(root,full);
+  if(!relativePath||relativePath==='..'||relativePath.startsWith('..\\')||
+    relativePath.startsWith('../')||isAbsolute(relativePath))return null;
   return full;
 };
 function checkedFile(root,name){
@@ -379,7 +381,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).hr
       mkdirSync(dirname(target),{recursive:true});
       writeFileSync(target,JSON.stringify(report,null,2)+'\n');
     }
-    if(opt.strict&&report.features.some(x=>x.needsBackend&&x.state!=='CLIENT_ONLY_NO_BACKEND_REQUIRED'))
+    if(opt.strict&&(!report.selectionExplicit||report.features.some(x=>x.missing.length>0)))
       process.exitCode=2;
   }catch(error){process.stderr.write('Integration audit error: '+error.message+'\n');process.exitCode=1;}
 }
