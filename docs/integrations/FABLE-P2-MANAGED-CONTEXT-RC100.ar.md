@@ -21,6 +21,6 @@
 4. A store bound to different Auth credentials cannot run the operation.
 
 ### Remaining P2 and P6 work
-- Integrate this safe store method into newly scaffolded feature repositories that make scoped requests (Wizard P5 integration).
+- RC101 closes the app/store/Access Control namespace binding. Newly scaffolded project-specific repositories still need to opt into `executeUsingStore` for explicitly scoped operations; see [RC101](./FABLE-P2-MANAGED-ACCESS-INTEGRATION-RC101.ar.md).
 - React to revocation or role downgrade while a screen is open; RC99 invalidates selected context on refresh/403.
 - Actual Backend+DB/device E2E remains unapproved; source mocks do not establish live E2E.
