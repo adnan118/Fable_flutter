@@ -625,7 +625,8 @@ class FableManagedAccountsRepository {
       throw StateError('Selected entity store belongs to another Auth session or Backend');
     }
     final choice=store.selected;
-    if(choice==null)throw StateError('No verified managed entity selected');
+    if(choice is! FableManagedAccountSelection)
+      throw StateError('No Backend-confirmed Fable managed account selected');
     final generation=store.selectionRevision;
     final result=await executeInContext(choice,operationId,
       path:path,query:query,body:body);
