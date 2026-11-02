@@ -53,12 +53,13 @@ class _UsernameState extends State<FableUsernameSettingsPage> {
     }
   }
 
-  Future<void> _update({String? proof}) async {
+  Future<void> _update({FableVerifiedSensitiveProof? proof}) async {
     if (_busy || !widget.gateway.canUpdateUsername) return;
     setState(() => _busy = true);
     try {
-      final result = await widget.gateway.updateUsername(_value.text,
-        securityChallengeId: proof);
+      final result = proof == null
+        ? await widget.gateway.updateUsername(_value.text)
+        : await widget.gateway.updateUsernameWithProof(_value.text, proof);
       if (!mounted || _revision != widget.gateway.session.identityRevision) return;
       setState(() {
         _status = result.changed ? 'Backend confirmed username update.'
@@ -96,12 +97,12 @@ class _UsernameState extends State<FableUsernameSettingsPage> {
   Future<void> _verifyAndUpdate() async {
     if (_busy || _challengeId == null) return;
     setState(() => _busy = true);
-    String? proof;
+    FableVerifiedSensitiveProof? proof;
     try {
       final verified = await widget.gateway.verifySensitiveActionOtp(
         _challengeId!, _otp.text.trim());
       // A verified proof is bound to the gateway and current identity.
-      proof = verified.challengeId;
+      proof = verified;
     } catch (_) {
       if (mounted) setState(() => _status = 'Verification rejected or expired.');
     } finally { if (mounted) setState(() => _busy = false); }
