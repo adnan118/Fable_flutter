@@ -1,5 +1,8 @@
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
+> **قرار RC88 المعتمد للتخطيط فقط (2026-11-02):** Offline مفعّل في إعداد Fable المرجعي مع SQLite/Drift، والمزامنة عند فتح/استعادة التطبيق ومحاولات خلفية Best Effort عبر Android/iOS وفق قيودهما. **لم نغير أي سلوك تنفيذي، ولم نفعّل الـWizard برمجياً؛ لا موعد خلفياً مضموناً ولا عمليات كتابة Offline دون عقد Backend.** التفاصيل والمتطلبات لـFable/Other والـWizard في [ADR RC88](./FABLE-OFFLINE-BACKGROUND-SYNC-ADR-RC88.ar.md).  
+
+
 > **مرجع الخطة الموحّد RC80، وآخر دفعة تدقيق RC86 — 2026-11-01.**
 > الباك المرجعي وقت الفحص: `adnan118/Fable@226cbcdc542ebe9c005d7445d84cc0ec10631932`.
 > الفرونت المرجعي وقت الفحص: `adnan118/Fable_flutter@94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7` (بعد RC79).
