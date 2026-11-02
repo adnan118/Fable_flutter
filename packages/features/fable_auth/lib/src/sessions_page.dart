@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
+import 'security_settings_page.dart';
 
 /// Actual Fable Backend GET /auth/sessions consumer.
 /// Revocation is intentionally not exposed until the protected Step-up
@@ -307,6 +308,16 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
           icon:const Icon(Icons.refresh),
           label:Text(ar?'تحديث الجلسات':'Refresh sessions'),
         ),
+        if(widget.gateway.canManageTwoFactor||
+           widget.gateway.canChangeEmailWithOtp||
+           widget.gateway.canChangePhoneWithOtp)
+          OutlinedButton.icon(
+            onPressed:_actionBusy?null:()=>unawaited(
+              Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                builder:(_)=>FableSecuritySettingsPage(
+                  gateway:widget.gateway)))),
+            icon:const Icon(Icons.shield_outlined),
+            label:Text(ar?'إعدادات أمان الحساب':'Account security settings')),
         if(_loading) const Padding(padding:EdgeInsets.all(20),child:Center(child:CircularProgressIndicator())),
         if(_error!=null) Padding(padding:const EdgeInsets.all(12),
           child:Text(_error!,textAlign:TextAlign.center)),
