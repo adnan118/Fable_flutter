@@ -114,12 +114,12 @@ class UnifiedApiClient implements BackendApiGateway {
     if (ifMatch != null) headers['If-Match']='"$ifMatch"';
     if(securityChallengeId!=null){
       const eligiblePaths={'/auth/sessions/revoke-selected','/auth/logout-all',
-        '/auth/sessions/{id}/revoke'};
+        '/auth/sessions/{id}/revoke','/auth/social/:provider'};
       final uuid=RegExp(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
         caseSensitive:false);
       if(contract is! FableContract || adapter is! FableTransportAdapter ||
          !op.requiresAuth || op.credentialHeader!=null ||
-         op.method!='POST'||!eligiblePaths.contains(op.path)||
+         (op.method!='POST' && !(op.method=='DELETE' && op.path=='/auth/social/:provider'))||!eligiblePaths.contains(op.path)||
          !uuid.hasMatch(securityChallengeId)){
         throw ArgumentError('Security challenge is not authorized for this verified Fable operation');
       }
