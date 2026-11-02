@@ -198,7 +198,7 @@ class FableSocialRepository {
     final payload = adapter.parseAuthResponse(response.data);
     if (payload is! Map) throw const FormatException('Malformed social auth response');
     if (link) {
-      if (payload['linked'] != true || payload['provider'] != provider.wireName) {
+      if (payload['linked'] != true || payload['provider'] != provider.wireName.toUpperCase()) {
         throw const FormatException('Link not confirmed by backend');
       }
       return const FableSocialAuthResult(signedIn: true, requiresTwoFactor: false);
