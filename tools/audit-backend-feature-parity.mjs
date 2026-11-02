@@ -16,6 +16,9 @@ const WIRED=Object.freeze({
   'auth.session-policy':'packages/fable_core/lib/src/fable_auth_gateway.dart',
   'auth.2fa.login.request':'packages/fable_core/lib/src/fable_auth_gateway.dart',
   'auth.2fa.login.complete':'packages/fable_core/lib/src/fable_auth_gateway.dart',
+  'auth.otp.public.request':'packages/fable_core/lib/src/fable_auth_gateway.dart',
+  'auth.otp.public.verify':'packages/fable_core/lib/src/fable_auth_gateway.dart',
+  'auth.password.reset':'packages/fable_core/lib/src/fable_auth_gateway.dart',
   'account.me':'packages/fable_core/lib/src/fable_auth_gateway.dart',
   'account.displayName.update':'packages/fable_core/lib/src/fable_auth_gateway.dart',
   'auth.social.challenge':'packages/features/fable_social/lib/src/social_auth_repository.dart',
@@ -48,9 +51,17 @@ const WIRED=Object.freeze({
 const VIEW_SOURCES=Object.freeze({
   'auth.login':'packages/features/fable_auth/lib/src/login_page.dart',
   'auth.sessions':'packages/features/fable_auth/lib/src/sessions_page.dart',
+  'auth.otp.public.request':'packages/features/fable_auth/lib/src/password_reset_page.dart',
+  'auth.otp.public.verify':'packages/features/fable_auth/lib/src/password_reset_page.dart',
+  'auth.password.reset':'packages/features/fable_auth/lib/src/password_reset_page.dart',
   'content.page.read':'packages/features/fable_content/lib/src/published_content_index.dart',
   'notifications.inbox':'packages/features/fable_notifications/lib/src/inbox_page.dart',
   'languages.list':'packages/features/fable_localization/lib/src/languages_page.dart',
+});
+const VIEW_WITNESS=Object.freeze({
+  'auth.otp.public.request':'requestPasswordResetOtp',
+  'auth.otp.public.verify':'verifyPasswordResetOtp',
+  'auth.password.reset':'completePasswordReset',
 });
 const MOBILE_CORE='assets/contracts/mobile-core-operations.json';
 const isWebOnly=op=>op.id.startsWith('auth.web.')||op.path.startsWith('/auth/web/');
@@ -183,6 +194,8 @@ export function auditBackendFeatureParity(root,{requireProjectBinding=false,expe
           ?readFileSync(join(path,viewSource),'utf8').includes('FableInboxPage')
         :op.id==='languages.list'
           ?readFileSync(join(path,viewSource),'utf8').includes('FableLanguagesPage')
+        :Object.hasOwn(VIEW_WITNESS,op.id)
+          ?readFileSync(join(path,viewSource),'utf8').includes(VIEW_WITNESS[op.id])
         :readFileSync(join(path,viewSource),'utf8').includes('auth.login'));
     return {...op,status:'SOURCE_WIRED_NOT_LIVE_TESTED',source,
       viewSource:screenWired?viewSource:null,

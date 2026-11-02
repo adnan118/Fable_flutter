@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'sessions_page.dart';
 import 'change_password_page.dart';
+import 'password_reset_page.dart';
 
 /// شاشة الدخول الخاصة بـFable تعتمد عقد مصادقة الموبايل ومعرّف الجهاز.
 /// نجاح هذه الشاشة لا يعني نقل تغيير البريد/الهاتف/كلمة المرور وOTP كلها.
@@ -388,6 +389,24 @@ class _FableLoginPageState extends State<FableLoginPage> {
             child:_busy?const SizedBox(height:18,width:18,child:CircularProgressIndicator(strokeWidth:2)):
               const Text('Sign in')),
         ]))),
+        if(!_signedIn&&_challenge==null&&
+            (_url.isNotEmpty||widget.gateway!=null)&&
+            _client().canResetPasswordWithPublicOtp)
+          Padding(padding:const EdgeInsets.only(top:8),
+            child:TextButton(
+              onPressed:_busy?null:()async{
+                final reset=await Navigator.of(context).push<bool>(
+                  MaterialPageRoute<bool>(builder:(_)=>FablePasswordResetPage(
+                    gateway:_client())));
+                if(reset==true&&mounted){
+                  setState((){
+                    _password.clear();
+                    _savedSessionAvailable=false;
+                    _message='Password reset confirmed by Backend. Sign in again.';
+                  });
+                }
+              },
+              child:const Text('Forgot password? Verify by OTP'))),
         if(_message!=null)Padding(padding:const EdgeInsets.only(top:20),child:Text(_message!,textAlign:TextAlign.center)),
         if(_url.isEmpty && widget.gateway==null)const Padding(padding:EdgeInsets.only(top:14),child:Text(
           'Configure with --dart-define=FABLE_API_BASE_URL=https://your-api.example',textAlign:TextAlign.center)),

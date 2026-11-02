@@ -462,10 +462,104 @@ class FableAuthGateway implements BackendApiGateway {
     return id;
   }
 
+
+  /// Public reset is allowed only when all three exact Backend Fable paths
+  /// exist with the public auth boundary. Never borrow External Backend APIs.
+  bool get canResetPasswordWithPublicOtp =>
+    _supportsAuthOperation('auth.otp.public.request','POST','/auth/otp/public/request',
+      requiresAuth:false) &&
+    _supportsAuthOperation('auth.otp.public.verify','POST','/auth/otp/public/verify',
+      requiresAuth:false) &&
+    _supportsAuthOperation('auth.password.reset','POST','/auth/password/reset',
+      requiresAuth:false);
+
+  /// QUEUED is a durable delivery command, not confirmation of email/SMS delivery.
+  Future<FablePasswordResetChallenge> requestPasswordResetOtp({
+    required String identifier,String? preferredChannel,
+  })async{
+    final id=identifier.trim();
+    if(id.isEmpty||id.length>191)throw ArgumentError('Invalid reset identifier');
+    if(preferredChannel!=null&&!const {'EMAIL','PHONE'}.contains(preferredChannel)){
+      throw ArgumentError('Invalid OTP channel');
+    }
+    _requireAuthOperation('auth.otp.public.request','POST',
+      '/auth/otp/public/request',requiresAuth:false);
+    final rev=session.identityRevision;
+    final response=await _api.request('auth.otp.public.request',
+      authorized:false,body:{'purpose':'PASSWORD_RESET','identifier':id,
+        if(preferredChannel!=null)'preferredChannel':preferredChannel});
+    if(session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data),challengeId=data['challengeId'];
+    if(data['accepted']!=true||data['deliveryStatus']!='QUEUED'||
+       challengeId is! String||!_uuid.hasMatch(challengeId)){
+      throw const FormatException('Backend did not accept a password reset challenge');
+    }
+    return FablePasswordResetChallenge._(challengeId,
+      _expiresAt(data['expiresAt'],context:'password-reset OTP'),rev,this);
+  }
+
+  /// A verified reset OTP cannot become an authenticated login session.
+  Future<FablePasswordResetProof> verifyPasswordResetOtp(
+    FablePasswordResetChallenge pending,String code)async{
+    if(!identical(pending._owner,this)||
+       session.identityRevision!=pending._identityRevision||
+       !pending.expiresAt.isAfter(DateTime.now().toUtc())){
+      throw StateError('Password reset challenge is expired or belongs to another session');
+    }
+    if(!RegExp(r'^[0-9]{6,10}$').hasMatch(code)){
+      throw ArgumentError('OTP must be 6 to 10 digits');
+    }
+    _requireAuthOperation('auth.otp.public.verify','POST',
+      '/auth/otp/public/verify',requiresAuth:false);
+    final response=await _api.request('auth.otp.public.verify',
+      authorized:false,body:{'challengeId':pending.challengeId,'code':code});
+    if(session.identityRevision!=pending._identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data);
+    if(data['verified']!=true||data['purpose']!='PASSWORD_RESET'||
+       data['challengeId']!=pending.challengeId){
+      throw const FormatException('Password reset OTP verification has the wrong purpose');
+    }
+    return FablePasswordResetProof._(pending.challengeId,
+      pending._identityRevision,this);
+  }
+
+  /// The server enforces password policy and invalidates all account sessions.
+  /// A reset response never automatically signs in or persists a password.
+  Future<FablePasswordResetResult> completePasswordReset(
+    FablePasswordResetProof proof,{required String newPassword})async{
+    if(!identical(proof._owner,this)||
+       session.identityRevision!=proof._identityRevision){
+      throw StateError('Reset proof belongs to another identity or gateway');
+    }
+    if(proof._completed)throw StateError('Password reset proof has been consumed');
+    if(newPassword.isEmpty||newPassword.length>1024){
+      throw ArgumentError('Password must contain 1 to 1024 characters');
+    }
+    _requireAuthOperation('auth.password.reset','POST',
+      '/auth/password/reset',requiresAuth:false);
+    final response=await _api.request('auth.password.reset',
+      authorized:false,body:{'challengeId':proof.challengeId,
+        'newPassword':newPassword});
+    if(session.identityRevision!=proof._identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(response.data);
+    if(data['changed']!=true||data['sessionsRevoked'] is! int||
+       (data['sessionsRevoked'] as int)<0||
+       data['twoFactorPreserved'] is! bool){
+      throw const FormatException('Backend did not confirm the password reset');
+    }
+    proof._completed=true; // Mark only after the server confirmed its write.
+    return FablePasswordResetResult(
+      sessionsRevoked:data['sessionsRevoked'] as int,
+      twoFactorPreserved:data['twoFactorPreserved'] as bool);
+  }
+
   /// The verified challenge is never a new login, nor a reusable local grant.
   /// It is a short-lived proof consumed atomically by the protected backend operation.
   Future<FableVerifiedSensitiveProof> verifySensitiveActionOtp(String challengeId,String code) async {
-    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
+    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{6,10}$').hasMatch(code))
       throw ArgumentError('Invalid OTP challenge or code');
     final rev=session.identityRevision;
     final response=await _api.request(_route('/auth/otp/verify','POST'),
@@ -745,4 +839,33 @@ class FableVerifiedSensitiveProof {
   const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision);
   final String _challengeId;
   final int _identityRevision;
+}
+
+
+/// Public OTP request accepted by Backend, with delivery only queued.
+class FablePasswordResetChallenge {
+  const FablePasswordResetChallenge._(
+    this.challengeId,this.expiresAt,this._identityRevision,this._owner);
+  final String challengeId;
+  final DateTime expiresAt;
+  final int _identityRevision;
+  final FableAuthGateway _owner;
+}
+
+/// Purpose-bound proof held in memory only; not a login session or a bearer.
+class FablePasswordResetProof {
+  FablePasswordResetProof._(
+    this.challengeId,this._identityRevision,this._owner);
+  final String challengeId;
+  final int _identityRevision;
+  final FableAuthGateway _owner;
+  bool _completed=false;
+}
+
+/// Confirmation returned by Fable after invalidating all affected sessions.
+class FablePasswordResetResult {
+  const FablePasswordResetResult({
+    required this.sessionsRevoked,required this.twoFactorPreserved});
+  final int sessionsRevoked;
+  final bool twoFactorPreserved;
 }

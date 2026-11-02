@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "fable.flutter-feature-parity-master",
-  "snapshotAt": "2026-11-01",
+  "snapshotAt": "2026-11-02",
   "flutterMainAtAudit": "94a63b77565ae7ee796e5ecbcf42aac8eb9ea7a7",
   "backendMainAtAudit": "226cbcdc542ebe9c005d7445d84cc0ec10631932",
   "basis": "Flutter source main+CI, Fable blueprints manifests on main; not generated real-project contract",
@@ -686,5 +686,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC85: 9/40 Auth SOURCE_IMPLEMENTED_E2E_PENDING (2FA request+complete added); 31 NOT_DECIDED; 0 live E2E, Other Backend MFA/Wizard still unmapped."
+  "latestSlice": "RC91: 12/40 Auth SOURCE_IMPLEMENTED_E2E_PENDING after public OTP request/verify + password reset (3 operations), 28 NOT_DECIDED, 0 live E2E. Other Backend Auth, generated-project OTP providers and device tests remain pending."
 }
