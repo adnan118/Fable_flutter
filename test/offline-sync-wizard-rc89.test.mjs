@@ -36,10 +36,10 @@ test('RC89 explicit consent preserves identity and never invents financial/Backe
     enabled:true,ask:async()=> 'اعتمد'}),/another project/);
   assert.throws(()=>saveFrontendOwnedDecisions(root,{
     ...disk,offlineSync:{...disk.offlineSync,guaranteedBackgroundExecution:true}},
-    {apply:true}),/Invalid Offline/Sync policy/);
+    {apply:true}),/Invalid Offline\/Sync policy/);
   assert.throws(()=>saveFrontendOwnedDecisions(root,{
     ...disk,offlineSync:{...disk.offlineSync,writeReplay:'all_operations'}},
-    {apply:true}),/Invalid Offline/Sync policy/);
+    {apply:true}),/Invalid Offline\/Sync policy/);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
 
