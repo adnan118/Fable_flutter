@@ -5,7 +5,7 @@ part of 'fable_auth_gateway.dart';
 extension FableUsernameOperations on FableAuthGateway {
   bool get canCheckUsernameAvailability => _supportsAuthOperation(
     'auth.username.availability', 'GET',
-    '/auth/me/username/availability/{username}', requiresAuth: true);
+    '/auth/me/username/availability/:username', requiresAuth: true);
 
   bool get canUpdateUsername => _supportsAuthOperation(
     'auth.username.update', 'PATCH', '/auth/me/username',
@@ -33,7 +33,7 @@ extension FableUsernameOperations on FableAuthGateway {
   Future<FableUsernameAvailability> checkUsernameAvailability(
       String username) async {
     _requireAuthOperation('auth.username.availability', 'GET',
-      '/auth/me/username/availability/{username}', requiresAuth: true);
+      '/auth/me/username/availability/:username', requiresAuth: true);
     final value = _validateUsername(username);
     final revision = session.identityRevision;
     final response = await _api.request(
