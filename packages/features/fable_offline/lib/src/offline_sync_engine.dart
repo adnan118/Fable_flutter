@@ -157,6 +157,7 @@ final class FableOfflineSyncEngine {
             }
             await store.acknowledge(scope,row.id);
             count++;
+            break;
           case FableSyncDisposition.retryLater:
             final attempt=row.attempts+1;
             if(attempt>6){
