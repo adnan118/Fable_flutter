@@ -251,6 +251,19 @@ export function formatFrontendSetupReview(snapshot,{root=null}={}){
   return lines.join('\n');
 }
 export const isExplicitFrontendApproval=answer=>['اعتمد','APPROVE'].includes(String(answer??'').trim());
+function reportSelectedFeatureGapsAfterApply(project,summary) {
+  try{
+    const audit=auditSelectedFeatureIntegration(project);
+    summary.integrationGapAudit={selectedFeatureCount:audit.selectedFeatureCount,
+      counts:audit.counts,fullLiveE2E:false};
+    if(audit.selectedFeatureCount>0)console.log(formatIntegrationGapReport(audit));
+    else console.warn('⚠ لم يثبت اختيار خدمات المشروع؛ شغّل pnpm wizard:check عند الاختيار');
+  }catch(error){
+    summary.integrationGapAudit={error:String(error?.message??error),fullLiveE2E:false};
+    console.warn('⚠ تدقيق ربط الخدمات لم يكتمل: '+String(error?.message??error)+
+      ' — شغّل pnpm wizard:check بعد إصلاح العقد');
+  }
+}
 function requirePruningPin(snapshot,prune){
   if(prune && (!snapshot.backendAuthority||!snapshot.projectBound))
     throw Error('Pruning requires a pinned Fable Backend contract and explicit project identity');
@@ -265,6 +278,8 @@ async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={}){
   if(sync){
     result.featureSync=sync.syncProjectFeatures(root,snapshot,{apply:snapshot.projectBound,prune});
   }
+  if(result.applied&&snapshot.backendAuthority)
+    reportSelectedFeatureGapsAfterApply(root,result); // AFTER final feature sync
   return result;
 }
 // The confirmation callback is intentionally injectable to test refusals.
@@ -364,26 +379,8 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
   outputFile(project,PROJECT_PATH,snapshot);
   saveFrontendOwnedDecisions(project,frontendOwned,{apply:true});
   summary.frontendOwnedChoicesPreserved=true;
-  // After every approved Wizard write, print an actionable gap report for
-  // exactly the project's selected frontend features, without silently
-  // accepting source-only routes as a complete integration.
-  try {
-    const audit=auditSelectedFeatureIntegration(project);
-    summary.integrationGapAudit={
-      selectedFeatureCount:audit.selectedFeatureCount,counts:audit.counts,
-      fullLiveE2E:false,
-    };
-    if(audit.selectedFeatureCount>0)
-      console.log(formatIntegrationGapReport(audit));
-    else
-      console.warn('⚠ لم يُثبَّت اختيار ميزات المشروع؛ شغّل pnpm wizard:check بعد اختيارها');
-  }catch(error){
-    summary.integrationGapAudit={error:String(error?.message??error),
-      fullLiveE2E:false};
-    console.warn('⚠ لم يكتمل فحص ربط الميزات بالـBackend: '+
-      String(error?.message??error)+
-      '\n  شغّل pnpm wizard:check بعد إصلاح ملفات العقد');
-  }
+  if(!snapshot.backendAuthority)
+    reportSelectedFeatureGapsAfterApply(project,summary); // manual / Other Backend
   return summary;
 }
 async function interactiveManual(question=null,{backendAdapter='custom'}={}){
