@@ -92,6 +92,7 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   Future<void> _commit()async{
     if(verified==null||busy)return;
     if(purpose==FableSecurityOtpPurpose.twoFactor&&status==null)return;
+    var shouldRefresh=false;
     setState(()=>busy=true);
     try{
       final number=purpose==FableSecurityOtpPurpose.twoFactor
@@ -105,13 +106,15 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
         message='Backend confirmed change; other sessions revoked: $number.';
         _clear();purpose=null;status=null;
       });
-      unawaited(_refresh());
+      shouldRefresh=true;
     }on FableApiException catch(e){
       if(!mounted)return;
       setState((){
         if(e.code=='AUTH_RECENT_AUTH_REQUIRED'){
           requiresRecent=true;
           message='A separate recent-auth proof is required.';
+        }else if(e.code=='AUTH_INDEPENDENT_FACTOR_REQUIRED'){
+          message='Backend requires an independent factor. This session cannot meet it.';
         }else{
           message='Backend did not confirm change: '+(e.status==409
             ?'destination conflict.':'check permissions or account state.');
@@ -120,7 +123,12 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
     }catch(_){
       if(mounted)setState(()=>
         message='Change unconfirmed. Verify server state before repeating.');
-    }finally{if(mounted)setState(()=>busy=false);}
+    }finally{
+      if(mounted){
+        setState(()=>busy=false);
+        if(shouldRefresh)unawaited(_refresh());
+      }
+    }
   }
   Future<void> _requestRecent()async{
     if(busy)return;
