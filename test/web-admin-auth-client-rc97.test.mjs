@@ -46,7 +46,7 @@ test('web/refresh sends CSRF token from safe cookie envelope and cannot expose a
  await client.refresh();
  assert.equal(seen[1].path,'/auth/web/refresh');
  assert.equal(seen[1].options.headers['X-CSRF-Token'],'s'.repeat(32));
- assert.equal(seen[1].options.body,null);
+ assert.equal(seen[1].options.body,undefined);
 });
 
 test('web/refresh fails closed without CSRF even when refresh cookie might exist',async()=>{
