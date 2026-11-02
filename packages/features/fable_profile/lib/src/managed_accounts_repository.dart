@@ -621,7 +621,8 @@ class FableManagedAccountsRepository {
   Future<Object?> executeUsingStore(FableManagedEntityStore store,
       String operationId,{Map<String,dynamic>? path,
         Map<String,dynamic>? query,Object? body}) async {
-    if(!store.isBoundToCredentials(gateway.session) || !store.bound) {
+    if(!store.isBoundToCredentials(gateway.session) ||
+       !store.isBoundToBackend(gateway.managedEntityBackendIdentity)) {
       throw StateError('Selected entity store belongs to another Auth session or Backend');
     }
     final choice=store.selected;
