@@ -83,6 +83,23 @@ extension FableUsernameOperations on FableAuthGateway {
   }
 }
 
+extension FableSocialVerifiedProof on FableAuthGateway {
+  /// Recent-auth proof must be issued by the same gateway and current user.
+  /// Only Backend can decide whether the proof has enough assurance or expired.
+  String verifiedSocialActionChallengeId(FableVerifiedSensitiveProof proof) {
+    if (!identical(proof._owner,this) ||
+        proof._identityRevision != session.identityRevision) {
+      throw StateError('Recent-auth proof belongs to another user or gateway');
+    }
+    return proof._challengeId;
+  }
+
+  Future<FableSocialUnlinkOutcome> unlinkSocialIdentityWithProof(
+      String provider,FableVerifiedSensitiveProof proof) =>
+    unlinkSocialIdentity(provider,
+      securityChallengeId:verifiedSocialActionChallengeId(proof));
+}
+
 extension FableSocialUnlinkSecurity on FableAuthGateway {
   bool get canUnlinkSocialIdentity => _supportsAuthOperation(
     'auth.social.unlink', 'DELETE', '/auth/social/:provider',
