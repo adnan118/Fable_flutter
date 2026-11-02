@@ -31,7 +31,7 @@ final class FableForegroundSyncObserver extends WidgetsBindingObserver {
 /// Workers MUST NOT assume the foreground isolate's credentials survive.
 final class FableBestEffortWorkScheduler {
   FableBestEffortWorkScheduler({required this.taskIdentifier,
-    this.uniqueName='fable-verified-offline-sync'});
+    String? uniqueName}):uniqueName=uniqueName??taskIdentifier;
   final String taskIdentifier,uniqueName;
   bool _initialized=false;
   static final _identifier=RegExp(r'^[A-Za-z0-9_-]+([.][A-Za-z0-9_-]+)+$');
