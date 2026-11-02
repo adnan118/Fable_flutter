@@ -103,3 +103,17 @@ test('RC87 rejects forged private Flutter pin and removed capability manifests',
    /Backend capability inventory changed/);
  }finally{rmSync(x.base,{recursive:true,force:true});}
 });
+
+test('RC87 refuses a modified tracked Backend file despite an unchanged Git commit',()=>{
+ const x=fixture();
+ try{
+  write(join(x.back,'docs/packaging-note.md'),'committed note');
+  git(x.back,'add','.');
+  git(x.back,'commit','-qm','allowed packaging note');
+  assert.equal(verifySourcePair({frontendRoot:x.front,backendRoot:x.back})
+   .backendSourceUnchangedSinceAudit,true);
+  write(join(x.back,'docs/packaging-note.md'),'uncommitted edited note');
+  assert.throws(()=>verifySourcePair({frontendRoot:x.front,backendRoot:x.back}),
+   /Backend tracked worktree differs/);
+ }finally{rmSync(x.base,{recursive:true,force:true});}
+});
