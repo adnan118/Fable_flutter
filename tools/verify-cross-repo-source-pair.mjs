@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // RC86: verify Fable-Backend source identity and Flutter Auth source ledger.
 // This verifies imported source declarations, NOT live E2E acceptance.
-import {createHash} from 'node:crypto';
 import {existsSync,readFileSync,readdirSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -27,8 +26,16 @@ function gitSourceUnchangedSinceAudit(root,baseSha,headSha){
     return false;
   }
 }
-function blobHash(buffer){
-  return createHash('sha1').update(Buffer.from('blob '+buffer.length+'\0')).update(buffer).digest('hex');
+function gitCommittedBlobSha(root,path){
+  // Git blob is source-of-truth on Windows too; worktree CRLF conversion
+  // must not generate a false mismatch against the committed LF blob.
+  return execFileSync('git',['rev-parse','HEAD:'+path],
+    {cwd:root,encoding:'utf8'}).trim();
+}
+function requireCleanBackendCheckout(root){
+  const dirty=execFileSync('git',['status','--porcelain','--untracked-files=no'],
+    {cwd:root,encoding:'utf8'}).trim();
+  assert(!dirty,'Backend tracked worktree differs from the recorded Git HEAD');
 }
 export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={}){
   const front=resolve(frontendRoot);
@@ -83,8 +90,9 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     const back=resolve(backendRoot);
     const authFile=join(back,pair.backend.authBlueprint);
     assert(existsSync(authFile),'private Backend auth source manifest missing');
+    requireCleanBackendCheckout(back);
     const buffer=readFileSync(authFile);
-    const actualBlob=blobHash(buffer);
+    const actualBlob=gitCommittedBlobSha(back,pair.backend.authBlueprint);
     assert(actualBlob===pair.backend.authBlueprintBlobSha,
       'Backend auth source changed since Flutter audit; re-audit before packaging');
     const backendAuth=JSON.parse(buffer.toString('utf8'));
