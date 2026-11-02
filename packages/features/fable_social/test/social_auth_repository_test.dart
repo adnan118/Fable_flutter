@@ -35,6 +35,7 @@ FableContract contract({bool insecure=false}) {
     projectName:'test',selectionMode:'explicit');
 }
 class _AuthenticatedSession extends FableSecureSession {
+  _AuthenticatedSession({required String namespace}):super(namespace:namespace);
   @override int identityRevision=0;
   @override Future<String?> get accessToken async=>'mock-session';
   @override Future<String?> get refreshToken async=>null;
