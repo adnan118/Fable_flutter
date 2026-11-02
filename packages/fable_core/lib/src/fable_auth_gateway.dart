@@ -5,6 +5,9 @@ import 'backend_transport_adapter.dart';
 import 'fable_api.dart';
 import 'fable_contract.dart';
 import 'fable_session.dart';
+part 'fable_auth_security.dart';
+part 'fable_auth_contact.dart';
+part 'fable_auth_security_types.dart';
 
 /// المصادقة هنا تخص Fable فقط وتستخدم عمليات Auth المصدّرة لا مسارات متوقعة.
 /// لا نحذف الجلسة عند Timeout/5xx، بل عند فشل صلاحية نهائي موثّق.
