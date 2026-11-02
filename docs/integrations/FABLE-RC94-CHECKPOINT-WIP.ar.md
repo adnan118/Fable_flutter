@@ -24,3 +24,15 @@
 
 ## Recoverability
 The RC93 baseline + this isolated branch preserve reviewed source increments separately from any un-synced local work. Do not merge automatically. The canonical Fable roadmap covers 17 families and priorities P0–P7.
+
+
+## Follow-up implementation (2026-11-02)
+- Social source corruption found by GitHub CI was restored from the known-good RC93 blob, then security changes reapplied safely.
+- Fable Social Link checks the Backend RC66 uppercase provider acknowledgement, while login challenge remains lowercase.
+- Fable-only social unlink uses DELETE `/auth/social/:provider`, authenticated Bearer request, and `X-Security-Challenge-Id` header constrained to UUIDv4 and that route. The server's last-login-method protection remains authoritative.
+- Added simulated backend tests for social linking and unlink; no provider OAuth credentials or real devices used.
+- Added `FableUsernameSettingsPage` reachable from authenticated session management only if the signed Fable contract exports username operations.
+- Username sensitive action flow consumes a proof bound to the same gateway and identity, without exposing it as an arbitrary user-entered identifier.
+- CI diagnosis: first run failed due corrupted social source (repaired); next analyzer run found missing test subclass constructor (repaired). Until latest CI completes, Auth remains at the last accepted RC93 count 22/40 and RC94 is not fully verified.
+- Keep Web/Admin contract IDs separate; no Web Cookie transport implementation is bundled with Flutter.
+- Backend main and locally unsynchronized source remain untouched; packaging comprehensive ZIP from the latest local frontend and backend remains an independent P0 task.
