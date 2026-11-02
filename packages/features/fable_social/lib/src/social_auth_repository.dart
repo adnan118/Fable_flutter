@@ -111,7 +111,7 @@ class FableSocialOperations {
       'apple': '/auth/social/apple',
       'googleLink': '/auth/social/google/link',
       'appleLink': '/auth/social/apple/link',
-      'unlink': '/auth/social/{provider}',
+      'unlink': '/auth/social/:provider',
     };
     for (final entry in fableIds.entries) {
       final op = catalog.operations[entry.value];
@@ -138,7 +138,7 @@ class FableSocialOperations {
           op.credentialHeader != null || op.path.contains('?') || op.path.contains('#') ||
           (!op.path.startsWith('/')) ||
           (binding.key != 'unlink' && (op.path.contains('{') || op.path.contains(':'))) ||
-          (binding.key == 'unlink' && !op.path.contains('{provider}'))) {
+          (binding.key == 'unlink' && !op.path.contains(':provider'))) {
         throw const FormatException('Unsafe social contract binding');
       }
       result[binding.key] = op.id;
