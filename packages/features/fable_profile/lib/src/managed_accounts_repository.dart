@@ -321,9 +321,29 @@ class FableManagedAccountsRepository {
   }
   Future<void> respondToInvitation(String id,{required bool accept}) async{
     if(!FableManagedAccount._uuid.hasMatch(id))throw ArgumentError('Invalid invitation ID');
+    final revision=gateway.session.identityRevision;
     final suffix=accept?'accept':'decline';
-    await gateway.execute(_operation('/managed-entities/invitations/{invitationId}/$suffix','POST'),
+    final response=await gateway.execute(
+      _operation('/managed-entities/invitations/{invitationId}/$suffix','POST'),
       path:{'invitationId':id});
+    if(gateway.session.identityRevision!=revision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final raw=response.data;
+    final expectedCode=accept
+      ?'MANAGED_ENTITY_INVITATION_ACCEPTED'
+      :'MANAGED_ENTITY_INVITATION_DECLINED';
+    if(raw is! Map || raw['success']!=true ||
+        raw['messageCode']!=expectedCode)
+      throw const FormatException('Backend did not confirm invitation decision');
+    if(accept){
+      final data=raw['data'];
+      if(data is! Map || data['managedEntityId'] is! String ||
+          !FableManagedAccount._uuid.hasMatch(data['managedEntityId'] as String) ||
+          !const {'MANAGER','VIEWER'}.contains(data['access']))
+        throw const FormatException('Backend returned an invalid accepted membership');
+    }else if(raw['data']!=null){
+      throw const FormatException('Unexpected declined-invitation response');
+    }
   }
   /// A local UI role label is never sufficient to authorize invitations.
   /// A contract-exported operation, current identity and verified activation
