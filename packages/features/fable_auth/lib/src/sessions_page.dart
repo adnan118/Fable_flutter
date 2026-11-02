@@ -113,13 +113,11 @@ class _FableSessionsPageState extends State<FableSessionsPage> {
     }
   }
 
-  bool get _supportsSingleRevoke=>widget.contract.operations.values.any(
-    (op)=>op.path=='/auth/sessions/{id}/revoke' &&
-      op.method=='POST' && op.requiresAuth && op.credentialHeader==null);
+  bool get _supportsSingleRevoke=>widget.gateway.canRevokeOtherSessions;
   bool get _supportsBulkRevoke=>widget.gateway.canRevokeSelectedSessions;
   bool get _supportsLogoutAll=>widget.contract.operations.values.any(
     (op)=>op.path=='/auth/logout-all' && op.method=='POST' &&
-      op.requiresAuth && op.credentialHeader==null);
+      op.requiresAuth && op.enforceAuth && op.credentialHeader==null);
 
   Future<void> _revoke(String? target,{bool logoutAll=false,List<String>? selectedIds}) async {
     if(_actionBusy||_loading)return;

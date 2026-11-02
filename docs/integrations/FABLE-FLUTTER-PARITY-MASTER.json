@@ -41,7 +41,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "RC85 source-reviewed auth.2fa.login.request and complete with exact contract + typed OTP metadata; 9/40 operations source-implemented E2E pending, 31 NOT_DECIDED; 0 live E2E. Other Backend MFA adapter and Wizard parity not completed.",
+        "RC92 source-reviewed Auth 17/40 (including sensitive OTP and device revocation), 23 NOT_DECIDED, zero live E2E. Other Backend MFA/session revocation mapping and generated-project Wizard/CI E2E remain missing.",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -222,6 +222,43 @@
             "auditAndAbuse"
           ],
           "remaining": "real email/phone OTP delivery and rate limits; Android/iOS device metadata/2FA UI; full Other Backend MFA adapter and Wizard mapping; true project E2E"
+        },
+        {
+          "milestone": "RC91",
+          "operationId": "auth.otp.public.request + auth.otp.public.verify + auth.password.reset",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/password_reset_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc91_public_otp_password_reset_test.dart",
+            "packages/features/fable_auth/test/password_reset_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "authProviderAndOtp",
+            "sessionPolicy",
+            "structuredErrors",
+            "auditAndAbuse"
+          ],
+          "remaining": "real OTP provider, live password reset policy/session revocation, Other Backend contracts and Android/iOS E2E"
+        },
+        {
+          "milestone": "RC92",
+          "operationId": "auth.otp.request + auth.otp.verify + auth.sessions.revoke-one + auth.sessions.revoke-selected + auth.logout-all",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/sensitive_session_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "sessionPolicy",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors",
+            "auditAndAbuse"
+          ],
+          "remaining": "multi-device step-up and revocation, push unlink, live Backend/DB tests, Other Backend per-operation MFA adapter"
         }
       ]
     },
@@ -686,5 +723,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC91: 12/40 Auth SOURCE_IMPLEMENTED_E2E_PENDING after public OTP request/verify + password reset (3 operations), 28 NOT_DECIDED, 0 live E2E. Other Backend Auth, generated-project OTP providers and device tests remain pending."
+  "latestSlice": "RC92: Auth 17/40 SOURCE_IMPLEMENTED_E2E_PENDING after sensitive OTP request/verify, session revoke one/selected and logout-all (5 additional). 23 NOT_DECIDED, 0 real live E2E across all 17 families. RC89/RC90 Flutter infrastructure CI-verified only; 50 Backend blueprints, Other Backend and private source ZIP remain independently gated."
 }

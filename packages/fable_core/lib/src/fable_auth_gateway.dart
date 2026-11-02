@@ -440,16 +440,19 @@ class FableAuthGateway implements BackendApiGateway {
   String _route(String path,String method) {
     final matching=_contract.operations.values.where(
       (op)=>op.path==path && op.method==method && op.requiresAuth &&
-        op.credentialHeader==null).toList();
+        op.enforceAuth && op.credentialHeader==null).toList();
     if(matching.length!=1)throw StateError('Backend did not export a unique authorized $method $path operation');
     return matching.single.id;
   }
   bool get canRevokeOtherSessions => _contract.operations.values.any(
-    (op)=>op.path=='/auth/sessions/{id}/revoke'&&op.method=='POST'&&op.requiresAuth);
+    (op)=>op.path=='/auth/sessions/{id}/revoke'&&op.method=='POST'&&
+      op.requiresAuth&&op.enforceAuth&&op.credentialHeader==null);
   bool get canRequestSensitiveProof => _contract.operations.values.any(
-    (op)=>op.path=='/auth/otp/request'&&op.method=='POST'&&op.requiresAuth) &&
+    (op)=>op.path=='/auth/otp/request'&&op.method=='POST'&&
+      op.requiresAuth&&op.enforceAuth&&op.credentialHeader==null) &&
     _contract.operations.values.any(
-    (op)=>op.path=='/auth/otp/verify'&&op.method=='POST'&&op.requiresAuth);
+    (op)=>op.path=='/auth/otp/verify'&&op.method=='POST'&&
+      op.requiresAuth&&op.enforceAuth&&op.credentialHeader==null);
 
   Future<String> requestSensitiveActionOtp() async {
     final rev=session.identityRevision;
@@ -569,28 +572,32 @@ class FableAuthGateway implements BackendApiGateway {
     if(data['verified']!=true || data['challengeId']!=challengeId ||
       data['purpose']!='SENSITIVE_ACTION')
       throw const FormatException('Backend did not verify the expected sensitive-action proof');
-    return FableVerifiedSensitiveProof._(challengeId,rev);
+    return FableVerifiedSensitiveProof._(challengeId,rev,this);
   }
 
   Future<bool> revokeOtherSession(String sessionId,{FableVerifiedSensitiveProof? proof}) async {
     if(!_uuid.hasMatch(sessionId))throw ArgumentError('Invalid session ID');
     final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
+    if(proof!=null && (proof._identityRevision!=rev||!identical(proof._owner,this)))
+      throw StateError('Security proof belongs to another authenticated identity or gateway');
     final response=await _api.request(
       _route('/auth/sessions/{id}/revoke','POST'),
       path:{'id':sessionId},securityChallengeId:proof?._challengeId);
     if(session.identityRevision!=rev)
       throw FableApiException(409,'session_changed_discard_response');
     final data=_payload(response.data);
-    if(data['sessionId']!=sessionId || data['revoked'] is! bool)
+    final revoked=data['revoked'],current=data['currentSessionRevoked'];
+    if(data['sessionId']!=sessionId || revoked is! bool || current is! bool ||
+        (current && !revoked)) {
       throw const FormatException('Invalid Backend session revocation response');
-    // Never silently sign out a different local identity.
-    return data['revoked'] as bool;
+    }
+    // Server-authoritative current-session revocation must clear local access.
+    if(current)await session.clearSessionIfIdentity(rev);
+    return revoked;
   }
   bool get canRevokeSelectedSessions => _contract.operations.values.any(
     (op)=>op.path=='/auth/sessions/revoke-selected' && op.method=='POST' &&
-      op.requiresAuth && op.credentialHeader==null);
+      op.requiresAuth && op.enforceAuth && op.credentialHeader==null);
 
   /// Server-owned bulk revocation. Never loop revoke-one calls (each may
   /// require a distinct consumed step-up proof).
@@ -601,8 +608,8 @@ class FableAuthGateway implements BackendApiGateway {
     if(selected.isEmpty||selected.length>100||selected.any((id)=>!_uuid.hasMatch(id)))
       throw ArgumentError('Select 1-100 distinct, valid active session IDs');
     final revision=session.identityRevision;
-    if(proof!=null&&proof._identityRevision!=revision)
-      throw StateError('Security proof belongs to another identity');
+    if(proof!=null&&(proof._identityRevision!=revision||!identical(proof._owner,this)))
+      throw StateError('Security proof belongs to another identity or gateway');
     final response=await _api.request(
       _route('/auth/sessions/revoke-selected','POST'),
       body:{'sessionIds':selected},securityChallengeId:proof?._challengeId);
@@ -622,8 +629,8 @@ class FableAuthGateway implements BackendApiGateway {
 
   Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
     final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
+    if(proof!=null && (proof._identityRevision!=rev||!identical(proof._owner,this)))
+      throw StateError('Security proof belongs to another authenticated identity or gateway');
     final response=await _api.request(_route('/auth/logout-all','POST'),
       securityChallengeId:proof?._challengeId);
     if(session.identityRevision!=rev)
@@ -836,9 +843,10 @@ class FableActiveSession {
 /// Backend consumes the challenge on the first protected action if the session
 /// itself does not already satisfy the recent AAL2 policy.
 class FableVerifiedSensitiveProof {
-  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision);
+  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision,this._owner);
   final String _challengeId;
   final int _identityRevision;
+  final FableAuthGateway _owner;
 }
 
 

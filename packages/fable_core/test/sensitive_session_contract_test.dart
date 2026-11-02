@@ -55,7 +55,8 @@ void main(){
           revocations++;
           if(req.headers['X-Security-Challenge-Id']!=challenge)
             return response(req,403,{'code':'AUTH_RECENT_AUTH_REQUIRED'});
-          return response(req,200,{'sessionId':id,'revoked':true});
+          return response(req,200,{'sessionId':id,'revoked':true,
+             'currentSessionRevoked':false,'clientActions':[]});
         }
         return response(req,404,{'code':'not_found'});
       }));
@@ -72,6 +73,35 @@ void main(){
     expect(seen.last.headers['X-Security-Challenge-Id'],challenge);
     expect(session.access,'demo-token');
   });
+  test('RC92: self-revocation clears current local access on authoritative response',()async{
+    final session=MemorySession();
+    final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract(),secureSession:session,
+      client:intercepted((req)async=>response(req,200,{
+        'sessionId':id,'revoked':true,
+        'currentSessionRevoked':true,'clientActions':['DELETE_LOCAL_PUSH_TOKEN']})));
+    addTearDown(client.dispose);
+    expect(await client.revokeOtherSession(id),true);
+    expect(session.access,isNull);
+    expect(session.identityRevision,1);
+  });
+  test('RC92: malformed session confirmation cannot clear account access',()async{
+    for(final payload in [
+      {'sessionId':id,'revoked':true},
+      {'sessionId':id,'revoked':false,'currentSessionRevoked':true},
+      {'sessionId':'550e8400-e29b-41d4-a716-446655440099',
+        'revoked':true,'currentSessionRevoked':true},
+    ]){
+      final session=MemorySession();
+      final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+        contract:contract(),secureSession:session,
+        client:intercepted((req)async=>response(req,200,payload)));
+      addTearDown(client.dispose);
+      await expectLater(client.revokeOtherSession(id),throwsFormatException);
+      expect(session.access,'demo-token');
+    }
+  });
+
   test('Sensitive OTP cannot be used on other API routes or external transport',()async{
     final fable=contract();
     final session=MemorySession();
@@ -95,6 +125,61 @@ void main(){
     await expectLater(other.request('external.foo',
       securityChallengeId:challenge),throwsArgumentError);
   });
+  test('RC92: SENSITIVE_ACTION proof cannot be reused by another gateway of same identity revision',()async{
+    final shared=MemorySession();
+    var targetPosts=0;
+    final issuer=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract(),secureSession:shared,
+      client:intercepted((req)async{
+        if(req.path=='/auth/otp/request')return response(req,200,{'challengeId':challenge});
+        if(req.path=='/auth/otp/verify')return response(req,200,
+          {'verified':true,'purpose':'SENSITIVE_ACTION','challengeId':challenge});
+        return response(req,404,{});
+      }));
+    final target=FableAuthGateway(baseUri:Uri.parse('https://other.example.test'),
+      contract:contract(),secureSession:shared,
+      client:intercepted((req)async{
+        targetPosts++;
+        return response(req,200,{'sessionId':id,'revoked':true,
+          'currentSessionRevoked':false});
+      }));
+    addTearDown(issuer.dispose);
+    addTearDown(target.dispose);
+    final proof=await issuer.verifySensitiveActionOtp(
+      await issuer.requestSensitiveActionOtp(),'123456');
+    await expectLater(target.revokeOtherSession(id,proof:proof),throwsStateError);
+    await expectLater(target.revokeSelectedSessions([id],proof:proof),throwsStateError);
+    await expectLater(target.revokeAllSessions(proof:proof),throwsStateError);
+    expect(targetPosts,0);
+    expect(shared.access,'demo-token');
+  });
+
+  test('RC92: contract with unenforced auth is neither advertised nor accepted',()async{
+    const weak=FableContract(contractHash:'hash',projectName:'weak',
+      selectionMode:'advisory',featureIds:<String>{},operations:{
+        'one':FableOperation('one','POST','/auth/sessions/{id}/revoke','hash',
+          requiresAuth:true,enforceAuth:false),
+        'bulk':FableOperation('bulk','POST','/auth/sessions/revoke-selected','hash',
+          requiresAuth:true,enforceAuth:false),
+        'otp-request':FableOperation('otp-request','POST','/auth/otp/request','hash',
+          requiresAuth:true,enforceAuth:false),
+        'otp-verify':FableOperation('otp-verify','POST','/auth/otp/verify','hash',
+          requiresAuth:true,enforceAuth:false),
+        'all':FableOperation('all','POST','/auth/logout-all','hash',
+          requiresAuth:true,enforceAuth:false),
+      });
+    final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:weak,secureSession:MemorySession());
+    addTearDown(client.dispose);
+    expect(client.canRequestSensitiveProof,false);
+    expect(client.canRevokeSelectedSessions,false);
+    expect(client.canRevokeOtherSessions,false);
+    await expectLater(client.requestSensitiveActionOtp(),throwsStateError);
+    await expectLater(client.revokeOtherSession(id),throwsStateError);
+    await expectLater(client.revokeSelectedSessions([id]),throwsStateError);
+    await expectLater(client.revokeAllSessions(),throwsStateError);
+  });
+
   test('A fresh logout-all revokes local identity only on server confirmation',()async{
     final session=MemorySession();
     final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
