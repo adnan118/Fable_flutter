@@ -97,8 +97,17 @@ test('RC87 rejects forged private Flutter pin and removed capability manifests',
   assert.throws(()=>verifySourcePair({frontendRoot:x.front,backendRoot:x.back}),
    /private Backend manifest does not approve/);
   rmSync(join(x.back,'docs/RC86-SOURCE-PAIR.json'));
+  // Uncommitted removal is rejected even before capability counting.
   rmSync(join(x.back,'Fable-Backend-RC66/blueprints/capabilities/cap-49'),
    {recursive:true,force:true});
+  assert.throws(()=>verifySourcePair({frontendRoot:x.front,backendRoot:x.back}),
+   /Backend tracked worktree differs/);
+  // A forged inventory count is independently rejected on clean Git.
+  git(x.back,'reset','--hard','HEAD');
+  const p=join(x.front,filenames[0]);
+  const current=json(p);
+  current.counts.backendCapabilityBlueprints=49;
+  write(p,current);
   assert.throws(()=>verifySourcePair({frontendRoot:x.front,backendRoot:x.back}),
    /Backend capability inventory changed/);
  }finally{rmSync(x.base,{recursive:true,force:true});}
