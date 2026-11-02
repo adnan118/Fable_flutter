@@ -629,8 +629,8 @@ class FableAuthGateway implements BackendApiGateway {
 
   Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
     final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
+    if(proof!=null && (proof._identityRevision!=rev||!identical(proof._owner,this)))
+      throw StateError('Security proof belongs to another authenticated identity or gateway');
     final response=await _api.request(_route('/auth/logout-all','POST'),
       securityChallengeId:proof?._challengeId);
     if(session.identityRevision!=rev)
