@@ -6,6 +6,7 @@ import {createInterface} from 'node:readline/promises';
 import {pathToFileURL} from 'node:url';
 import {readFrontendOwnedDecisions,saveFrontendOwnedDecisions,
   APPROVED_SYNC_MODES} from './frontend-owned-decisions.mjs';
+import {auditSelectedFeatureIntegration,formatIntegrationGapReport} from './audit-selected-feature-integration.mjs';
 
 function projectId(root) {
   const file=resolve(root,'.fable/frontend-setup.json');
@@ -54,6 +55,13 @@ export async function approveOfflineSync(root,id,{
   if(!['اعتمد','APPROVE'].includes(answer))
     return {applied:false,cancelled:true};
   saveFrontendOwnedDecisions(root,next,{apply:true});
+  try{
+    const audit=auditSelectedFeatureIntegration(root);
+    if(audit.selectedFeatureCount>0)show(formatIntegrationGapReport(audit));
+  }catch(error){
+    show('⚠ Offline مفعّل لكن تعذر فحص ربط Backend: '+
+      String(error?.message??error)+' — شغّل pnpm wizard:check');
+  }
   return {applied:true,projectId:id,offlineEnabled:enabled,policy,
     backendSecurityOverride:false,mutationContractVerified:false};
 }
