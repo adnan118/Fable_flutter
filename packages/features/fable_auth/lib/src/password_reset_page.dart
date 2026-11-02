@@ -182,6 +182,6 @@ class _FablePasswordResetPageState extends State<FablePasswordResetPage> {
             child:Center(child:CircularProgressIndicator())),
           if(_status!=null)Padding(padding:const EdgeInsets.only(top:16),
             child:Text(_status!,textAlign:TextAlign.center)),
-        ]))))));
+        ])))));
   }
 }
