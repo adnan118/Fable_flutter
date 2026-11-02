@@ -34,6 +34,12 @@ FableContract contract({bool insecure=false}) {
   return FableContract(contractHash:digest,operations:ops,featureIds:const {'auth'},
     projectName:'test',selectionMode:'explicit');
 }
+class _AuthenticatedSession extends FableSecureSession {
+  @override int identityRevision=0;
+  @override Future<String?> get accessToken async=>'mock-session';
+  @override Future<String?> get refreshToken async=>null;
+}
+
 void main() {
   test('Fable social bindings use only declared method, public status and paths',(){
     final bound=FableSocialOperations.fable(contract());
@@ -69,6 +75,25 @@ void main() {
     expect(api.calls,['auth.social.challenge','auth.social.google']);
     expect((api.bodies[1] as Map)['nonce'],seq('n',32));
   });
+  test('RC94 social link accepts only explicit Backend uppercase ACK',()async {
+    final api=_Gateway()..respond=(id)=>id=='auth.social.challenge'
+      ? {'provider':'google','state':seq('s',32),'nonce':seq('n',32),
+         'expiresInMs':600000}
+      : {'linked':true,'provider':'GOOGLE'};
+    final provider=_Credentials()..credential=FableSocialCredential(
+      provider:FableSocialProvider.google,nonce:seq('n',32),
+      identityToken:seq('t',32));
+    final repository=FableSocialRepository(gateway:api,
+      operations:FableSocialOperations.fable(contract()),
+      session:_AuthenticatedSession(namespace:'test.rc94-link'),
+      credentials:provider,adapter:const FableSocialBackendAdapter());
+    expect(await repository.link(FableSocialProvider.google,
+      securityChallengeId:'550e8400-e29b-41d4-a716-446655440013'),true);
+    expect(api.calls,['auth.social.challenge','auth.social.google.link']);
+    expect((api.bodies.last as Map)['securityChallengeId'],
+      '550e8400-e29b-41d4-a716-446655440013');
+  });
+
   test('Google / Apple credentials require original challenge and approved tokens',(){
     const codec=FableSocialBackendAdapter();
     final challenge=FableSocialChallenge(provider:FableSocialProvider.apple,
