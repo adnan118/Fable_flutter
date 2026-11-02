@@ -614,8 +614,31 @@ class FableManagedAccountsRepository {
     return _unwrap(changed.data);
   }
 
-  /// The caller must opt into each scoped operation. No implicit injection
-  /// into Auth/Other Backends. The server re-checks membership on every call.
+  /// Preferred API for screens bound to a shared managed-entity store.
+  /// A late response from entity A is never rendered into entity B after a
+  /// same-login switch, even when the authenticated identity epoch is stable.
+  /// The Backend still authorizes each operation independently.
+  Future<Object?> executeUsingStore(FableManagedEntityStore store,
+      String operationId,{Map<String,dynamic>? path,
+        Map<String,dynamic>? query,Object? body}) async {
+    if(!store.isBoundToCredentials(gateway.session) || !store.bound) {
+      throw StateError('Selected entity store belongs to another Auth session or Backend');
+    }
+    final choice=store.selected;
+    if(choice==null)throw StateError('No verified managed entity selected');
+    final generation=store.selectionRevision;
+    final result=await executeInContext(choice,operationId,
+      path:path,query:query,body:body);
+    if(!store.isBoundToCredentials(gateway.session) ||
+       generation!=store.selectionRevision ||
+       !identical(store.selected,choice)) {
+      throw FableApiException(409,'managed_entity_context_changed_discard_response');
+    }
+    return result;
+  }
+
+  /// Legacy explicit selection API. UI code should prefer executeUsingStore
+  /// so selection changes invalidate in-flight response consumption.
   Future<Object?> executeInContext(FableManagedAccountSelection selected,
     String operationId,{Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body}) async {
     if(gateway.session.identityRevision!=selected.identityRevision)
