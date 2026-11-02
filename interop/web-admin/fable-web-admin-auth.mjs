@@ -24,7 +24,7 @@ function unbox(body) {
   return body.data;
 }
 function validFutureInstant(value) {
-  return typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}T.*(?:Z|[+-]\\d{2}:\\d{2})$/.test(value) && Date.parse(value)>Date.now();
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Date.parse(value)>Date.now();
 }
 function validateSecondFactor(data) {
   if (!data || data.requiresTwoFactor !== true) return false;
@@ -180,7 +180,7 @@ export class FableWebAuth {
     if(!issued || !this.#issuedFactors.delete(issued) || !UUID4.test(issued.challengeId))
       throw new Error('Unknown or replayed 2FA request');
     this.#requireFactor(issued.firstFactor);
-    if (!/^\\d{4,10}$/.test(code)) throw new TypeError('2FA OTP must contain digits');
+    if (!/^\d{4,10}$/.test(code)) throw new TypeError('2FA OTP must contain digits');
     this.#pendingFactors.delete(issued.firstFactor); // one-shot even after network failures
     const data=await this.#request('/auth/web/2fa/login/complete',{
       twoFactorToken:issued.firstFactor.token,challengeId:issued.challengeId,
@@ -205,7 +205,7 @@ export class FableWebAuth {
     if(!this.#pendingOtp.delete(challenge) || challenge.generation!==this.#generation ||
        Date.now()>=Date.parse(challenge.expiresAt))
       throw new Error('Expired or foreign LOGIN OTP');
-    if (!/^\\d{6,10}$/.test(code)) throw new TypeError('LOGIN OTP must contain digits');
+    if (!/^\d{6,10}$/.test(code)) throw new TypeError('LOGIN OTP must contain digits');
     const data=await this.#request('/auth/otp/public/verify',{
       challengeId:challenge.challengeId,code:assertString(code,'LOGIN OTP',6,10)});
     if(data?.verified!==true || data?.purpose!=='LOGIN' ||
