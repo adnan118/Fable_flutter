@@ -58,6 +58,16 @@ function selectedFeatures(root) {
       if(!seen.has(id)){seen.add(id);all.push(id);}
     }
   }
+  const projectFeatures=join(root,'.fable/project-features.json');
+  if(existsSync(projectFeatures)){
+    const custom=read(projectFeatures);
+    if(!Array.isArray(custom.features))throw Error('Invalid custom project feature manifest');
+    for(const feature of custom.features){
+      const id=typeof feature==='string'?feature:feature?.id;
+      if(!present(id))throw Error('Custom project feature is missing its identifier');
+      if(!seen.has(id)){seen.add(id);all.push(id);explicit=true;}
+    }
+  }
   const owned=join(root,'.fable/frontend-owned-decisions.json');
   if(existsSync(owned)){
     const j=read(owned);
@@ -140,8 +150,10 @@ function classify({selected,problems,sourceMapped,needsBackend}){
 function auditOne(root,feature,backend,master,external,explicit){
   const ownership=FEATURE_OWNERSHIP[feature]??'custom';
   const req=explicit??null;
-  const requires=req?.needsBackend===true||
-    (req?.needsBackend===false?false:BACKEND_REQUIRED.includes(feature) ||
+  // Backend-owned features cannot be silently recast as client-only just
+  // by writing needsBackend:false in a local config file.
+  const requires=ownership==='server'||req?.needsBackend===true||
+    (req?.needsBackend===false?false:BACKEND_REQUIRED.includes(feature)||
       (ownership==='custom'&&req?.needsBackend!==false));
   const problems=[],details=[];
   const add=(code,detail,action,operationId)=>{
