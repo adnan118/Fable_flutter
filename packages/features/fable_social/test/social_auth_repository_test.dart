@@ -26,7 +26,7 @@ FableContract contract({bool insecure=false}) {
     ops[entry.value]=FableOperation(entry.value,entry.key=='unlink'?'DELETE':'POST',
       entry.key=='unlink'?'/auth/social/{provider}':'/auth/social/${entry.key}',digest,
       requiresAuth:const {'googleLink','appleLink','unlink'}.contains(entry.key) ||
-        (insecure && entry.key=='challenge'));
+        (insecure && entry.key=='challenge'),enforceAuth:true);
   }
   return FableContract(contractHash:digest,operations:ops,featureIds:const {'auth'},
     projectName:'test',selectionMode:'explicit');
