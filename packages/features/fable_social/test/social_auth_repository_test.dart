@@ -24,7 +24,10 @@ FableContract contract({bool insecure=false}) {
   final ops=<String,FableOperation>{};
   for(final entry in FableSocialOperations.fableIds.entries) {
     ops[entry.value]=FableOperation(entry.value,entry.key=='unlink'?'DELETE':'POST',
-      entry.key=='unlink'?'/auth/social/{provider}':'/auth/social/${entry.key}',digest,
+      entry.key=='unlink'?'/auth/social/{provider}':
+      entry.key=='googleLink'?'/auth/social/google/link':
+      entry.key=='appleLink'?'/auth/social/apple/link':
+      '/auth/social/${entry.key}',digest,
       requiresAuth:const {'googleLink','appleLink','unlink'}.contains(entry.key) ||
         (insecure && entry.key=='challenge'),enforceAuth:true);
   }
