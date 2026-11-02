@@ -533,6 +533,7 @@ class FableAuthGateway implements BackendApiGateway {
        session.identityRevision!=proof._identityRevision){
       throw StateError('Reset proof belongs to another identity or gateway');
     }
+    if(proof._completed)throw StateError('Password reset proof has been consumed');
     if(newPassword.isEmpty||newPassword.length>1024){
       throw ArgumentError('Password must contain 1 to 1024 characters');
     }
@@ -549,6 +550,7 @@ class FableAuthGateway implements BackendApiGateway {
        data['twoFactorPreserved'] is! bool){
       throw const FormatException('Backend did not confirm the password reset');
     }
+    proof._completed=true; // Mark only after the server confirmed its write.
     return FablePasswordResetResult(
       sessionsRevoked:data['sessionsRevoked'] as int,
       twoFactorPreserved:data['twoFactorPreserved'] as bool);
@@ -852,11 +854,12 @@ class FablePasswordResetChallenge {
 
 /// Purpose-bound proof held in memory only; not a login session or a bearer.
 class FablePasswordResetProof {
-  const FablePasswordResetProof._(
+  FablePasswordResetProof._(
     this.challengeId,this._identityRevision,this._owner);
   final String challengeId;
   final int _identityRevision;
   final FableAuthGateway _owner;
+  bool _completed=false;
 }
 
 /// Confirmation returned by Fable after invalidating all affected sessions.
