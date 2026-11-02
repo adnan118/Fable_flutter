@@ -645,7 +645,7 @@
       ],
       "regressionTests": [
         "packages/fable_core/test/sensitive_session_contract_test.dart",
-        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+        "packages/fable_core/test/active_sessions_contract_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -701,7 +701,7 @@
       ],
       "regressionTests": [
         "packages/fable_core/test/sensitive_session_contract_test.dart",
-        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+        "packages/fable_core/test/active_sessions_contract_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -820,7 +820,7 @@
       ],
       "regressionTests": [
         "packages/fable_core/test/sensitive_session_contract_test.dart",
-        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+        "packages/fable_core/test/active_sessions_contract_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -876,7 +876,7 @@
       ],
       "regressionTests": [
         "packages/fable_core/test/sensitive_session_contract_test.dart",
-        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+        "packages/fable_core/test/active_sessions_contract_test.dart"
       ],
       "requestModel": {
         "method": "POST",
@@ -931,7 +931,7 @@
       ],
       "regressionTests": [
         "packages/fable_core/test/sensitive_session_contract_test.dart",
-        "packages/features/fable_auth/test/sessions_page_contract_test.dart"
+        "packages/fable_core/test/active_sessions_contract_test.dart"
       ],
       "requestModel": {
         "method": "POST",
