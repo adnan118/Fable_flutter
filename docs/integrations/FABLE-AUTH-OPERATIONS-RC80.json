@@ -1341,81 +1341,282 @@
       "method": "GET",
       "path": "/auth/2fa/status",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_security.dart"
+      ],
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_security.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/two-factor.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_security.dart",
+        "packages/features/fable_auth/lib/src/security_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+        "packages/features/fable_auth/test/security_settings_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "GET",
+        "path": "/auth/2fa/status",
+        "auth": "verified Fable bearer, enforceAuth; no Other Backend fallback",
+        "behavior": "Authenticated GET; {enabled: boolean, enabledAt: Date|null, methods: EMAIL_OTP|PHONE_OTP[]}; no local invention of active methods"
+      },
+      "responseModel": {
+        "behavior": "Server-authoritative state/counter, no local optimistic confirmation",
+        "contract": "Authenticated GET; {enabled: boolean, enabledAt: Date|null, methods: EMAIL_OTP|PHONE_OTP[]}; no local invention of active methods"
+      },
+      "backendEffect": "Authenticated GET; {enabled: boolean, enabledAt: Date|null, methods: EMAIL_OTP|PHONE_OTP[]}; no local invention of active methods",
+      "otherBackendRequired": [
+        "Provide independently signed Backend feature/catalog paths and auth modes; Fable routes and SENSITIVE_ACTION semantics cannot be copied blindly",
+        "Document separate OTP purpose/destination binding and replay limits, 2FA device methods, step-up policy and exact input/output/error DTOs",
+        "Show 401/403/409/429/503, rate-limit, expiry, permission and session revoke effects on a real generated project",
+        "Define Other Backend account role and recent-auth proof transport; do not infer support from a screen"
+      ],
+      "missingGates": [
+        "Real Backend provider/SMS/email/DB live E2E: purpose, expiry, wrong-code, rate-limits and replay",
+        "Multi-device revocation/refresh and session identity switching on real Android/iOS builds",
+        "Transport/provider/channel configuration and failure behavior in actual backend deployment",
+        "Other Backend independent contract integration and Wizard per-operation parity"
+      ]
     },
     {
       "id": "auth.2fa.enable",
       "method": "POST",
       "path": "/auth/2fa/enable",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_security.dart"
+      ],
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_security.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/two-factor.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/two-factor.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_security.dart",
+        "packages/features/fable_auth/lib/src/security_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+        "packages/features/fable_auth/test/security_settings_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/2fa/enable",
+        "auth": "verified Fable bearer, enforceAuth; no Other Backend fallback",
+        "behavior": "Authenticated POST: challengeId UUID v4 of VERIFIED purpose TWO_FACTOR; server consumes proof, enables 2FA, revokes all other sessions and returns enabled:true, enabledAt, revokedOtherSessions"
+      },
+      "responseModel": {
+        "behavior": "Server-authoritative state/counter, no local optimistic confirmation",
+        "contract": "Authenticated POST: challengeId UUID v4 of VERIFIED purpose TWO_FACTOR; server consumes proof, enables 2FA, revokes all other sessions and returns enabled:true, enabledAt, revokedOtherSessions"
+      },
+      "backendEffect": "Authenticated POST: challengeId UUID v4 of VERIFIED purpose TWO_FACTOR; server consumes proof, enables 2FA, revokes all other sessions and returns enabled:true, enabledAt, revokedOtherSessions",
+      "otherBackendRequired": [
+        "Provide independently signed Backend feature/catalog paths and auth modes; Fable routes and SENSITIVE_ACTION semantics cannot be copied blindly",
+        "Document separate OTP purpose/destination binding and replay limits, 2FA device methods, step-up policy and exact input/output/error DTOs",
+        "Show 401/403/409/429/503, rate-limit, expiry, permission and session revoke effects on a real generated project",
+        "Define Other Backend account role and recent-auth proof transport; do not infer support from a screen"
+      ],
+      "missingGates": [
+        "Real Backend provider/SMS/email/DB live E2E: purpose, expiry, wrong-code, rate-limits and replay",
+        "Multi-device revocation/refresh and session identity switching on real Android/iOS builds",
+        "Transport/provider/channel configuration and failure behavior in actual backend deployment",
+        "Other Backend independent contract integration and Wizard per-operation parity"
+      ]
     },
     {
       "id": "auth.2fa.disable",
       "method": "POST",
       "path": "/auth/2fa/disable",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_security.dart"
+      ],
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_security.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/two-factor.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/two-factor.dto.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_security.dart",
+        "packages/features/fable_auth/lib/src/security_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+        "packages/features/fable_auth/test/security_settings_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/2fa/disable",
+        "auth": "verified Fable bearer, enforceAuth; no Other Backend fallback",
+        "behavior": "Authenticated POST: new verified TWO_FACTOR challengeId UUID; server consumes once, disables 2FA, revokes other sessions and confirms enabled:false, revokedOtherSessions"
+      },
+      "responseModel": {
+        "behavior": "Server-authoritative state/counter, no local optimistic confirmation",
+        "contract": "Authenticated POST: new verified TWO_FACTOR challengeId UUID; server consumes once, disables 2FA, revokes other sessions and confirms enabled:false, revokedOtherSessions"
+      },
+      "backendEffect": "Authenticated POST: new verified TWO_FACTOR challengeId UUID; server consumes once, disables 2FA, revokes other sessions and confirms enabled:false, revokedOtherSessions",
+      "otherBackendRequired": [
+        "Provide independently signed Backend feature/catalog paths and auth modes; Fable routes and SENSITIVE_ACTION semantics cannot be copied blindly",
+        "Document separate OTP purpose/destination binding and replay limits, 2FA device methods, step-up policy and exact input/output/error DTOs",
+        "Show 401/403/409/429/503, rate-limit, expiry, permission and session revoke effects on a real generated project",
+        "Define Other Backend account role and recent-auth proof transport; do not infer support from a screen"
+      ],
+      "missingGates": [
+        "Real Backend provider/SMS/email/DB live E2E: purpose, expiry, wrong-code, rate-limits and replay",
+        "Multi-device revocation/refresh and session identity switching on real Android/iOS builds",
+        "Transport/provider/channel configuration and failure behavior in actual backend deployment",
+        "Other Backend independent contract integration and Wizard per-operation parity"
+      ]
     },
     {
       "id": "auth.contact.email.change",
       "method": "POST",
       "path": "/auth/contact/email/change",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_contact.dart"
+      ],
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_contact.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/contact-change.dto.ts",
+        "Fable-Backend-RC66/src/platform/auth/otp.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_contact.dart",
+        "packages/features/fable_auth/lib/src/security_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+        "packages/features/fable_auth/test/security_settings_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/contact/email/change",
+        "auth": "verified Fable bearer, enforceAuth; no Other Backend fallback",
+        "behavior": "Authenticated POST challengeId verified CHANGE_EMAIL to newEmail (<=191, normalized); optional securityChallengeId from independent SENSITIVE_ACTION proof; server enforces recent AAL2, handles 409 duplicate, revokes other sessions and returns changed:true verified:true count"
+      },
+      "responseModel": {
+        "behavior": "Server-authoritative state/counter, no local optimistic confirmation",
+        "contract": "Authenticated POST challengeId verified CHANGE_EMAIL to newEmail (<=191, normalized); optional securityChallengeId from independent SENSITIVE_ACTION proof; server enforces recent AAL2, handles 409 duplicate, revokes other sessions and returns changed:true verified:true count"
+      },
+      "backendEffect": "Authenticated POST challengeId verified CHANGE_EMAIL to newEmail (<=191, normalized); optional securityChallengeId from independent SENSITIVE_ACTION proof; server enforces recent AAL2, handles 409 duplicate, revokes other sessions and returns changed:true verified:true count",
+      "otherBackendRequired": [
+        "Provide independently signed Backend feature/catalog paths and auth modes; Fable routes and SENSITIVE_ACTION semantics cannot be copied blindly",
+        "Document separate OTP purpose/destination binding and replay limits, 2FA device methods, step-up policy and exact input/output/error DTOs",
+        "Show 401/403/409/429/503, rate-limit, expiry, permission and session revoke effects on a real generated project",
+        "Define Other Backend account role and recent-auth proof transport; do not infer support from a screen"
+      ],
+      "missingGates": [
+        "Real Backend provider/SMS/email/DB live E2E: purpose, expiry, wrong-code, rate-limits and replay",
+        "Multi-device revocation/refresh and session identity switching on real Android/iOS builds",
+        "Transport/provider/channel configuration and failure behavior in actual backend deployment",
+        "Other Backend independent contract integration and Wizard per-operation parity"
+      ]
     },
     {
       "id": "auth.contact.phone.change",
       "method": "POST",
       "path": "/auth/contact/phone/change",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
-      "literalOperationReferences": [],
-      "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "reviewDomain": "MOBILE_REQUIRED",
+      "literalOperationReferences": [
+        "packages/fable_core/lib/src/fable_auth_contact.dart"
+      ],
+      "literalPathReferences": [
+        "packages/fable_core/lib/src/fable_auth_contact.dart"
+      ],
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts",
+        "Fable-Backend-RC66/src/platform/auth/dto/contact-change.dto.ts",
+        "Fable-Backend-RC66/src/platform/auth/otp.service.ts"
+      ],
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_contact.dart",
+        "packages/features/fable_auth/lib/src/security_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+        "packages/features/fable_auth/test/security_settings_page_test.dart"
+      ],
+      "requestModel": {
+        "method": "POST",
+        "path": "/auth/contact/phone/change",
+        "auth": "verified Fable bearer, enforceAuth; no Other Backend fallback",
+        "behavior": "Authenticated POST challengeId verified CHANGE_PHONE to newPhone E.164; optional recent-auth securityChallengeId; server consumes destination-bound OTP, enforces AAL2, revokes other sessions and returns changed:true verified:true count"
+      },
+      "responseModel": {
+        "behavior": "Server-authoritative state/counter, no local optimistic confirmation",
+        "contract": "Authenticated POST challengeId verified CHANGE_PHONE to newPhone E.164; optional recent-auth securityChallengeId; server consumes destination-bound OTP, enforces AAL2, revokes other sessions and returns changed:true verified:true count"
+      },
+      "backendEffect": "Authenticated POST challengeId verified CHANGE_PHONE to newPhone E.164; optional recent-auth securityChallengeId; server consumes destination-bound OTP, enforces AAL2, revokes other sessions and returns changed:true verified:true count",
+      "otherBackendRequired": [
+        "Provide independently signed Backend feature/catalog paths and auth modes; Fable routes and SENSITIVE_ACTION semantics cannot be copied blindly",
+        "Document separate OTP purpose/destination binding and replay limits, 2FA device methods, step-up policy and exact input/output/error DTOs",
+        "Show 401/403/409/429/503, rate-limit, expiry, permission and session revoke effects on a real generated project",
+        "Define Other Backend account role and recent-auth proof transport; do not infer support from a screen"
+      ],
+      "missingGates": [
+        "Real Backend provider/SMS/email/DB live E2E: purpose, expiry, wrong-code, rate-limits and replay",
+        "Multi-device revocation/refresh and session identity switching on real Android/iOS builds",
+        "Transport/provider/channel configuration and failure behavior in actual backend deployment",
+        "Other Backend independent contract integration and Wizard per-operation parity"
+      ]
     }
   ],
-  "snapshotUpdate": "RC92: 5 further authenticated sensitive OTP and device session revocation operations source-reviewed with gateway proof binding/self-revocation safety and UI regressions. Auth 17/40 SOURCE_IMPLEMENTED_E2E_PENDING, 23 NOT_DECIDED, 0 real live E2E, Other Backend remains separately unmapped."
+  "snapshotUpdate": "RC93 source-reviewed 5 additional 2FA and authenticated contact operations (status, enable, disable, email and phone changes): Auth 22/40 SOURCE_IMPLEMENTED_E2E_PENDING, 18 NOT_DECIDED, 0 live E2E; Other Backend independent adapter and real devices pending."
 }
