@@ -48,6 +48,10 @@ void main(){
   expect(store.isBoundToCredentials(FableSecureSession(namespace:'other-project')),isFalse);
   expect(store.isBoundToBackend(backend),isTrue);
   expect(store.isBoundToBackend('different-contract|https://api.example.test'),isFalse);
+  final before=store.selectionRevision;
+  store.bindBackend('different-contract|https://api.example.test');
+  expect(store.selectionRevision,before+1);
+  expect(store.selected,isNull);
  });
  test('role/identity input validation never grants a forged entity',()async{
   final events=StreamController<FableIdentityEvent>.broadcast(sync:true);
