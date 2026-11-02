@@ -59,11 +59,17 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
   assert(auth.operationCount===pair.counts.authBackendOperations &&
     auth.operations?.length===auth.operationCount,
     'Auth ledger operation count mismatch');
-  const counts={sourceReviewed:auth.operations.filter(x=>x.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,
-    undecided:auth.operations.filter(x=>x.disposition==='NOT_DECIDED').length};
+  const counts={
+    sourceReviewed:auth.operations.filter(x=>x.disposition==='SOURCE_IMPLEMENTED_E2E_PENDING').length,
+    webReviewed:auth.operations.filter(x=>x.disposition==='WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING').length,
+    adminReviewed:auth.operations.filter(x=>x.disposition==='ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING').length,
+    undecided:auth.operations.filter(x=>x.disposition==='NOT_DECIDED').length
+  };
   assert(counts.sourceReviewed===pair.counts.authSourceReviewed &&
+    counts.webReviewed===pair.counts.authWebSourceReviewed &&
+    counts.adminReviewed===pair.counts.authAdminSourceReviewed &&
     counts.undecided===pair.counts.authUndecided &&
-    counts.sourceReviewed+counts.undecided===auth.operationCount,
+    counts.sourceReviewed+counts.webReviewed+counts.adminReviewed+counts.undecided===auth.operationCount,
     'Auth source disposition drift');
   assert(master.features?.length===pair.counts.featureFamilies,
     '17-feature inventory drift');
@@ -81,7 +87,8 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     backendSourceUnchangedSinceAudit:false,
     backendRouteCount:null,backendCapabilityCount:null,
     backendCapabilityInventory:[],backendRoutesAbsent:[],backendRouteMismatches:[],
-    sourceReviewed:counts.sourceReviewed,notDecided:counts.undecided,
+    sourceReviewed:counts.sourceReviewed,webReviewed:counts.webReviewed,
+    adminReviewed:counts.adminReviewed,notDecided:counts.undecided,
     featureFamilies:master.features.length,liveE2EAccepted:0,
     otherBackendMfaApproved:false,projectGeneratedLiveTested:false,
     sourceOnly:backendRoot==null,

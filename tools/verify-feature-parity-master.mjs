@@ -94,17 +94,28 @@ export function validateMaster(root,master){
  else {
    const inventory=JSON.parse(readFileSync(authPath,'utf8'));
    const operations=inventory.operations;
-   // يسمح بنقل عملية مصدرية واحدة دون أن تصبح معتمدة إنتاجياً:
-   // كل عملية SOURCE_IMPLEMENTED يلزمها أدلة ملفات واختبارات،
-   // بينما كل عملية NOT_DECIDED لا يجوز نسب تنفيذ/اختبار إليها.
+   // RC97: Mobile-source evidence and separate Web/Admin source clients.
+   // None of these statuses implies live provider, host app or DB acceptance.
    if(inventory.schemaVersion!==1||inventory.operationCount!==40||
       !Array.isArray(operations)||operations.length!==40||
       !noDuplicates(operations.map(o=>o.id))||
       operations.some(o=>{
         if(!o.id.startsWith('auth.')||!isNonempty(o.method)||
            !isNonempty(o.path)||o.realE2EVerified!==false)return true;
-        if(o.disposition==='NOT_DECIDED')
-          return o.modelAndDtoReviewed!==false||o.uiFlowReviewed!==false;
+        if(o.disposition==='WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING' ||
+           o.disposition==='ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING') {
+          const web=o.disposition==='WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING';
+          if(o.ownerClient!==(web?'WEB_COOKIE':'ADMIN_WEB_DASHBOARD') ||
+             o.modelAndDtoReviewed!==true||o.clientFlowReviewed!==true||
+             o.uiFlowReviewed!==false||o.permissionAndErrorReviewed!==true||
+             !Array.isArray(o.clientEvidence)||o.clientEvidence.length<2||
+             !Array.isArray(o.regressionTests)||o.regressionTests.length<2||
+             !Array.isArray(o.missingGates)||o.missingGates.length<3||
+             !Array.isArray(o.otherBackendRequired)||o.otherBackendRequired.length<3)
+             return true;
+          return [...o.clientEvidence,...o.regressionTests].some(path=>
+            !isNonempty(path)||!existsSync(resolve(root,path)));
+        }
         if(o.disposition!=='SOURCE_IMPLEMENTED_E2E_PENDING'||
            o.modelAndDtoReviewed!==true||o.uiFlowReviewed!==true||
            o.permissionAndErrorReviewed!==true)return true;

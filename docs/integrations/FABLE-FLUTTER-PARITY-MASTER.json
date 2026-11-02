@@ -33,7 +33,10 @@
         "packages/fable_core/lib/src/fable_auth_gateway.dart",
         "packages/features/fable_auth/lib/src/login_page.dart",
         "packages/features/fable_auth/lib/src/sessions_page.dart",
-        "packages/features/fable_auth/lib/src/change_password_page.dart"
+        "packages/features/fable_auth/lib/src/change_password_page.dart",
+        "packages/fable_core/lib/src/fable_auth_otp_login.dart",
+        "packages/fable_core/lib/src/fable_auth_username.dart",
+        "packages/features/fable_social/lib/src/social_account_settings_page.dart"
       ],
       "sourceStatus": "source_and_selected_ui",
       "externalStatus": "mapped_partial",
@@ -41,7 +44,7 @@
       "liveE2EVerified": false,
       "complete": false,
       "gaps": [
-        "RC93 Auth 22/40 source-reviewed and 18 NOT_DECIDED; source gateway/UI covers 2FA status/enable/disable and contact change, not yet real E2E with SMS/email, roles, step-up or multi-device. Other Backend auth adapter remains partial.",
+        "RC97: Auth source scope classified (31 mobile source reviewed, 7 Web cookie client SDK, 2 Admin dashboard client SDK); Web/Admin host UI integration and live E2E remain open in owning applications, not Flutter mobile. Auth backend provider/OTP/device/DB E2E is still 0/40; Other Backend adapter and Wizard mapping remain independent.",
         "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
         "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً"
       ],
@@ -278,6 +281,539 @@
             "auditAndAbuse"
           ],
           "remaining": "Live OTP provider, real device 2FA verification and contact step-up with independent factor, role/permission errors and multi-device revocation; Other Backend contract and Wizard."
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.social.challenge",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/features/fable_social/lib/src/social_auth_repository.dart",
+          "ui": "packages/features/fable_social/lib/src/social_widgets.dart",
+          "tests": [
+            "packages/features/fable_social/test/social_auth_repository_test.dart",
+            "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.social.google",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/features/fable_social/lib/src/social_auth_repository.dart",
+          "ui": "packages/features/fable_social/lib/src/social_widgets.dart",
+          "tests": [
+            "packages/features/fable_social/test/social_auth_repository_test.dart",
+            "packages/fable_core/test/auth_rc95_social_2fa_handoff_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.social.apple",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/features/fable_social/lib/src/social_auth_repository.dart",
+          "ui": "packages/features/fable_social/lib/src/social_widgets.dart",
+          "tests": [
+            "packages/features/fable_social/test/social_auth_repository_test.dart",
+            "packages/fable_core/test/auth_rc95_social_2fa_handoff_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.otp.public.request",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/password_reset_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc91_public_otp_password_reset_test.dart",
+            "packages/features/fable_auth/test/password_reset_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.otp.public.verify",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/password_reset_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc91_public_otp_password_reset_test.dart",
+            "packages/features/fable_auth/test/password_reset_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.otp.request",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/sensitive_session_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.otp.verify",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/sensitive_session_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.logout-all",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/sensitive_session_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.sessions.revoke-selected",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/sensitive_session_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.sessions.revoke-one",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/sessions_page.dart",
+          "tests": [
+            "packages/fable_core/test/sensitive_session_contract_test.dart",
+            "packages/fable_core/test/active_sessions_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.username.availability",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_username.dart",
+          "ui": "packages/features/fable_auth/lib/src/username_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc94_username_mock_test.dart",
+            "packages/features/fable_auth/test/auth_pages_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.username.update",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_username.dart",
+          "ui": "packages/features/fable_auth/lib/src/username_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc94_username_mock_test.dart",
+            "packages/features/fable_auth/test/auth_pages_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.2fa.login.request",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/fable_second_factor_login_test.dart",
+            "packages/fable_core/test/auth_rc85_two_factor_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.2fa.login.complete",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/login_page.dart",
+          "tests": [
+            "packages/fable_core/test/fable_second_factor_login_test.dart",
+            "packages/fable_core/test/auth_rc85_two_factor_contract_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC95",
+          "operationId": "auth.otp.login.complete",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_otp_login.dart",
+          "ui": "packages/features/fable_auth/lib/src/otp_login_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc95_public_otp_login_test.dart",
+            "packages/features/fable_auth/test/auth_pages_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.password.reset",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_gateway.dart",
+          "ui": "packages/features/fable_auth/lib/src/password_reset_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc91_public_otp_password_reset_test.dart",
+            "packages/features/fable_auth/test/password_reset_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.social.google.link",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/features/fable_social/lib/src/social_auth_repository.dart",
+          "ui": "packages/features/fable_social/lib/src/social_account_settings_page.dart",
+          "tests": [
+            "packages/features/fable_social/test/social_auth_repository_test.dart",
+            "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.social.apple.link",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/features/fable_social/lib/src/social_auth_repository.dart",
+          "ui": "packages/features/fable_social/lib/src/social_account_settings_page.dart",
+          "tests": [
+            "packages/features/fable_social/test/social_auth_repository_test.dart",
+            "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.social.unlink",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_username.dart",
+          "ui": "packages/features/fable_social/lib/src/social_account_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc94_username_mock_test.dart",
+            "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.2fa.status",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_security.dart",
+          "ui": "packages/features/fable_auth/lib/src/security_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+            "packages/features/fable_auth/test/security_settings_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.2fa.enable",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_security.dart",
+          "ui": "packages/features/fable_auth/lib/src/security_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+            "packages/features/fable_auth/test/security_settings_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.2fa.disable",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_security.dart",
+          "ui": "packages/features/fable_auth/lib/src/security_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+            "packages/features/fable_auth/test/security_settings_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.contact.email.change",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_contact.dart",
+          "ui": "packages/features/fable_auth/lib/src/security_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+            "packages/features/fable_auth/test/security_settings_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        },
+        {
+          "milestone": "RC94–RC97",
+          "operationId": "auth.contact.phone.change",
+          "status": "SOURCE_IMPLEMENTED_E2E_PENDING",
+          "core": "packages/fable_core/lib/src/fable_auth_contact.dart",
+          "ui": "packages/features/fable_auth/lib/src/security_settings_page.dart",
+          "tests": [
+            "packages/fable_core/test/auth_rc93_two_factor_contact_test.dart",
+            "packages/features/fable_auth/test/security_settings_page_test.dart"
+          ],
+          "crossCuttingDecisions": [
+            "clientTransport",
+            "identityModel",
+            "authProviderAndOtp",
+            "structuredErrors"
+          ],
+          "remaining": "live backend/SDK/device E2E, Other Backend contract mapping, Wizard generated-project acceptance"
+        }
+      ],
+      "ownerClientUpdates": [
+        {
+          "operationId": "auth.web.login",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.web.refresh",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.web.social.google",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.web.social.apple",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.password-policy.get",
+          "owner": "ADMIN_WEB_DASHBOARD",
+          "status": "ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.password-policy.update",
+          "owner": "ADMIN_WEB_DASHBOARD",
+          "status": "ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.web.2fa.login.request",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.web.2fa.login.complete",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
+        },
+        {
+          "operationId": "auth.web.otp.login.complete",
+          "owner": "WEB_COOKIE",
+          "status": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+          "client": "interop/web-admin/fable-web-admin-auth.mjs",
+          "tests": [
+            "test/web-admin-auth-client-rc97.test.mjs",
+            "test/feature-parity-master.test.mjs"
+          ],
+          "remaining": "host-specific UI and configured real Backend E2E in Web/Admin owning client"
         }
       ]
     },
@@ -742,5 +1278,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC93: Auth 22/40 SOURCE_IMPLEMENTED_E2E_PENDING after 2FA status/enable/disable and destination OTP protected email/phone changes. 18 NOT_DECIDED, 0 live E2E across all 17. RC89/RC90 Flutter infrastructure CI-verified. Backend private Actions and full-source ZIP pending."
+  "latestSlice": "RC97 Auth source-closure: all 40 operations assigned to owners and source-evidenced: 31 Flutter Mobile, 7 separate Web cookie SDK, 2 separate Admin password-policy SDK. 0 real-provider/DB E2E accepted, 0/17 feature families production accepted. RC96 P2 managed invitations source and Flutter CI passed; Backend RC66 main unchanged. Backend Actions gate remains blocked, so Web/Admin mock tests run in Flutter CI mirror."
 }

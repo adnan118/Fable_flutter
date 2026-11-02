@@ -31,6 +31,8 @@ jobs:
           node --test test/contract-acceptance.test.mjs test/session-policy-for-wizard.test.mjs test/flutter-setup-wizard.test.mjs test/feature-sync.test.mjs test/backend-feature-parity-audit.test.mjs test/frontend-feature-ownership.test.mjs test/external-backend-isolation.test.mjs
           node tools/verify-fable-contract.mjs --mode source
           # RC80: حراسة سجل الميزات؛ لا نعلن اكتمالاً لمجرد نجاح CI.
+          # RC97: Web/Admin are separate browser-client contracts, never Flutter runtime endpoints.
+          node --test test/web-admin-auth-client-rc97.test.mjs
           node --test test/feature-parity-master.test.mjs
           node --test test/backend-wide-decision-review.test.mjs
           node tools/verify-feature-parity-master.mjs

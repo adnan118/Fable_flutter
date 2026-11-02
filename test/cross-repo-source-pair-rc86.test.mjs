@@ -30,8 +30,10 @@ const patch=(root,path,fn)=>{
 test('RC86 source pair is pinned to private Backend and includes all 40 Auth routes, but claims no E2E',()=>{
  const report=verifySourcePair({frontendRoot:process.cwd()});
  assert.equal(report.sourceOnly,true);
- assert.equal(report.sourceReviewed,22);
- assert.equal(report.notDecided,18);
+ assert.equal(report.sourceReviewed,31);
+ assert.equal(report.webReviewed,7);
+ assert.equal(report.adminReviewed,2);
+ assert.equal(report.notDecided,0);
  assert.equal(report.featureFamilies,17);
  assert.equal(report.liveE2EAccepted,0);
  assert.equal(report.authSourceBlobVerified,false);
