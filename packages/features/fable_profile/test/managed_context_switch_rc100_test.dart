@@ -35,10 +35,16 @@ class _ControlledApi {
   }
   void answer(int i, Object data) => pending[i].complete(Response<dynamic>(
     requestOptions:seen[i],statusCode:200,data:data));
+  Future<void> waitFor(int count) async {
+    for(var attempt=0;attempt<200;attempt++){
+      if(pending.length>=count)return;
+      await Future<void>.delayed(const Duration(milliseconds:10));
+    }
+    throw StateError('Simulated Backend did not receive the expected request');
+  }
 }
 FableManagedAccountSelection _choice(String id)=>FableManagedAccountSelection(
  id:id,access:'MANAGER',nameAr:'كيان',nameEn:'Entity',identityRevision:0);
-Future<void> _tick()async=>Future<void>.delayed(Duration.zero);
 
 void main(){
   test('RC100 ignores entity A response after switching same-login account to B',()async{
@@ -52,7 +58,7 @@ void main(){
     store.bindBackend('rc100|https://api.example.test');
     store.activate(_choice(entityA));
     final old=repo.executeUsingStore(store,'business.read');
-    await _tick();
+    await wire.waitFor(1);
     expect(wire.seen.length,1);
     expect(wire.seen.single.headers['X-Fable-Managed-Entity-Id'],entityA);
 
@@ -61,7 +67,7 @@ void main(){
     await expectLater(old,throwsA(isA<FableApiException>()));
 
     final current=repo.executeUsingStore(store,'business.read');
-    await _tick();
+    await wire.waitFor(2);
     expect(wire.seen.length,2);
     expect(wire.seen.last.headers['X-Fable-Managed-Entity-Id'],entityB);
     wire.answer(1,{'entity':entityB,'grants':['read']});
@@ -80,7 +86,7 @@ void main(){
     store.activate(first);
     final repo=FableManagedAccountsRepository(gateway,catalog);
     final old=repo.executeUsingStore(store,'business.read');
-    await _tick();
+    await wire.waitFor(1);
     store.activate(_choice(entityB));
     store.activate(first);
     wire.answer(0,{'entity':entityA});
@@ -99,7 +105,7 @@ void main(){
     store.activate(_choice(entityA));
     final request=FableManagedAccountsRepository(gateway,catalog)
       .executeUsingStore(store,'business.read');
-    await _tick();
+    await wire.waitFor(1);
     store.clear();
     wire.answer(0,{'entity':entityA});
     await expectLater(request,throwsA(isA<FableApiException>()));
