@@ -142,6 +142,32 @@ function externalEvidence(root,backend){
     throw Error('External feature bindings do not match the active Backend catalog');
   return {operations,bindings:b.bindings,missing,verified:backend.ready};
 }
+/// Wizard guard for the cross-feature Managed Accounts → Access Control binding.
+/// A matching screen or imported operation is not enough: all runtime layers
+/// must share one backend identity namespace and invalidate access snapshots.
+export function managedAccessContextBindingGaps(root) {
+  root=resolve(root);
+  const source=(name)=>checkedFile(root,name)?readFileSync(safeFile(root,name),'utf8'):'';
+  const app=source('lib/src/app.dart');
+  const session=source('packages/features/fable_access_control/lib/src/access_session.dart');
+  const bootstrap=source('packages/features/fable_access_control/lib/src/access_bootstrap.dart');
+  const store=source('packages/fable_core/lib/src/fable_managed_entity_scope.dart');
+  const auth=source('packages/fable_core/lib/src/fable_auth_gateway.dart');
+  const accessRepo=source('packages/features/fable_access_control/lib/src/access_repository.dart');
+  const managedRepo=source('packages/features/fable_profile/lib/src/managed_accounts_repository.dart');
+  const checks=[
+    ['APP_STORE_NAMESPACE',app.includes('FableManagedEntityStore(session:FableSecureSession(')],
+    ['APP_STORE_SCOPE',app.includes('managedEntityStore:managedStore')&&app.includes('FableManagedEntityScope(store:managedStore')],
+    ['BOOTSTRAP_STORE_BINDING',bootstrap.includes('managedEntityStore: widget.managedEntityStore')&&bootstrap.includes('managedStore.isBoundToBackend(auth.managedEntityBackendIdentity)')],
+    ['ACCESS_SESSION_INVALIDATION',session.includes('managedEntityStore?.addListener(_onManagedSelectionChanged)')&&session.includes('store.selectionRevision')&&session.includes('value = null;')],
+    ['SHARED_IDENTITY_NAMESPACE',store.includes('_session.sharesIdentityNamespaceWith(credentials)')&&auth.includes('sessionNamespaceFor')],
+    ['BACKEND_IDENTITY_PIN',store.includes('isBoundToBackend(String identity)')&&auth.includes('managedEntityBackendIdentityFor')],
+    ['SCOPED_REPOSITORY_GUARD',managedRepo.includes('store.isBoundToBackend(gateway.managedEntityBackendIdentity)')],
+    ['GLOBAL_PERMISSION_BOUNDARY',accessRepo.includes('Deliberately user-global')&&accessRepo.includes('gateway.execute(operationId)')],
+  ];
+  return checks.filter(([,ok])=>!ok).map(([code])=>code);
+}
+
 function classify({selected,problems,sourceMapped,needsBackend}){
   if(!selected)return 'NOT_SELECTED';
   if(!needsBackend)return problems.length?'CLIENT_ONLY_REVIEW':'CLIENT_ONLY_NO_BACKEND_REQUIRED';
@@ -149,7 +175,7 @@ function classify({selected,problems,sourceMapped,needsBackend}){
   if(sourceMapped>0)return 'PARTIAL';
   return 'MISSING';
 }
-function auditOne(root,feature,backend,master,external,explicit){
+function auditOne(root,feature,backend,master,external,explicit,selectedIds=[]){
   const ownership=FEATURE_OWNERSHIP[feature]??'custom';
   const req=explicit??null;
   // Backend-owned features cannot be silently recast as client-only just
@@ -188,6 +214,15 @@ function auditOne(root,feature,backend,master,external,explicit){
       'اختر Fable أو Other Backend أولاً');
   let mapped=0;
   const fableOps=external?.fable?.featureMatrix?.find(x=>x.id===feature);
+  if(feature==='access_control' && selectedIds.includes('profile') &&
+     backend.kind==='fable' &&
+     external?.fable?.operations?.some(op=>
+       /^managed-(?:entities|accounts)\./.test(op.id))) {
+    const gaps=managedAccessContextBindingGaps(root);
+    if(gaps.length) add('MANAGED_ACCESS_CONTEXT_NOT_BOUND',
+      'ربط حسابات Fable الفرعية مع Access Control غير مكتمل: '+gaps.join(', '),
+      'وحّد namespace الخاص بـFableSecureSession، ومرّر ManagedEntityStore إلى AccessBootstrap، وأعد التحقق من Snapshot عند كل تبديل دون تحويل أدوار الكيان إلى صلاحيات عامة.');
+  }
   if(requires&&backend.kind==='fable'){
     if(!backend.ready)
       add('FABLE_BACKEND_NOT_READY','عقد Fable غير مفعّل لهذا المشروع',
@@ -321,7 +356,7 @@ export function auditSelectedFeatureIntegration(root,{overrideSelections=null}={
   const evidence=backend.kind==='fable'?{fable,reason:external?.reason}:
     backend.kind==='other'?external:{};
   const features=selected.ids.map(id=>auditOne(root,id,backend,defs.get(id),
-    evidence,req.features[id]));
+    evidence,req.features[id],selected.ids));
   const counts={
     MISSING:features.filter(x=>x.state==='MISSING').length,
     PARTIAL:features.filter(x=>x.state==='PARTIAL').length,
