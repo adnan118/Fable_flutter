@@ -10,7 +10,6 @@ import json
 import os
 import pathlib
 import subprocess
-import sys
 import zipfile
 
 SCHEMA = 1
@@ -18,9 +17,10 @@ SKIP_DIRS = {'.git', '.dart_tool', 'node_modules', '.gradle', '.next',
              'build', 'dist', 'coverage', '__pycache__', '.venv', 'venv'}
 SKIP_SUFFIX = ('.pem', '.key', '.p12', '.p8', '.jks', '.keystore',
                '.mobileprovision', '.cer', '.pfx')
-SKIP_NAMES = {'.env', '.npmrc', '.pypirc', '.netrc', '.secrets',
-              'id_rsa', 'id_ed25519', 'google-services.json',
-              'googleservice-info.plist'}
+SKIP_NAMES = {'.env', '.envrc', '.npmrc', '.pypirc', '.netrc',
+              '.secrets', '.git-credentials', 'id_rsa', 'id_ed25519',
+              'google-services.json', 'googleservice-info.plist',
+              'service-account.json', 'service-account-key.json'}
 ALLOWED_ENV_SUFFIX = {'.env.example', '.env.sample', '.env.template'}
 
 def run(*args, cwd):
@@ -55,7 +55,36 @@ def blocked(rel):
     return False
 
 def plain(archive, name, data):
-    archive.writestr(name, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
+    # Stable metadata independent of the build machine's locale and wall clock.
+    entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    entry.external_attr = 0o644 << 16
+    archive.writestr(entry, data, compress_type=zipfile.ZIP_DEFLATED,
+                     compresslevel=6)
+
+def demand(ok, message):
+    if not ok:
+        raise ValueError('RC87 archive guard: ' + message)
+
+def require_git_clean(root):
+    # Packaging an edited working tree while recording the commit SHA creates
+    # a misleading archive. Git-tracked source MUST equal checkout HEAD.
+    dirty = subprocess.check_output(
+        ['git', 'status', '--porcelain', '--untracked-files=no'], cwd=root)
+    demand(not dirty.strip(), f'working tree differs from Git HEAD: {root}')
+
+def verify_sums(archive, records):
+    expected = {name: sha for sha, name in records}
+    archive_names = set(archive.namelist())
+    demand(len(archive_names) == len(archive.namelist()),
+           'duplicate ZIP entry names')
+    for name, sha in expected.items():
+        demand(name in archive_names, 'source file omitted from ZIP: ' + name)
+        digest = hashlib.sha256(archive.read(name)).hexdigest()
+        demand(digest == sha, 'source file SHA256 differs in ZIP: ' + name)
+    listed = archive.read('SOURCE-PAIR/SHA256SUMS.txt').decode('utf-8').splitlines()
+    demand(len(listed) == len(records), 'SHA256SUMS list count mismatch')
+    for line, (sha, name) in zip(listed, records):
+        demand(line == f'{sha}  {name}', 'SHA256SUMS mismatch: ' + name)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -78,6 +107,21 @@ def main():
     assert audit.get('sourceReviewed') == 9
     assert audit.get('notDecided') == 31
     assert audit.get('liveE2EAccepted') == 0
+    demand(audit.get('backendSourceUnchangedSinceAudit') is True,
+           'Backend source changed after Flutter audit')
+    demand(audit.get('backendCapabilityCount') == 50,
+           'Backend capability inventory drift')
+    demand(len(audit.get('backendCapabilityInventory', [])) == 50,
+           'Backend capability manifest inventory absent')
+    for cap in audit['backendCapabilityInventory']:
+        demand(cap.get('manifestPresent') is True and
+               cap.get('liveE2EVerified') is False,
+               'missing capability manifest or invented E2E')
+    if (back / 'docs/RC86-SOURCE-PAIR.json').is_file():
+        demand(audit.get('privateBackendPairVerified') is True,
+               'private Backend Flutter SHA pin has not been verified')
+    require_git_clean(back)
+    require_git_clean(front)
     backend_head = run('git','rev-parse','HEAD',cwd=back)
     frontend_head = run('git','rev-parse','HEAD',cwd=front)
     assert audit['backendGitHead'] == backend_head
@@ -93,7 +137,7 @@ def main():
     excluded = []
     source_counts = {}
     source_sizes = {}
-    when = '2026-11-01'  # release identity; no fabricated E2E completion
+    when = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     paired = [
       ('Fable-Backend', back),
       ('Fable-Flutter', front),
@@ -131,6 +175,10 @@ def main():
                 'methodPathMismatches':0,'sourceReviewed':9,'notDecided':31,
             },
             'featureFamilies':17,
+            'backendCapabilityBlueprints':50,
+            'backendCapabilityInventory':audit['backendCapabilityInventory'],
+            'backendSourceUnchangedSinceAudit':True,
+            'privateBackendPairVerified':audit.get('privateBackendPairVerified', False),
             'liveE2EAccepted':0,
             'otherBackendMfaMapped':False,
             'omittedTrackedPaths':excluded,
@@ -157,6 +205,7 @@ def main():
         assert z.testzip() is None, 'archive CRC failed'
         assert z.getinfo('SOURCE-PAIR/PAIR-MANIFEST.json')
         assert len(z.namelist()) > 10, 'missing files'
+        verify_sums(z, records)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     checksum_path = output.with_suffix(output.suffix + '.sha256')
     checksum_path.write_text(f'{digest}  {output.name}\n', encoding='utf-8')

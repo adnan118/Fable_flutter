@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // RC86: verify Fable-Backend source identity and Flutter Auth source ledger.
 // This verifies imported source declarations, NOT live E2E acceptance.
-import {createHash} from 'node:crypto';
 import {existsSync,readFileSync,readdirSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -14,8 +13,29 @@ const hex40=(value)=>typeof value==='string'&&/^[0-9a-f]{40}$/.test(value);
 function gitHead(root){
   return execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 }
-function blobHash(buffer){
-  return createHash('sha1').update(Buffer.from('blob '+buffer.length+'\0')).update(buffer).digest('hex');
+function gitSourceUnchangedSinceAudit(root,baseSha,headSha){
+  // A release may add packaging workflow/docs, but NOT silently change
+  // Backend source since the commit against which Flutter was audited.
+  try{
+    execFileSync('git',['merge-base','--is-ancestor',baseSha,headSha],
+      {cwd:root,stdio:'pipe'});
+    execFileSync('git',['diff','--quiet',baseSha,headSha,'--',
+      'Fable-Backend-RC66/'],{cwd:root,stdio:'pipe'});
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+function gitCommittedBlobSha(root,path){
+  // Git blob is source-of-truth on Windows too; worktree CRLF conversion
+  // must not generate a false mismatch against the committed LF blob.
+  return execFileSync('git',['rev-parse','HEAD:'+path],
+    {cwd:root,encoding:'utf8'}).trim();
+}
+function requireCleanBackendCheckout(root){
+  const dirty=execFileSync('git',['status','--porcelain','--untracked-files=no'],
+    {cwd:root,encoding:'utf8'}).trim();
+  assert(!dirty,'Backend tracked worktree differs from the recorded Git HEAD');
 }
 export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={}){
   const front=resolve(frontendRoot);
@@ -58,6 +78,7 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     revision:pair.revision,
     frontendGitHead:existsSync(join(front,'.git'))?gitHead(front):null,
     backendGitHead:null,authSourceBlobVerified:false,
+    backendSourceUnchangedSinceAudit:false,
     backendRouteCount:null,backendCapabilityCount:null,
     backendCapabilityInventory:[],backendRoutesAbsent:[],backendRouteMismatches:[],
     sourceReviewed:counts.sourceReviewed,notDecided:counts.undecided,
@@ -69,8 +90,9 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
     const back=resolve(backendRoot);
     const authFile=join(back,pair.backend.authBlueprint);
     assert(existsSync(authFile),'private Backend auth source manifest missing');
+    requireCleanBackendCheckout(back);
     const buffer=readFileSync(authFile);
-    const actualBlob=blobHash(buffer);
+    const actualBlob=gitCommittedBlobSha(back,pair.backend.authBlueprint);
     assert(actualBlob===pair.backend.authBlueprintBlobSha,
       'Backend auth source changed since Flutter audit; re-audit before packaging');
     const backendAuth=JSON.parse(buffer.toString('utf8'));
@@ -94,16 +116,22 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
       'Backend/Flutter Auth operations differ');
     const backendHead=gitHead(back);
     report.backendGitHead=backendHead;
+    assert(gitSourceUnchangedSinceAudit(back,pair.backend.sourceCommitAtAudit,
+      backendHead),
+      'Backend operational source drift or missing pinned Git history; re-audit/re-pin');
+    report.backendSourceUnchangedSinceAudit=true;
     report.backendRouteCount=catalog.size;
     report.authSourceBlobVerified=true;
     // This never claims feature parity. Inventory is provided for manual review.
     const capabilities=join(back,'Fable-Backend-RC66/blueprints/capabilities');
     const rows=readdirSync(capabilities,{withFileTypes:true})
       .filter(x=>x.isDirectory()).map(x=>x.name).sort();
+    assert(rows.length===pair.counts.backendCapabilityBlueprints,
+      'Backend capability inventory changed; review new/removed features first');
     report.backendCapabilityCount=rows.length;
     report.backendCapabilityInventory=rows.map(name=>{
       const manifestFile=join(capabilities,name,'manifest.json');
-      if(!existsSync(manifestFile))return{name,manifestPresent:false,operations:null};
+      assert(existsSync(manifestFile),'missing Backend capability manifest: '+name);
       const capability=json(manifestFile);
       // Some capabilities are non-route decisions/services. Inventory them
       // without inventing HTTP operations, but reject malformed route arrays.
@@ -117,6 +145,18 @@ export function verifySourcePair({frontendRoot=process.cwd(),backendRoot=null}={
         operations:ids.length,routeIds:ids,liveE2EVerified:false};
     });
     report.sourceOnly=false;
+    // Only the PRIVATE Backend checkout can pin a concrete released
+    // Flutter commit. This check MUST NOT depend on frontend self-SHA.
+    const privatePair=join(back,'docs/RC86-SOURCE-PAIR.json');
+    if(existsSync(privatePair)){
+      const pin=json(privatePair);
+      assert(pin.backend?.auditCommit===pair.backend.sourceCommitAtAudit &&
+        pin.flutter?.verifiedMainCommit===report.frontendGitHead,
+        'private Backend manifest does not approve this Flutter Git SHA');
+      report.privateBackendPairVerified=true;
+    }else{
+      report.privateBackendPairVerified=false; // Legacy source-only checkout
+    }
   }
   return report;
 }
