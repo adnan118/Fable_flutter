@@ -167,7 +167,7 @@ test('RC90 never mistakes a narrow Fable fixture contract for project completene
     assert.equal(feature.id,'auth');
     assert.notEqual(feature.state,'CLIENT_ONLY_NO_BACKEND_REQUIRED');
     assert.ok(feature.missing.some(x=>x.code==='LIVE_E2E_NOT_VERIFIED'));
-    assert.ok(feature.missing.some(x=>x.code==='PROJECT_CONTRACT_UNPINN'||
+    assert.ok(feature.missing.some(x=>x.code==='PROJECT_CONTRACT_UNPINNED'||
       x.code==='FABLE_CONTRACT_AUDIT_UNAVAILABLE'));
   }finally{rmSync(root,{recursive:true,force:true});}
 });
