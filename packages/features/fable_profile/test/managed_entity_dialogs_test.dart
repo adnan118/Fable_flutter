@@ -141,4 +141,39 @@ void main(){
     r.path=='/managed-entities/$entityId/invitations'&&r.method=='POST').single;
   expect(post.data,{'username':'alice','access':'MANAGER'});
  });
+ testWidgets('resume revalidates membership and clears a downgraded managed role',
+ (tester)async{
+  var access='OWNER',cleared=0;
+  final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+    contract:_contract(),secureSession:_Session(),client:_dio((request)async{
+      if(request.path=='/managed-entities'&&request.method=='GET'){
+        return _ok(request,[{
+          ..._ownedEntity(),
+          'memberships':[{'access':access,'active':true}],
+        }]);
+      }
+      if(request.path=='/managed-entities/invitations/me')return _ok(request,[]);
+      if(request.path=='/managed-entities/$entityId/activate')return _ok(request,{
+        'managedEntityId':entityId,'access':'OWNER',
+        'header':{'name':'X-Fable-Managed-Entity-Id','value':entityId},
+      });
+      return _ok(request,{});
+    }));
+  addTearDown(gateway.dispose);
+  await tester.pumpWidget(MaterialApp(home:FableManagedAccountsPage(
+    gateway:gateway,contract:_contract(),onCleared:()=>cleared++,
+  )));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Select'));
+  await tester.pumpAndSettle();
+  expect(find.textContaining('Selected: '),findsOneWidget);
+
+  access='VIEWER';
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pumpAndSettle();
+  expect(cleared,1);
+  expect(find.textContaining('Selected: '),findsNothing);
+ });
+
 }
