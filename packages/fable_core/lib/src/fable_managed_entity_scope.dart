@@ -26,6 +26,12 @@ class FableManagedEntityStore extends ChangeNotifier {
  late final StreamSubscription<FableIdentityEvent> _identityEvents;
  FableManagedEntitySelection? _active;
  String? _backendIdentity;
+ int _selectionRevision = 0;
+ /// Changes on each activation/clear, including an A → B → A switch.
+ /// Lets callers discard late responses without storing roles or secrets.
+ int get selectionRevision => _selectionRevision;
+ bool isBoundToCredentials(FableSecureSession credentials) =>
+   identical(credentials, _session);
  static final _uuid=RegExp(
    r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
    caseSensitive:false);
@@ -52,11 +58,13 @@ class FableManagedEntityStore extends ChangeNotifier {
       choice.nameAr.length>191||choice.nameEn.length>191)
      throw const FormatException('Invalid managed entity activation result');
    _active=choice;
+   _selectionRevision++;
    notifyListeners();
  }
  void clear(){
    if(_active==null)return;
    _active=null;
+   _selectionRevision++;
    notifyListeners();
  }
  @override void dispose(){
