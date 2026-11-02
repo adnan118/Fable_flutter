@@ -11,6 +11,33 @@ function assertChoice(choice,id){
   if(choice===null || typeof choice==='boolean')return;
   throw Error('Frontend choice must be true, false, or null (review): '+id);
 }
+export const APPROVED_SYNC_MODES=Object.freeze([
+ 'foreground_only','foreground_plus_background_best_effort'
+]);
+export const DEFAULT_OFFLINE_SYNC_POLICY=Object.freeze({
+ schemaVersion:1,
+ storage:'sqlite_drift',
+ policy:'foreground_plus_background_best_effort',
+ writeReplay:'verified_backend_operation_only',
+ conflict:'server_version_preconditions_required',
+ financial:'online_revalidation_required',
+ scheduler:'android_workmanager_ios_bgtaskscheduler',
+ guaranteedBackgroundExecution:false,
+});
+export function validateOfflineSyncPolicy(policy) {
+ if(!policy||typeof policy!=='object'||Array.isArray(policy)||
+   policy.schemaVersion!==1||policy.storage!=='sqlite_drift'||
+   !APPROVED_SYNC_MODES.includes(policy.policy)||
+   policy.writeReplay!=='verified_backend_operation_only'||
+   policy.conflict!=='server_version_preconditions_required'||
+   policy.financial!=='online_revalidation_required'||
+   policy.scheduler!=='android_workmanager_ios_bgtaskscheduler'||
+   policy.guaranteedBackgroundExecution!==false||
+   Object.keys(policy).length!==Object.keys(DEFAULT_OFFLINE_SYNC_POLICY).length) {
+   throw Error('Invalid Offline/Sync policy: backend authority and background schedule must remain fail-closed');
+ }
+ return policy;
+}
 export function frontendOwnedDefaults(projectId){
   if(typeof projectId!=='string'||!projectId.trim())throw Error('Missing frontend project ID');
   return {
@@ -18,6 +45,7 @@ export function frontendOwnedDefaults(projectId){
     authority:'frontend-only',backendSecurityOverride:false,
     choices:Object.fromEntries(FEATURE_IDS.filter(id=>FEATURE_OWNERSHIP[id]!=='server')
       .map(id=>[id,{ownership:FEATURE_OWNERSHIP[id],enabled:null}])),
+    offlineSync:{...DEFAULT_OFFLINE_SYNC_POLICY},
   };
 }
 export function readFrontendOwnedDecisions(root,projectId){
@@ -37,6 +65,10 @@ export function readFrontendOwnedDecisions(root,projectId){
     if(!saved||saved.ownership!==value.ownership)throw Error('Frontend feature ownership conflicts: '+id);
     assertChoice(saved.enabled,id);
   }
+  // RC89: existing project decisions from before Offline policy keep their
+  // choices; migrating the config cannot turn Offline on silently.
+  if(current.offlineSync==null)current.offlineSync={...DEFAULT_OFFLINE_SYNC_POLICY};
+  validateOfflineSyncPolicy(current.offlineSync);
   return current;
 }
 export function saveFrontendOwnedDecisions(root,config,{apply=false}={}){
@@ -52,6 +84,7 @@ export function saveFrontendOwnedDecisions(root,config,{apply=false}={}){
       throw Error('Invalid Flutter ownership: '+id);
     assertChoice(config.choices[id].enabled,id);
   }
+  validateOfflineSyncPolicy(config.offlineSync);
   const path=resolve(root,OWNED_CONFIG_PATH);
   // Ensure a previously recorded local choice is not replaced by an unrelated project.
   if(existsSync(path))readFrontendOwnedDecisions(root,config.projectId);
