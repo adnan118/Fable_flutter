@@ -462,344 +462,53 @@ class FableAuthGateway implements BackendApiGateway {
     return id;
   }
 
-  /// A public-password-reset flow is enabled only when the *three exact*
-  /// Backend Fable operations are exported with the right auth boundary.
-  /// Other Backend has its own catalog; do not import these Fable routes.
-  bool get canResetPasswordWithPublicOtp =>
-      _supportsAuthOperation('auth.otp.public.request','POST',
-        '/auth/otp/public/request',requiresAuth:false) &&
-      _supportsAuthOperation('auth.otp.public.verify','POST',
-        '/auth/otp/public/verify',requiresAuth:false) &&
-      _supportsAuthOperation('auth.password.reset','POST',
-        '/auth/password/reset',requiresAuth:false);
 
-  /// Server returns QUEUED, not confirmation of remote email/SMS delivery.
-  /// A rejected/unknown identifier is a real backend failure; do not show
-  /// a fabricated success or expose any internal rejection reason.
+  /// Public reset is allowed only when all three exact Backend Fable paths
+  /// exist with the public auth boundary. Never borrow External Backend APIs.
+  bool get canResetPasswordWithPublicOtp =>
+    _supportsAuthOperation('auth.otp.public.request','POST','/auth/otp/public/request',
+      requiresAuth:false) &&
+    _supportsAuthOperation('auth.otp.public.verify','POST','/auth/otp/public/verify',
+      requiresAuth:false) &&
+    _supportsAuthOperation('auth.password.reset','POST','/auth/password/reset',
+      requiresAuth:false);
+
+  /// QUEUED is a durable delivery command, not confirmation of email/SMS delivery.
   Future<FablePasswordResetChallenge> requestPasswordResetOtp({
     required String identifier,String? preferredChannel,
-  }) async {
+  })async{
     final id=identifier.trim();
     if(id.isEmpty||id.length>191)throw ArgumentError('Invalid reset identifier');
-    if(preferredChannel!=null &&
-        !const {'EMAIL','PHONE'}.contains(preferredChannel)) {
+    if(preferredChannel!=null&&!const {'EMAIL','PHONE'}.contains(preferredChannel)){
       throw ArgumentError('Invalid OTP channel');
     }
     _requireAuthOperation('auth.otp.public.request','POST',
       '/auth/otp/public/request',requiresAuth:false);
     final rev=session.identityRevision;
     final response=await _api.request('auth.otp.public.request',
-      authorized:false,body:{
-        'purpose':'PASSWORD_RESET','identifier':id,
-        if(preferredChannel!=null)'preferredChannel':preferredChannel,
-      });
+      authorized:false,body:{'purpose':'PASSWORD_RESET','identifier':id,
+        if(preferredChannel!=null)'preferredChannel':preferredChannel});
     if(session.identityRevision!=rev)
       throw FableApiException(409,'session_changed_discard_response');
     final data=_payload(response.data),challengeId=data['challengeId'];
     if(data['accepted']!=true||data['deliveryStatus']!='QUEUED'||
-        challengeId is! String||!_uuid.hasMatch(challengeId)){
-      throw const FormatException('Backend did not queue a valid password-reset OTP');
+       challengeId is! String||!_uuid.hasMatch(challengeId)){
+      throw const FormatException('Backend did not accept a password reset challenge');
     }
-    return FablePasswordResetChallenge._(
-      challengeId,_expiresAt(data['expiresAt'],context:'password-reset OTP'),
-      rev,this);
+    return FablePasswordResetChallenge._(challengeId,
+      _expiresAt(data['expiresAt'],context:'password-reset OTP'),rev,this);
   }
 
-  /// Proof is purpose-bound to PASSWORD_RESET and one Backend challenge.
-  /// This method does not start a new authenticated session.
+  /// A verified reset OTP cannot become an authenticated login session.
   Future<FablePasswordResetProof> verifyPasswordResetOtp(
-      FablePasswordResetChallenge pending,String code) async {
+    FablePasswordResetChallenge pending,String code)async{
     if(!identical(pending._owner,this)||
        session.identityRevision!=pending._identityRevision||
        !pending.expiresAt.isAfter(DateTime.now().toUtc())){
       throw StateError('Password reset challenge is expired or belongs to another session');
     }
-    if(!RegExp(r'^[0-9]{6,10}
-  /// It is a short-lived proof consumed atomically by the protected backend operation.
-  Future<FableVerifiedSensitiveProof> verifySensitiveActionOtp(String challengeId,String code) async {
-    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{6,10}
-      throw ArgumentError('Invalid OTP challenge or code');
-    final rev=session.identityRevision;
-    final response=await _api.request(_route('/auth/otp/verify','POST'),
-      body:{'challengeId':challengeId,'code':code});
-    if(session.identityRevision!=rev)throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['verified']!=true || data['challengeId']!=challengeId ||
-      data['purpose']!='SENSITIVE_ACTION')
-      throw const FormatException('Backend did not verify the expected sensitive-action proof');
-    return FableVerifiedSensitiveProof._(challengeId,rev);
-  }
-
-  Future<bool> revokeOtherSession(String sessionId,{FableVerifiedSensitiveProof? proof}) async {
-    if(!_uuid.hasMatch(sessionId))throw ArgumentError('Invalid session ID');
-    final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
-    final response=await _api.request(
-      _route('/auth/sessions/{id}/revoke','POST'),
-      path:{'id':sessionId},securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=rev)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['sessionId']!=sessionId || data['revoked'] is! bool)
-      throw const FormatException('Invalid Backend session revocation response');
-    // Never silently sign out a different local identity.
-    return data['revoked'] as bool;
-  }
-  bool get canRevokeSelectedSessions => _contract.operations.values.any(
-    (op)=>op.path=='/auth/sessions/revoke-selected' && op.method=='POST' &&
-      op.requiresAuth && op.credentialHeader==null);
-
-  /// Server-owned bulk revocation. Never loop revoke-one calls (each may
-  /// require a distinct consumed step-up proof).
-  Future<List<String>> revokeSelectedSessions(List<String> ids,{
-    FableVerifiedSensitiveProof? proof,
-  })async {
-    final selected=ids.toSet().toList(growable:false);
-    if(selected.isEmpty||selected.length>100||selected.any((id)=>!_uuid.hasMatch(id)))
-      throw ArgumentError('Select 1-100 distinct, valid active session IDs');
-    final revision=session.identityRevision;
-    if(proof!=null&&proof._identityRevision!=revision)
-      throw StateError('Security proof belongs to another identity');
-    final response=await _api.request(
-      _route('/auth/sessions/revoke-selected','POST'),
-      body:{'sessionIds':selected},securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=revision)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    final revoked=data['sessionIds'],current=data['currentSessionRevoked'];
-    if(revoked is! List||revoked.any((id)=>id is! String||
-        !selected.contains(id)) ||
-       revoked.length!=revoked.toSet().length||
-       data['revoked'] is! int||data['revoked']!=revoked.length||
-       current is! bool)
-      throw const FormatException('Backend returned an invalid selected-session revocation');
-    if(current)await session.clearSessionIfIdentity(revision);
-    return List<String>.unmodifiable(revoked.cast<String>());
-  }
-
-  Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
-    final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
-    final response=await _api.request(_route('/auth/logout-all','POST'),
-      securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=rev)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data),count=data['revoked'];
-    if(count is! int||count<0)throw const FormatException('Invalid logout-all response');
-    await session.clearSessionIfIdentity(rev);
-    return count;
-  }
-
-  /// Explicit Fable entity-context opt-in for a verified, protected project
-  /// operation. Never persist the entity header or propagate it across Backends.
-  Future<Response<dynamic>> executeInManagedEntity(String operationId,String managedEntityId,{
-    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body
-  }) {
-    if(!_uuid.hasMatch(managedEntityId))throw ArgumentError('Invalid managed entity ID');
-    return _api.request(operationId,path:path,query:query,body:body,
-      managedEntityId:managedEntityId);
-  }
-
-  static Map<String, dynamic> _payload(Object? value) {
-    final envelope = value is Map ? value : null;
-    final candidate = envelope != null && envelope['data'] is Map
-        ? envelope['data']
-        : envelope;
-    if (candidate is! Map) {
-      throw const FormatException('Expected object from auth backend');
-    }
-    return Map<String, dynamic>.from(candidate);
-  }
-
-  /// يجب رفض اعتماد انتهت مدته بالفعل، ولا نتخيل انتهاءً من ساعة العميل
-  /// عندما يغيب expiresAt من استجابة Fable. لا نعيد إرسال Refresh تلقائياً.
-  static DateTime _expiresAt(Object? value,{required String context}) {
-    if(value is! String || value.length>64 ||
-       !RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(value) ||
-       !value.endsWith('Z')) {
-      throw FormatException('Missing UTC expiration in $context');
-    }
-    final time=DateTime.tryParse(value)?.toUtc();
-    if(time==null || !time.isAfter(DateTime.now().toUtc())) {
-      throw FormatException('Expired or invalid $context');
-    }
-    return time;
-  }
-
-  static bool _requiredPasswordChangeState(Map<String,dynamic> payload) {
-    final required=payload['mustChangePassword'];
-    if(required is! bool) {
-      throw const FormatException('Missing mustChangePassword in Fable login response');
-    }
-    return required;
-  }
-
-  Future<bool> _saveNewSession(Map<String, dynamic> payload, {bool newLogin = false,
-      required int expectedIdentity, String? expectedRefreshToken}) async {
-    final access = payload['accessToken'];
-    final refresh = payload['refreshToken'];
-    // فشل التاريخ يمنع حفظ أسرار جلسة منتهية؛ JWT/Session DB يظلان
-    // مصدر الصلاحية النهائي، ولا نعد هذا اختباراً لتكامل Backend الحي.
-    _expiresAt(payload['expiresAt'],context:'session');
-    if (access is! String || access.isEmpty || access.length > 8192 ||
-        access.contains(RegExp(r'[\r\n\x00-\x1f\x7f]')) ||
-        refresh is! String || !RegExp(r'^[A-Za-z0-9_-]{64}$').hasMatch(refresh)) {
-      throw const FormatException('Invalid session response from auth backend');
-    }
-    if (newLogin) {
-      return session.replaceTokensIfIdentity(expectedIdentity: expectedIdentity,
-        accessToken: access, refreshToken: refresh);
-    } else {
-      return session.saveTokensIfIdentity(expectedIdentity: expectedIdentity,
-        accessToken: access, refreshToken: refresh,
-        expectedRefreshToken: expectedRefreshToken);
-    }
-  }
-
-  /// Shared verified-operation transport for optional Fable capabilities.
-  /// Feature repositories only depend on BackendApiGateway; this adapter retains
-  /// the same auth/session/refresh semantics as login, without guessing routes.
-  Future<Response<dynamic>> execute(String operationId,{
-    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
-    CancelToken? cancelToken,String? ifMatch,
-  }) => _api.execute(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
-  void dispose() => _api.dispose();
-}
-
-/// Never render/log the token. Keep this object only in the login screen state.
-class FableSecondFactorChallenge {
-  const FableSecondFactorChallenge._(this._token,this._identityRevision,
-    this.methods,this.device,this.expiresAt);
-  final String _token;
-  final int _identityRevision;
-  final List<String> methods;
-  /// نحتفظ بنفس بيانات الجهاز للعامل الثاني. لا نخزن Password أو OTP.
-  final Map<String,String> device;
-  final DateTime expiresAt;
-}
-
-/// بيانات تحدي OTP لا تتضمن الرمز نفسه، ونحتفظ بالعنوان المقنّع فقط.
-class FableSecondFactorOtpRequest {
-  const FableSecondFactorOtpRequest._(this.challengeId,this.method,this.channel,
-    this.expiresAt,this.twoFactorExpiresAt,this.maskedDestination);
-  final String challengeId,method,channel;
-  final DateTime expiresAt,twoFactorExpiresAt;
-  final String? maskedDestination;
-}
-
-class FableLoginOutcome {
-  const FableLoginOutcome._(this.authenticated,this.requiresTwoFactor,
-      this.secondFactor,this.mustChangePassword);
-  const FableLoginOutcome.authenticated({required bool mustChangePassword}) :
-    this._(true,false,null,mustChangePassword);
-  const FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge challenge) :
-    this._(false,true,challenge,false);
-  final bool authenticated;
-  final bool requiresTwoFactor;
-  final FableSecondFactorChallenge? secondFactor;
-  /// Fable يسمح في هذه الحالة فقط بـchange-password/logout حتى نجاح التغيير.
-  /// هذا حقل صادر من الخادم، وليس تخميناً من Flutter أو اختياراً في Wizard.
-  final bool mustChangePassword;
-}
-
-/// Only the presentation-safe, authenticated account fields of the Fable core.
-/// This is intentionally NOT a domain Profile. The API response is whitelisted.
-class FableAccountSummary {
-  const FableAccountSummary({required this.id,this.displayName,this.username,
-    this.email,this.phone,this.locale,this.timezone});
-  final String id;
-  final String? displayName,username,email,phone,locale,timezone;
-
-  static FableAccountSummary fromMap(Map<String,dynamic> data) {
-    final id=data['id'];
-    if(id is! String || id.isEmpty || id.length>191) {
-      throw const FormatException('Invalid account identity');
-    }
-    String? field(String key,int max) {
-      final value=data[key];
-      if(value==null)return null;
-      if(value is! String || value.length>max || value.contains(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'))) {
-        throw const FormatException('Malformed account presentation field');
-      }
-      return value;
-    }
-    return FableAccountSummary(id:id,displayName:field('displayName',191),
-      username:field('username',64),email:field('email',191),
-      phone:field('phone',32),locale:field('locale',16),timezone:field('timezone',64));
-  }
-}
-
-
-/// Public presentation fields returned by GET /auth/sessions.
-/// Never stores bearer/refresh tokens, installation secrets or security proofs.
-class FableActiveSession {
-  const FableActiveSession({
-    required this.id,required this.isCurrent,required this.createdAt,
-    required this.expiresAt,this.lastUsedAt,this.displayName,this.deviceName,
-    this.platform,this.clientType,this.appVersion,this.securityState,
-  });
-  final String id;
-  final bool isCurrent;
-  final DateTime createdAt,expiresAt;
-  final DateTime? lastUsedAt;
-  final String? displayName,deviceName,platform,clientType,appVersion;
-  /// حالة حماية الجلسة من Backend، وليست حكماً أمنياً محلياً من Flutter.
-  final String? securityState;
-
-  factory FableActiveSession.fromMap(Map<String,dynamic> source){
-    final id=source['id'];
-    if(id is! String ||
-       !RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(id))
-      throw const FormatException('Invalid active session UUID');
-    if(source['isCurrent'] is! bool)
-      throw const FormatException('Missing active session current state');
-    DateTime parseDate(String key){
-      final value=source[key];
-      if(value is! String || value.length>64)
-        throw FormatException('Invalid session date: $key');
-      final parsed=DateTime.tryParse(value)?.toUtc();
-      if(parsed==null)throw FormatException('Invalid session date: $key');
-      return parsed;
-    }
-    String? optional(String key,int max){
-      final value=source[key];
-      if(value==null)return null;
-      if(value is! String || value.length>max ||
-         value.contains(RegExp(r'[\x00-\x1F\x7F]')))
-        throw FormatException('Invalid session presentation field: $key');
-      return value;
-    }
-    final createdAt=parseDate('createdAt'),expiresAt=parseDate('expiresAt');
-    final lastUsed=source['lastUsedAt']==null ? null : parseDate('lastUsedAt');
-    final security=source['securityState'];
-    if(security!=null && (security is! String ||
-        !const <String>{'ACTIVE','SUSPICIOUS','COMPROMISED'}.contains(security))) {
-      throw const FormatException('Invalid backend session security state');
-    }
-    return FableActiveSession(
-      id:id,isCurrent:source['isCurrent'] as bool,
-      createdAt:createdAt,expiresAt:expiresAt,lastUsedAt:lastUsed,
-      displayName:optional('displayName',191),
-      deviceName:optional('deviceName',191),platform:optional('platform',64),
-      clientType:optional('clientType',64),appVersion:optional('appVersion',64),
-      securityState:security as String?,
-    );
-  }
-}
-
-
-/// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
-/// Backend consumes the challenge on the first protected action if the session
-/// itself does not already satisfy the recent AAL2 policy.
-class FableVerifiedSensitiveProof {
-  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision);
-  final String _challengeId;
-  final int _identityRevision;
-}
-).hasMatch(code)){
-      throw ArgumentError('Password reset OTP must be 6-10 digits');
+    if(!RegExp(r'^[0-9]{6,10}$').hasMatch(code)){
+      throw ArgumentError('OTP must be 6 to 10 digits');
     }
     _requireAuthOperation('auth.otp.public.verify','POST',
       '/auth/otp/public/verify',requiresAuth:false);
@@ -808,38 +517,37 @@ class FableVerifiedSensitiveProof {
     if(session.identityRevision!=pending._identityRevision)
       throw FableApiException(409,'session_changed_discard_response');
     final data=_payload(response.data);
-    if(data['verified']!=true||data['challengeId']!=pending.challengeId||
-       data['purpose']!='PASSWORD_RESET'){
-      throw const FormatException('Backend OTP verification has wrong purpose or challenge');
+    if(data['verified']!=true||data['purpose']!='PASSWORD_RESET'||
+       data['challengeId']!=pending.challengeId){
+      throw const FormatException('Password reset OTP verification has the wrong purpose');
     }
     return FablePasswordResetProof._(pending.challengeId,
       pending._identityRevision,this);
   }
 
-  /// Server enforces password policy/history and revokes *all* sessions.
-  /// A local gateway must not invent a new session or log/store the password.
+  /// The server enforces password policy and invalidates all account sessions.
+  /// A reset response never automatically signs in or persists a password.
   Future<FablePasswordResetResult> completePasswordReset(
-      FablePasswordResetProof proof,{required String newPassword}) async {
+    FablePasswordResetProof proof,{required String newPassword})async{
     if(!identical(proof._owner,this)||
-       session.identityRevision!=proof._identityRevision) {
-      throw StateError('Reset proof belongs to another Fable identity or gateway');
+       session.identityRevision!=proof._identityRevision){
+      throw StateError('Reset proof belongs to another identity or gateway');
     }
     if(newPassword.isEmpty||newPassword.length>1024){
-      throw ArgumentError('Password reset DTO requires 1-1024 characters');
+      throw ArgumentError('Password must contain 1 to 1024 characters');
     }
     _requireAuthOperation('auth.password.reset','POST',
       '/auth/password/reset',requiresAuth:false);
     final response=await _api.request('auth.password.reset',
-      authorized:false,body:{
-        'challengeId':proof.challengeId,'newPassword':newPassword,
-      });
+      authorized:false,body:{'challengeId':proof.challengeId,
+        'newPassword':newPassword});
     if(session.identityRevision!=proof._identityRevision)
       throw FableApiException(409,'session_changed_discard_response');
     final data=_payload(response.data);
     if(data['changed']!=true||data['sessionsRevoked'] is! int||
-       (data['sessionsRevoked'] as int)<0 ||
+       (data['sessionsRevoked'] as int)<0||
        data['twoFactorPreserved'] is! bool){
-      throw const FormatException('Backend did not confirm password reset and session invalidation');
+      throw const FormatException('Backend did not confirm the password reset');
     }
     return FablePasswordResetResult(
       sessionsRevoked:data['sessionsRevoked'] as int,
@@ -849,620 +557,7 @@ class FableVerifiedSensitiveProof {
   /// The verified challenge is never a new login, nor a reusable local grant.
   /// It is a short-lived proof consumed atomically by the protected backend operation.
   Future<FableVerifiedSensitiveProof> verifySensitiveActionOtp(String challengeId,String code) async {
-    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
-      throw ArgumentError('Invalid OTP challenge or code');
-    final rev=session.identityRevision;
-    final response=await _api.request(_route('/auth/otp/verify','POST'),
-      body:{'challengeId':challengeId,'code':code});
-    if(session.identityRevision!=rev)throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['verified']!=true || data['challengeId']!=challengeId ||
-      data['purpose']!='SENSITIVE_ACTION')
-      throw const FormatException('Backend did not verify the expected sensitive-action proof');
-    return FableVerifiedSensitiveProof._(challengeId,rev);
-  }
-
-  Future<bool> revokeOtherSession(String sessionId,{FableVerifiedSensitiveProof? proof}) async {
-    if(!_uuid.hasMatch(sessionId))throw ArgumentError('Invalid session ID');
-    final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
-    final response=await _api.request(
-      _route('/auth/sessions/{id}/revoke','POST'),
-      path:{'id':sessionId},securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=rev)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['sessionId']!=sessionId || data['revoked'] is! bool)
-      throw const FormatException('Invalid Backend session revocation response');
-    // Never silently sign out a different local identity.
-    return data['revoked'] as bool;
-  }
-  bool get canRevokeSelectedSessions => _contract.operations.values.any(
-    (op)=>op.path=='/auth/sessions/revoke-selected' && op.method=='POST' &&
-      op.requiresAuth && op.credentialHeader==null);
-
-  /// Server-owned bulk revocation. Never loop revoke-one calls (each may
-  /// require a distinct consumed step-up proof).
-  Future<List<String>> revokeSelectedSessions(List<String> ids,{
-    FableVerifiedSensitiveProof? proof,
-  })async {
-    final selected=ids.toSet().toList(growable:false);
-    if(selected.isEmpty||selected.length>100||selected.any((id)=>!_uuid.hasMatch(id)))
-      throw ArgumentError('Select 1-100 distinct, valid active session IDs');
-    final revision=session.identityRevision;
-    if(proof!=null&&proof._identityRevision!=revision)
-      throw StateError('Security proof belongs to another identity');
-    final response=await _api.request(
-      _route('/auth/sessions/revoke-selected','POST'),
-      body:{'sessionIds':selected},securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=revision)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    final revoked=data['sessionIds'],current=data['currentSessionRevoked'];
-    if(revoked is! List||revoked.any((id)=>id is! String||
-        !selected.contains(id)) ||
-       revoked.length!=revoked.toSet().length||
-       data['revoked'] is! int||data['revoked']!=revoked.length||
-       current is! bool)
-      throw const FormatException('Backend returned an invalid selected-session revocation');
-    if(current)await session.clearSessionIfIdentity(revision);
-    return List<String>.unmodifiable(revoked.cast<String>());
-  }
-
-  Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
-    final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
-    final response=await _api.request(_route('/auth/logout-all','POST'),
-      securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=rev)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data),count=data['revoked'];
-    if(count is! int||count<0)throw const FormatException('Invalid logout-all response');
-    await session.clearSessionIfIdentity(rev);
-    return count;
-  }
-
-  /// Explicit Fable entity-context opt-in for a verified, protected project
-  /// operation. Never persist the entity header or propagate it across Backends.
-  Future<Response<dynamic>> executeInManagedEntity(String operationId,String managedEntityId,{
-    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body
-  }) {
-    if(!_uuid.hasMatch(managedEntityId))throw ArgumentError('Invalid managed entity ID');
-    return _api.request(operationId,path:path,query:query,body:body,
-      managedEntityId:managedEntityId);
-  }
-
-  static Map<String, dynamic> _payload(Object? value) {
-    final envelope = value is Map ? value : null;
-    final candidate = envelope != null && envelope['data'] is Map
-        ? envelope['data']
-        : envelope;
-    if (candidate is! Map) {
-      throw const FormatException('Expected object from auth backend');
-    }
-    return Map<String, dynamic>.from(candidate);
-  }
-
-  /// يجب رفض اعتماد انتهت مدته بالفعل، ولا نتخيل انتهاءً من ساعة العميل
-  /// عندما يغيب expiresAt من استجابة Fable. لا نعيد إرسال Refresh تلقائياً.
-  static DateTime _expiresAt(Object? value,{required String context}) {
-    if(value is! String || value.length>64 ||
-       !RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(value) ||
-       !value.endsWith('Z')) {
-      throw FormatException('Missing UTC expiration in $context');
-    }
-    final time=DateTime.tryParse(value)?.toUtc();
-    if(time==null || !time.isAfter(DateTime.now().toUtc())) {
-      throw FormatException('Expired or invalid $context');
-    }
-    return time;
-  }
-
-  static bool _requiredPasswordChangeState(Map<String,dynamic> payload) {
-    final required=payload['mustChangePassword'];
-    if(required is! bool) {
-      throw const FormatException('Missing mustChangePassword in Fable login response');
-    }
-    return required;
-  }
-
-  Future<bool> _saveNewSession(Map<String, dynamic> payload, {bool newLogin = false,
-      required int expectedIdentity, String? expectedRefreshToken}) async {
-    final access = payload['accessToken'];
-    final refresh = payload['refreshToken'];
-    // فشل التاريخ يمنع حفظ أسرار جلسة منتهية؛ JWT/Session DB يظلان
-    // مصدر الصلاحية النهائي، ولا نعد هذا اختباراً لتكامل Backend الحي.
-    _expiresAt(payload['expiresAt'],context:'session');
-    if (access is! String || access.isEmpty || access.length > 8192 ||
-        access.contains(RegExp(r'[\r\n\x00-\x1f\x7f]')) ||
-        refresh is! String || !RegExp(r'^[A-Za-z0-9_-]{64}$').hasMatch(refresh)) {
-      throw const FormatException('Invalid session response from auth backend');
-    }
-    if (newLogin) {
-      return session.replaceTokensIfIdentity(expectedIdentity: expectedIdentity,
-        accessToken: access, refreshToken: refresh);
-    } else {
-      return session.saveTokensIfIdentity(expectedIdentity: expectedIdentity,
-        accessToken: access, refreshToken: refresh,
-        expectedRefreshToken: expectedRefreshToken);
-    }
-  }
-
-  /// Shared verified-operation transport for optional Fable capabilities.
-  /// Feature repositories only depend on BackendApiGateway; this adapter retains
-  /// the same auth/session/refresh semantics as login, without guessing routes.
-  Future<Response<dynamic>> execute(String operationId,{
-    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
-    CancelToken? cancelToken,String? ifMatch,
-  }) => _api.execute(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
-  void dispose() => _api.dispose();
-}
-
-/// Never render/log the token. Keep this object only in the login screen state.
-class FableSecondFactorChallenge {
-  const FableSecondFactorChallenge._(this._token,this._identityRevision,
-    this.methods,this.device,this.expiresAt);
-  final String _token;
-  final int _identityRevision;
-  final List<String> methods;
-  /// نحتفظ بنفس بيانات الجهاز للعامل الثاني. لا نخزن Password أو OTP.
-  final Map<String,String> device;
-  final DateTime expiresAt;
-}
-
-/// بيانات تحدي OTP لا تتضمن الرمز نفسه، ونحتفظ بالعنوان المقنّع فقط.
-class FableSecondFactorOtpRequest {
-  const FableSecondFactorOtpRequest._(this.challengeId,this.method,this.channel,
-    this.expiresAt,this.twoFactorExpiresAt,this.maskedDestination);
-  final String challengeId,method,channel;
-  final DateTime expiresAt,twoFactorExpiresAt;
-  final String? maskedDestination;
-}
-
-class FableLoginOutcome {
-  const FableLoginOutcome._(this.authenticated,this.requiresTwoFactor,
-      this.secondFactor,this.mustChangePassword);
-  const FableLoginOutcome.authenticated({required bool mustChangePassword}) :
-    this._(true,false,null,mustChangePassword);
-  const FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge challenge) :
-    this._(false,true,challenge,false);
-  final bool authenticated;
-  final bool requiresTwoFactor;
-  final FableSecondFactorChallenge? secondFactor;
-  /// Fable يسمح في هذه الحالة فقط بـchange-password/logout حتى نجاح التغيير.
-  /// هذا حقل صادر من الخادم، وليس تخميناً من Flutter أو اختياراً في Wizard.
-  final bool mustChangePassword;
-}
-
-/// Only the presentation-safe, authenticated account fields of the Fable core.
-/// This is intentionally NOT a domain Profile. The API response is whitelisted.
-class FableAccountSummary {
-  const FableAccountSummary({required this.id,this.displayName,this.username,
-    this.email,this.phone,this.locale,this.timezone});
-  final String id;
-  final String? displayName,username,email,phone,locale,timezone;
-
-  static FableAccountSummary fromMap(Map<String,dynamic> data) {
-    final id=data['id'];
-    if(id is! String || id.isEmpty || id.length>191) {
-      throw const FormatException('Invalid account identity');
-    }
-    String? field(String key,int max) {
-      final value=data[key];
-      if(value==null)return null;
-      if(value is! String || value.length>max || value.contains(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'))) {
-        throw const FormatException('Malformed account presentation field');
-      }
-      return value;
-    }
-    return FableAccountSummary(id:id,displayName:field('displayName',191),
-      username:field('username',64),email:field('email',191),
-      phone:field('phone',32),locale:field('locale',16),timezone:field('timezone',64));
-  }
-}
-
-
-/// Public presentation fields returned by GET /auth/sessions.
-/// Never stores bearer/refresh tokens, installation secrets or security proofs.
-class FableActiveSession {
-  const FableActiveSession({
-    required this.id,required this.isCurrent,required this.createdAt,
-    required this.expiresAt,this.lastUsedAt,this.displayName,this.deviceName,
-    this.platform,this.clientType,this.appVersion,this.securityState,
-  });
-  final String id;
-  final bool isCurrent;
-  final DateTime createdAt,expiresAt;
-  final DateTime? lastUsedAt;
-  final String? displayName,deviceName,platform,clientType,appVersion;
-  /// حالة حماية الجلسة من Backend، وليست حكماً أمنياً محلياً من Flutter.
-  final String? securityState;
-
-  factory FableActiveSession.fromMap(Map<String,dynamic> source){
-    final id=source['id'];
-    if(id is! String ||
-       !RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(id))
-      throw const FormatException('Invalid active session UUID');
-    if(source['isCurrent'] is! bool)
-      throw const FormatException('Missing active session current state');
-    DateTime parseDate(String key){
-      final value=source[key];
-      if(value is! String || value.length>64)
-        throw FormatException('Invalid session date: $key');
-      final parsed=DateTime.tryParse(value)?.toUtc();
-      if(parsed==null)throw FormatException('Invalid session date: $key');
-      return parsed;
-    }
-    String? optional(String key,int max){
-      final value=source[key];
-      if(value==null)return null;
-      if(value is! String || value.length>max ||
-         value.contains(RegExp(r'[\x00-\x1F\x7F]')))
-        throw FormatException('Invalid session presentation field: $key');
-      return value;
-    }
-    final createdAt=parseDate('createdAt'),expiresAt=parseDate('expiresAt');
-    final lastUsed=source['lastUsedAt']==null ? null : parseDate('lastUsedAt');
-    final security=source['securityState'];
-    if(security!=null && (security is! String ||
-        !const <String>{'ACTIVE','SUSPICIOUS','COMPROMISED'}.contains(security))) {
-      throw const FormatException('Invalid backend session security state');
-    }
-    return FableActiveSession(
-      id:id,isCurrent:source['isCurrent'] as bool,
-      createdAt:createdAt,expiresAt:expiresAt,lastUsedAt:lastUsed,
-      displayName:optional('displayName',191),
-      deviceName:optional('deviceName',191),platform:optional('platform',64),
-      clientType:optional('clientType',64),appVersion:optional('appVersion',64),
-      securityState:security as String?,
-    );
-  }
-}
-
-
-/// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
-/// Backend consumes the challenge on the first protected action if the session
-/// itself does not already satisfy the recent AAL2 policy.
-class FableVerifiedSensitiveProof {
-  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision);
-  final String _challengeId;
-  final int _identityRevision;
-}
-).hasMatch(code))
-      throw ArgumentError('Invalid OTP challenge or code');
-    final rev=session.identityRevision;
-    final response=await _api.request(_route('/auth/otp/verify','POST'),
-      body:{'challengeId':challengeId,'code':code});
-    if(session.identityRevision!=rev)throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['verified']!=true || data['challengeId']!=challengeId ||
-      data['purpose']!='SENSITIVE_ACTION')
-      throw const FormatException('Backend did not verify the expected sensitive-action proof');
-    return FableVerifiedSensitiveProof._(challengeId,rev);
-  }
-
-  Future<bool> revokeOtherSession(String sessionId,{FableVerifiedSensitiveProof? proof}) async {
-    if(!_uuid.hasMatch(sessionId))throw ArgumentError('Invalid session ID');
-    final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
-    final response=await _api.request(
-      _route('/auth/sessions/{id}/revoke','POST'),
-      path:{'id':sessionId},securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=rev)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['sessionId']!=sessionId || data['revoked'] is! bool)
-      throw const FormatException('Invalid Backend session revocation response');
-    // Never silently sign out a different local identity.
-    return data['revoked'] as bool;
-  }
-  bool get canRevokeSelectedSessions => _contract.operations.values.any(
-    (op)=>op.path=='/auth/sessions/revoke-selected' && op.method=='POST' &&
-      op.requiresAuth && op.credentialHeader==null);
-
-  /// Server-owned bulk revocation. Never loop revoke-one calls (each may
-  /// require a distinct consumed step-up proof).
-  Future<List<String>> revokeSelectedSessions(List<String> ids,{
-    FableVerifiedSensitiveProof? proof,
-  })async {
-    final selected=ids.toSet().toList(growable:false);
-    if(selected.isEmpty||selected.length>100||selected.any((id)=>!_uuid.hasMatch(id)))
-      throw ArgumentError('Select 1-100 distinct, valid active session IDs');
-    final revision=session.identityRevision;
-    if(proof!=null&&proof._identityRevision!=revision)
-      throw StateError('Security proof belongs to another identity');
-    final response=await _api.request(
-      _route('/auth/sessions/revoke-selected','POST'),
-      body:{'sessionIds':selected},securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=revision)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    final revoked=data['sessionIds'],current=data['currentSessionRevoked'];
-    if(revoked is! List||revoked.any((id)=>id is! String||
-        !selected.contains(id)) ||
-       revoked.length!=revoked.toSet().length||
-       data['revoked'] is! int||data['revoked']!=revoked.length||
-       current is! bool)
-      throw const FormatException('Backend returned an invalid selected-session revocation');
-    if(current)await session.clearSessionIfIdentity(revision);
-    return List<String>.unmodifiable(revoked.cast<String>());
-  }
-
-  Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
-    final rev=session.identityRevision;
-    if(proof!=null && proof._identityRevision!=rev)
-      throw StateError('Security proof belongs to another authenticated identity');
-    final response=await _api.request(_route('/auth/logout-all','POST'),
-      securityChallengeId:proof?._challengeId);
-    if(session.identityRevision!=rev)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data),count=data['revoked'];
-    if(count is! int||count<0)throw const FormatException('Invalid logout-all response');
-    await session.clearSessionIfIdentity(rev);
-    return count;
-  }
-
-  /// Explicit Fable entity-context opt-in for a verified, protected project
-  /// operation. Never persist the entity header or propagate it across Backends.
-  Future<Response<dynamic>> executeInManagedEntity(String operationId,String managedEntityId,{
-    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body
-  }) {
-    if(!_uuid.hasMatch(managedEntityId))throw ArgumentError('Invalid managed entity ID');
-    return _api.request(operationId,path:path,query:query,body:body,
-      managedEntityId:managedEntityId);
-  }
-
-  static Map<String, dynamic> _payload(Object? value) {
-    final envelope = value is Map ? value : null;
-    final candidate = envelope != null && envelope['data'] is Map
-        ? envelope['data']
-        : envelope;
-    if (candidate is! Map) {
-      throw const FormatException('Expected object from auth backend');
-    }
-    return Map<String, dynamic>.from(candidate);
-  }
-
-  /// يجب رفض اعتماد انتهت مدته بالفعل، ولا نتخيل انتهاءً من ساعة العميل
-  /// عندما يغيب expiresAt من استجابة Fable. لا نعيد إرسال Refresh تلقائياً.
-  static DateTime _expiresAt(Object? value,{required String context}) {
-    if(value is! String || value.length>64 ||
-       !RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(value) ||
-       !value.endsWith('Z')) {
-      throw FormatException('Missing UTC expiration in $context');
-    }
-    final time=DateTime.tryParse(value)?.toUtc();
-    if(time==null || !time.isAfter(DateTime.now().toUtc())) {
-      throw FormatException('Expired or invalid $context');
-    }
-    return time;
-  }
-
-  static bool _requiredPasswordChangeState(Map<String,dynamic> payload) {
-    final required=payload['mustChangePassword'];
-    if(required is! bool) {
-      throw const FormatException('Missing mustChangePassword in Fable login response');
-    }
-    return required;
-  }
-
-  Future<bool> _saveNewSession(Map<String, dynamic> payload, {bool newLogin = false,
-      required int expectedIdentity, String? expectedRefreshToken}) async {
-    final access = payload['accessToken'];
-    final refresh = payload['refreshToken'];
-    // فشل التاريخ يمنع حفظ أسرار جلسة منتهية؛ JWT/Session DB يظلان
-    // مصدر الصلاحية النهائي، ولا نعد هذا اختباراً لتكامل Backend الحي.
-    _expiresAt(payload['expiresAt'],context:'session');
-    if (access is! String || access.isEmpty || access.length > 8192 ||
-        access.contains(RegExp(r'[\r\n\x00-\x1f\x7f]')) ||
-        refresh is! String || !RegExp(r'^[A-Za-z0-9_-]{64}$').hasMatch(refresh)) {
-      throw const FormatException('Invalid session response from auth backend');
-    }
-    if (newLogin) {
-      return session.replaceTokensIfIdentity(expectedIdentity: expectedIdentity,
-        accessToken: access, refreshToken: refresh);
-    } else {
-      return session.saveTokensIfIdentity(expectedIdentity: expectedIdentity,
-        accessToken: access, refreshToken: refresh,
-        expectedRefreshToken: expectedRefreshToken);
-    }
-  }
-
-  /// Shared verified-operation transport for optional Fable capabilities.
-  /// Feature repositories only depend on BackendApiGateway; this adapter retains
-  /// the same auth/session/refresh semantics as login, without guessing routes.
-  Future<Response<dynamic>> execute(String operationId,{
-    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
-    CancelToken? cancelToken,String? ifMatch,
-  }) => _api.execute(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
-  void dispose() => _api.dispose();
-}
-
-/// Never render/log the token. Keep this object only in the login screen state.
-class FableSecondFactorChallenge {
-  const FableSecondFactorChallenge._(this._token,this._identityRevision,
-    this.methods,this.device,this.expiresAt);
-  final String _token;
-  final int _identityRevision;
-  final List<String> methods;
-  /// نحتفظ بنفس بيانات الجهاز للعامل الثاني. لا نخزن Password أو OTP.
-  final Map<String,String> device;
-  final DateTime expiresAt;
-}
-
-/// بيانات تحدي OTP لا تتضمن الرمز نفسه، ونحتفظ بالعنوان المقنّع فقط.
-class FableSecondFactorOtpRequest {
-  const FableSecondFactorOtpRequest._(this.challengeId,this.method,this.channel,
-    this.expiresAt,this.twoFactorExpiresAt,this.maskedDestination);
-  final String challengeId,method,channel;
-  final DateTime expiresAt,twoFactorExpiresAt;
-  final String? maskedDestination;
-}
-
-class FableLoginOutcome {
-  const FableLoginOutcome._(this.authenticated,this.requiresTwoFactor,
-      this.secondFactor,this.mustChangePassword);
-  const FableLoginOutcome.authenticated({required bool mustChangePassword}) :
-    this._(true,false,null,mustChangePassword);
-  const FableLoginOutcome.requiresSecondFactor(FableSecondFactorChallenge challenge) :
-    this._(false,true,challenge,false);
-  final bool authenticated;
-  final bool requiresTwoFactor;
-  final FableSecondFactorChallenge? secondFactor;
-  /// Fable يسمح في هذه الحالة فقط بـchange-password/logout حتى نجاح التغيير.
-  /// هذا حقل صادر من الخادم، وليس تخميناً من Flutter أو اختياراً في Wizard.
-  final bool mustChangePassword;
-}
-
-/// Only the presentation-safe, authenticated account fields of the Fable core.
-/// This is intentionally NOT a domain Profile. The API response is whitelisted.
-class FableAccountSummary {
-  const FableAccountSummary({required this.id,this.displayName,this.username,
-    this.email,this.phone,this.locale,this.timezone});
-  final String id;
-  final String? displayName,username,email,phone,locale,timezone;
-
-  static FableAccountSummary fromMap(Map<String,dynamic> data) {
-    final id=data['id'];
-    if(id is! String || id.isEmpty || id.length>191) {
-      throw const FormatException('Invalid account identity');
-    }
-    String? field(String key,int max) {
-      final value=data[key];
-      if(value==null)return null;
-      if(value is! String || value.length>max || value.contains(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'))) {
-        throw const FormatException('Malformed account presentation field');
-      }
-      return value;
-    }
-    return FableAccountSummary(id:id,displayName:field('displayName',191),
-      username:field('username',64),email:field('email',191),
-      phone:field('phone',32),locale:field('locale',16),timezone:field('timezone',64));
-  }
-}
-
-
-/// Public presentation fields returned by GET /auth/sessions.
-/// Never stores bearer/refresh tokens, installation secrets or security proofs.
-class FableActiveSession {
-  const FableActiveSession({
-    required this.id,required this.isCurrent,required this.createdAt,
-    required this.expiresAt,this.lastUsedAt,this.displayName,this.deviceName,
-    this.platform,this.clientType,this.appVersion,this.securityState,
-  });
-  final String id;
-  final bool isCurrent;
-  final DateTime createdAt,expiresAt;
-  final DateTime? lastUsedAt;
-  final String? displayName,deviceName,platform,clientType,appVersion;
-  /// حالة حماية الجلسة من Backend، وليست حكماً أمنياً محلياً من Flutter.
-  final String? securityState;
-
-  factory FableActiveSession.fromMap(Map<String,dynamic> source){
-    final id=source['id'];
-    if(id is! String ||
-       !RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(id))
-      throw const FormatException('Invalid active session UUID');
-    if(source['isCurrent'] is! bool)
-      throw const FormatException('Missing active session current state');
-    DateTime parseDate(String key){
-      final value=source[key];
-      if(value is! String || value.length>64)
-        throw FormatException('Invalid session date: $key');
-      final parsed=DateTime.tryParse(value)?.toUtc();
-      if(parsed==null)throw FormatException('Invalid session date: $key');
-      return parsed;
-    }
-    String? optional(String key,int max){
-      final value=source[key];
-      if(value==null)return null;
-      if(value is! String || value.length>max ||
-         value.contains(RegExp(r'[\x00-\x1F\x7F]')))
-        throw FormatException('Invalid session presentation field: $key');
-      return value;
-    }
-    final createdAt=parseDate('createdAt'),expiresAt=parseDate('expiresAt');
-    final lastUsed=source['lastUsedAt']==null ? null : parseDate('lastUsedAt');
-    final security=source['securityState'];
-    if(security!=null && (security is! String ||
-        !const <String>{'ACTIVE','SUSPICIOUS','COMPROMISED'}.contains(security))) {
-      throw const FormatException('Invalid backend session security state');
-    }
-    return FableActiveSession(
-      id:id,isCurrent:source['isCurrent'] as bool,
-      createdAt:createdAt,expiresAt:expiresAt,lastUsedAt:lastUsed,
-      displayName:optional('displayName',191),
-      deviceName:optional('deviceName',191),platform:optional('platform',64),
-      clientType:optional('clientType',64),appVersion:optional('appVersion',64),
-      securityState:security as String?,
-    );
-  }
-}
-
-
-/// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
-/// Backend consumes the challenge on the first protected action if the session
-/// itself does not already satisfy the recent AAL2 policy.
-class FableVerifiedSensitiveProof {
-  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision);
-  final String _challengeId;
-  final int _identityRevision;
-}
-).hasMatch(code)){
-      throw ArgumentError('Password reset OTP must be 6-10 digits');
-    }
-    _requireAuthOperation('auth.otp.public.verify','POST',
-      '/auth/otp/public/verify',requiresAuth:false);
-    final response=await _api.request('auth.otp.public.verify',
-      authorized:false,body:{'challengeId':pending.challengeId,'code':code});
-    if(session.identityRevision!=pending._identityRevision)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['verified']!=true||data['challengeId']!=pending.challengeId||
-       data['purpose']!='PASSWORD_RESET'){
-      throw const FormatException('Backend OTP verification has wrong purpose or challenge');
-    }
-    return FablePasswordResetProof._(pending.challengeId,
-      pending._identityRevision,this);
-  }
-
-  /// Server enforces password policy/history and revokes *all* sessions.
-  /// A local gateway must not invent a new session or log/store the password.
-  Future<FablePasswordResetResult> completePasswordReset(
-      FablePasswordResetProof proof,{required String newPassword}) async {
-    if(!identical(proof._owner,this)||
-       session.identityRevision!=proof._identityRevision) {
-      throw StateError('Reset proof belongs to another Fable identity or gateway');
-    }
-    if(newPassword.isEmpty||newPassword.length>1024){
-      throw ArgumentError('Password reset DTO requires 1-1024 characters');
-    }
-    _requireAuthOperation('auth.password.reset','POST',
-      '/auth/password/reset',requiresAuth:false);
-    final response=await _api.request('auth.password.reset',
-      authorized:false,body:{
-        'challengeId':proof.challengeId,'newPassword':newPassword,
-      });
-    if(session.identityRevision!=proof._identityRevision)
-      throw FableApiException(409,'session_changed_discard_response');
-    final data=_payload(response.data);
-    if(data['changed']!=true||data['sessionsRevoked'] is! int||
-       (data['sessionsRevoked'] as int)<0 ||
-       data['twoFactorPreserved'] is! bool){
-      throw const FormatException('Backend did not confirm password reset and session invalidation');
-    }
-    return FablePasswordResetResult(
-      sessionsRevoked:data['sessionsRevoked'] as int,
-      twoFactorPreserved:data['twoFactorPreserved'] as bool);
-  }
-
-  /// The verified challenge is never a new login, nor a reusable local grant.
-  /// It is a short-lived proof consumed atomically by the protected backend operation.
-  Future<FableVerifiedSensitiveProof> verifySensitiveActionOtp(String challengeId,String code) async {
-    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
+    if(!_uuid.hasMatch(challengeId)||!RegExp(r'^[0-9]{6,10}$').hasMatch(code))
       throw ArgumentError('Invalid OTP challenge or code');
     final rev=session.identityRevision;
     final response=await _api.request(_route('/auth/otp/verify','POST'),
@@ -1745,7 +840,7 @@ class FableVerifiedSensitiveProof {
 }
 
 
-/// A queued public OTP challenge. QUEUED does not guarantee provider delivery.
+/// Public OTP request accepted by Backend, with delivery only queued.
 class FablePasswordResetChallenge {
   const FablePasswordResetChallenge._(
     this.challengeId,this.expiresAt,this._identityRevision,this._owner);
@@ -1755,7 +850,7 @@ class FablePasswordResetChallenge {
   final FableAuthGateway _owner;
 }
 
-/// One-time purpose-confirmed proof; not a bearer token or login session.
+/// Purpose-bound proof held in memory only; not a login session or a bearer.
 class FablePasswordResetProof {
   const FablePasswordResetProof._(
     this.challengeId,this._identityRevision,this._owner);
@@ -1764,7 +859,7 @@ class FablePasswordResetProof {
   final FableAuthGateway _owner;
 }
 
-/// Server-authoritative reset response; prior sessions are invalidated.
+/// Confirmation returned by Fable after invalidating all affected sessions.
 class FablePasswordResetResult {
   const FablePasswordResetResult({
     required this.sessionsRevoked,required this.twoFactorPreserved});
