@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:crypto/crypto.dart';
 import 'offline_drift_store.dart';
 
 enum FableSyncDisposition { acknowledged, retryLater, conflict, authorizationRequired, refused }
