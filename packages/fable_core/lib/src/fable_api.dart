@@ -97,17 +97,17 @@ class UnifiedApiClient implements BackendApiGateway {
       throw const FormatException('Backend contract operation has unsafe path');
     }
     var endpoint=op.path;
-    for(final placeholder in RegExp(r'\{([a-zA-Z_][a-zA-Z_0-9]*)\}').allMatches(endpoint)){
-      final name=placeholder.group(1)!;
+    for(final placeholder in RegExp(r'\{([a-zA-Z_][a-zA-Z_0-9]*)\}|(?<=/):([a-zA-Z_][a-zA-Z_0-9]*)').allMatches(endpoint)){
+      final name=placeholder.group(1) ?? placeholder.group(2)!;
       final value=path?[name];
       if(value==null)throw ArgumentError('Missing path parameter: $name');
       final text=value.toString();
       if(text=='.'||text=='..'||text.contains('\\')||text.contains('/')||text.contains('?')||text.contains('#')||text.contains('%')) {
         throw ArgumentError('Unsafe path parameter: $name');
       }
-      endpoint=endpoint.replaceAll('{$name}',Uri.encodeComponent(text));
+      endpoint=endpoint.replaceAll(placeholder.group(0)!,Uri.encodeComponent(text));
     }
-    if (RegExp(r'\{[^}]*\}').hasMatch(endpoint)) {
+    if (RegExp(r'\{[^}]*\}|(?<=/):[a-zA-Z_][a-zA-Z_0-9]*').hasMatch(endpoint)) {
       throw const FormatException('Unresolved backend path parameter');
     }
     final headers=await adapter.headersFor(op,session);
