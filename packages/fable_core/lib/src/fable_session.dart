@@ -60,6 +60,9 @@ class FableSecureSession {
     }
   }
   final String _prefix;
+  /// True when two clients share the same backend/project identity namespace.
+  /// Secure-session identity epochs and events are namespace-scoped.
+  bool sharesIdentityNamespaceWith(FableSecureSession other) => _prefix == other._prefix;
   final FlutterSecureStorage _storage;
   String get _idKey => 'fable.installation.id';
   String get _accessKey => '$_prefix.session.access';
