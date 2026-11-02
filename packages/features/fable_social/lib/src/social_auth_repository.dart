@@ -103,9 +103,7 @@ class FableSocialOperations {
   };
   static const _authorized = {'googleLink','appleLink','unlink'};
   factory FableSocialOperations.fable(FableContract catalog) {
-    // Fable-specific security: method/public-ness alone is insufficient.
-    // Other Backend never inherits these paths; it uses explicit bindings.
-    const paths = <String, String>{
+    const expectedPaths = <String, String>{
       'challenge': '/auth/social/challenge',
       'google': '/auth/social/google',
       'apple': '/auth/social/apple',
@@ -115,9 +113,9 @@ class FableSocialOperations {
     };
     for (final entry in fableIds.entries) {
       final op = catalog.operations[entry.value];
-      if (op == null || op.path != paths[entry.key] ||
+      if (op == null || op.path != expectedPaths[entry.key] ||
           !op.enforceAuth) {
-        throw const FormatException('Fable social operation route or policy mismatched');
+        throw const FormatException('Fable social contract operation mismatch');
       }
     }
     return FableSocialOperations._checked(catalog, fableIds);
@@ -170,68 +168,7 @@ class FableSocialRepository {
 
   Future<FableSocialAuthResult?> signIn(FableSocialProvider provider) => _run(provider, link: false);
   Future<bool?> link(FableSocialProvider provider, {required String securityChallengeId}) async {
-    if (!RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}
-      throw ArgumentError('Recent authentication proof required');
-    }
-    final outcome = await _run(provider, link: true, securityChallengeId: securityChallengeId);
-    return outcome == null ? null : outcome.signedIn;
-  }
-  Future<FableSocialAuthResult?> _run(FableSocialProvider provider,
-      {required bool link, String? securityChallengeId}) async {
-    final identity = session.identityRevision;
-    if (link && await session.accessToken == null) throw StateError('Sign in before linking social identity');
-    final challengeResponse = await gateway.execute(operations.require('challenge'),
-      body: adapter.challengeRequest(provider));
-    if (session.identityRevision != identity) return null;
-    final challenge = adapter.parseChallenge(challengeResponse.data, provider);
-    final started = DateTime.now().toUtc();
-    final credential = await credentials.obtain(challenge);
-    if (credential == null || session.identityRevision != identity) return null;
-    if (DateTime.now().toUtc().difference(started).inMilliseconds >= challenge.expiresInMs) {
-      throw StateError('Social challenge expired');
-    }
-    if (credential.provider != provider || credential.nonce != challenge.nonce) {
-      throw const FormatException('Provider credential challenge mismatch');
-    }
-    final role = link ? '${provider.wireName}Link' : provider.wireName;
-    final response = await gateway.execute(operations.require(role),
-      body: adapter.credentialRequest(credential, challenge, securityChallengeId: securityChallengeId));
-    if (session.identityRevision != identity) return null;
-    final payload = adapter.parseAuthResponse(response.data);
-    if (payload is! Map) throw const FormatException('Malformed social auth response');
-    if (link) {
-      if (payload['linked'] != true || payload['provider'] != provider.wireName) {
-        throw const FormatException('Link not confirmed by backend');
-      }
-      return const FableSocialAuthResult(signedIn: true, requiresTwoFactor: false);
-    }
-    if (payload['requiresTwoFactor'] == true) {
-      // A second factor does not grant an authenticated session.
-      if (payload['twoFactorToken'] is! String ||
-          (payload['twoFactorToken'] as String).length < 32 ||
-          (payload['twoFactorToken'] as String).length > 512) {
-        throw const FormatException('Invalid second-factor challenge');
-      }
-      return FableSocialAuthResult(signedIn:false, requiresTwoFactor:true,
-        challengeData: FableImmutablePayload.object({
-          'twoFactorToken':payload['twoFactorToken'],
-          if (payload['methods'] is List) 'methods':payload['methods'],
-        }));
-    }
-    final access = payload['accessToken'], refresh = payload['refreshToken'];
-    if (access is! String || access.isEmpty || access.length > 8192 ||
-        access.contains(RegExp(r'[\x00-\x1f\x7f]')) ||
-        refresh is! String || !RegExp(r'^[A-Za-z0-9_-]{64}$').hasMatch(refresh)) {
-      throw const FormatException('Invalid social session tokens');
-    }
-    final saved = await session.replaceTokensIfIdentity(expectedIdentity: identity,
-      accessToken: access, refreshToken: refresh);
-    if (!saved) return null;
-    return const FableSocialAuthResult(signedIn:true, requiresTwoFactor:false);
-  }
-
-}
-).hasMatch(securityChallengeId)) {
+    if (!RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$').hasMatch(securityChallengeId)) {
       throw ArgumentError('Recent authentication proof required');
     }
     final outcome = await _run(provider, link: true, securityChallengeId: securityChallengeId);
