@@ -267,9 +267,10 @@ function auditOne(root,feature,backend,master,external,explicit){
     const missingGeneric=(backend.kind==='other'?master?.otherBackendContract:master?.gaps)??[];
     for(const text of missingGeneric.slice(0,8))details.push(text);
     // Never report "complete" from source metadata alone.
-    if(req?.liveE2EVerified!==true)
-      add('LIVE_E2E_NOT_VERIFIED','لا يوجد إثبات E2E حي لهذا المشروع/الخدمة',
-        'اختبر API/DB وAndroid/iOS والرفض والتعارضات وسجّل الإثبات');
+    // A manifest boolean cannot prove production correctness or runner results.
+    // Require independently checked device/server evidence in a later gate.
+    add('LIVE_E2E_NOT_VERIFIED','لا يوجد إثبات E2E حي مستقل لهذه الخدمة',
+      'اختبر API/DB وAndroid/iOS والرفض والتعارضات وسجّل الإثبات');
   }else if(ownership==='client'){
     details.push('قرار Flutter محلي؛ Backend ليس إلزامياً ما لم تطلب هذه الميزة API في المشروع');
   }
