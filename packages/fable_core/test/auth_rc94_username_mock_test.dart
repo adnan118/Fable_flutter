@@ -19,6 +19,8 @@ FableContract _contract({bool wrongPath = false}) => FableContract(
       enforceAuth:true),
     'auth.username.update':const FableOperation('auth.username.update',
       'PATCH','/auth/me/username','rc94',enforceAuth:true),
+    'auth.social.unlink':const FableOperation('auth.social.unlink',
+      'DELETE','/auth/social/:provider','rc94',enforceAuth:true),
   },
 );
 
@@ -69,6 +71,25 @@ void main() {
     expect(value.changed,true);
     expect(calls.single.method,'PATCH');
     expect((calls.single.data as Map)['securityChallengeId'],
+      '550e8400-e29b-41d4-a716-446655440013');
+  });
+
+  test('RC94 unlink requires source-verified step-up and server ACK',()async {
+    final calls=<RequestOptions>[];
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://fable.test'),
+      contract:_contract(),secureSession:_Session(),
+      client:_mock(calls, (_)=>{'provider':'apple','unlinked':true,
+        'externalCleanup':'transactional-outbox'}));
+    addTearDown(gateway.dispose);
+    await expectLater(gateway.unlinkSocialIdentity('github',
+      securityChallengeId:'550e8400-e29b-41d4-a716-446655440013'),
+      throwsArgumentError);
+    final result=await gateway.unlinkSocialIdentity('apple',
+      securityChallengeId:'550e8400-e29b-41d4-a716-446655440013');
+    expect(result.unlinked,true);
+    expect(result.externalCleanup,'transactional-outbox');
+    expect(calls.single.path,'/auth/social/apple');
+    expect(calls.single.headers['X-Security-Challenge-Id'],
       '550e8400-e29b-41d4-a716-446655440013');
   });
 
