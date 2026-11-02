@@ -25,7 +25,8 @@
     "authSourceReviewed": 9,
     "authUndecided": 31,
     "featureFamilies": 17,
-    "liveE2EAccepted": 0
+    "liveE2EAccepted": 0,
+    "backendCapabilityBlueprints": 50
   },
   "validation": {
     "backendAuthOperationIdsAndMethodPaths": "verify against pinned backend blueprint, not starter demo",
