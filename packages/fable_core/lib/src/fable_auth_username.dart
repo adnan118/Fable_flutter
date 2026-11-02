@@ -74,6 +74,45 @@ extension FableUsernameOperations on FableAuthGateway {
   }
 }
 
+extension FableSocialUnlinkSecurity on FableAuthGateway {
+  bool get canUnlinkSocialIdentity => _supportsAuthOperation(
+    'auth.social.unlink', 'DELETE', '/auth/social/:provider',
+    requiresAuth: true);
+
+  /// Only a verified, server-supplied recent-auth proof may authorize unlink.
+  /// Backend will reject removal of the final remaining sign-in method.
+  Future<FableSocialUnlinkOutcome> unlinkSocialIdentity(String provider,
+      {required String securityChallengeId}) async {
+    _requireAuthOperation('auth.social.unlink', 'DELETE',
+      '/auth/social/:provider', requiresAuth: true);
+    if (!const {'google','apple'}.contains(provider)) {
+      throw ArgumentError('Unsupported social identity provider');
+    }
+    if (!FableAuthGateway._uuid.hasMatch(securityChallengeId)) {
+      throw ArgumentError('Invalid recent-auth proof identifier');
+    }
+    final revision = session.identityRevision;
+    final response = await _api.request('auth.social.unlink',
+      path: {'provider':provider}, securityChallengeId:securityChallengeId);
+    if (session.identityRevision != revision) {
+      throw FableApiException(409, 'session_changed_discard_response');
+    }
+    final data = FableAuthGateway._payload(response.data);
+    if (data['provider'] != provider || data['unlinked'] is! bool ||
+        !const {'none','transactional-outbox'}.contains(data['externalCleanup'])) {
+      throw const FormatException('Backend did not confirm unlink result');
+    }
+    return FableSocialUnlinkOutcome(provider,
+      data['unlinked'] as bool, data['externalCleanup'] as String);
+  }
+}
+class FableSocialUnlinkOutcome {
+  const FableSocialUnlinkOutcome(this.provider,this.unlinked,this.externalCleanup);
+  final String provider;
+  final bool unlinked;
+  final String externalCleanup;
+}
+
 class FableUsernameAvailability {
   const FableUsernameAvailability(this.username, this.available);
   final String username;
