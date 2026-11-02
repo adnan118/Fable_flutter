@@ -55,7 +55,8 @@ void main(){
           revocations++;
           if(req.headers['X-Security-Challenge-Id']!=challenge)
             return response(req,403,{'code':'AUTH_RECENT_AUTH_REQUIRED'});
-          return response(req,200,{'sessionId':id,'revoked':true});
+          return response(req,200,{'sessionId':id,'revoked':true,
+             'currentSessionRevoked':false,'clientActions':[]});
         }
         return response(req,404,{'code':'not_found'});
       }));
@@ -72,6 +73,35 @@ void main(){
     expect(seen.last.headers['X-Security-Challenge-Id'],challenge);
     expect(session.access,'demo-token');
   });
+  test('RC92: self-revocation clears current local access on authoritative response',()async{
+    final session=MemorySession();
+    final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract(),secureSession:session,
+      client:intercepted((req)async=>response(req,200,{
+        'sessionId':id,'revoked':true,
+        'currentSessionRevoked':true,'clientActions':['DELETE_LOCAL_PUSH_TOKEN']})));
+    addTearDown(client.dispose);
+    expect(await client.revokeOtherSession(id),true);
+    expect(session.access,isNull);
+    expect(session.identityRevision,1);
+  });
+  test('RC92: malformed session confirmation cannot clear account access',()async{
+    for(final payload in [
+      {'sessionId':id,'revoked':true},
+      {'sessionId':id,'revoked':false,'currentSessionRevoked':true},
+      {'sessionId':'550e8400-e29b-41d4-a716-446655440099',
+        'revoked':true,'currentSessionRevoked':true},
+    ]){
+      final session=MemorySession();
+      final client=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+        contract:contract(),secureSession:session,
+        client:intercepted((req)async=>response(req,200,payload)));
+      addTearDown(client.dispose);
+      await expectLater(client.revokeOtherSession(id),throwsFormatException);
+      expect(session.access,'demo-token');
+    }
+  });
+
   test('Sensitive OTP cannot be used on other API routes or external transport',()async{
     final fable=contract();
     final session=MemorySession();
