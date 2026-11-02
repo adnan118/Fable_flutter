@@ -40,7 +40,7 @@
 
 ## P2 — Other Backend وWizard
 
-**السؤال الأول في Wizard:** Fable Backend أم Backend آخر؟ لا تُظهر ميزات Auth أو Firebase أو Push أو مدير الصلاحيات ما لم يعلن العقد выбран أنها مدعومة. تمييز البيانات الثابتة (إعداد المشروع) عن القيم الديناميكية/القدرات المحكومة بالخادم. لكل عملية نُقلت إلى Flutter، أنشئ قائمة إلزامية لما يجب على Backend الآخر تقديمه: method/path, DTO, auth scheme, errors, permissions, pagination, delivery, nullability, idempotency, contract tests. لم يكتمل ربط MFA الخارجي بعد.
+**السؤال الأول في Wizard:** Fable Backend أم Backend آخر؟ لا تُظهر ميزات Auth أو Firebase أو Push أو مدير الصلاحيات ما لم يعلن العقد المختار أنها مدعومة. تمييز البيانات الثابتة (إعداد المشروع) عن القيم الديناميكية/القدرات المحكومة بالخادم. لكل عملية نُقلت إلى Flutter، أنشئ قائمة إلزامية لما يجب على Backend الآخر تقديمه: method/path, DTO, auth scheme, errors, permissions, pagination, delivery, nullability, idempotency, contract tests. لم يكتمل ربط MFA الخارجي بعد.
 
 ## P3 — Offline/Sync والميزات الأخرى
 
