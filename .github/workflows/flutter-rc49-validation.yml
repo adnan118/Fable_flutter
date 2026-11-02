@@ -37,6 +37,8 @@ jobs:
           # RC86: source-pair pin is not E2E acceptance, and Other stays isolated.
           node --test test/cross-repo-source-pair-rc86.test.mjs
           node tools/verify-cross-repo-source-pair.mjs
+          node --test test/cross-repo-source-pair-rc87.test.mjs
+          python3 -m unittest discover -s test -p 'rc87_archive_hardening_test.py' -v
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
