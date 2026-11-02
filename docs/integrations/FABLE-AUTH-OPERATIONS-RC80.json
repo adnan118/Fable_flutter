@@ -446,54 +446,141 @@
       "method": "POST",
       "path": "/auth/social/challenge",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [
         "packages/features/fable_social/lib/src/social_auth_repository.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_widgets.dart"
+      ],
+      "regressionTests": [
+        "packages/features/fable_social/test/social_auth_repository_test.dart",
+        "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/social-auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "provider (google|apple) with optional verified redirect; response state/nonce/expiry; no authenticated session"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.social.google",
       "method": "POST",
       "path": "/auth/social/google",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [
         "packages/features/fable_social/lib/src/social_auth_repository.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_widgets.dart"
+      ],
+      "regressionTests": [
+        "packages/features/fable_social/test/social_auth_repository_test.dart",
+        "packages/fable_core/test/auth_rc95_social_2fa_handoff_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/social-auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "native Google idToken bound to issued nonce/state; returns secure tokens or pending 2FA"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.social.apple",
       "method": "POST",
       "path": "/auth/social/apple",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [
         "packages/features/fable_social/lib/src/social_auth_repository.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_widgets.dart"
+      ],
+      "regressionTests": [
+        "packages/features/fable_social/test/social_auth_repository_test.dart",
+        "packages/fable_core/test/auth_rc95_social_2fa_handoff_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/social-auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "native Apple identityToken plus authorizationCode bound to challenge, returning session or 2FA"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.otp.public.request",
@@ -732,64 +819,204 @@
       "method": "POST",
       "path": "/auth/web/login",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/login",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.web.refresh",
       "method": "POST",
       "path": "/auth/web/refresh",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/refresh",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.web.social.google",
       "method": "POST",
       "path": "/auth/web/social/google",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/social/google",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.web.social.apple",
       "method": "POST",
       "path": "/auth/web/social/apple",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/social/apple",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.logout-all",
@@ -962,64 +1189,192 @@
       "method": "GET",
       "path": "/admin/auth/password-policy",
       "permission": "auth.password-policy.read",
-      "reviewDomain": "ADMIN_REVIEW",
+      "reviewDomain": "ADMIN_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "ADMIN_WEB_DASHBOARD",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/password-policy.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 permission guard, recent-AAL2 auth and optimistic version check for password policy",
+      "requestModel": {
+        "owner": "admin_web_dashboard",
+        "endpoint": "/admin/auth/password-policy",
+        "method": "GET",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.password-policy.update",
       "method": "PUT",
       "path": "/admin/auth/password-policy",
       "permission": "auth.password-policy.update",
-      "reviewDomain": "ADMIN_REVIEW",
+      "reviewDomain": "ADMIN_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "ADMIN_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "ADMIN_WEB_DASHBOARD",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/password-policy.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 permission guard, recent-AAL2 auth and optimistic version check for password policy",
+      "requestModel": {
+        "owner": "admin_web_dashboard",
+        "endpoint": "/admin/auth/password-policy",
+        "method": "PUT",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.username.availability",
       "method": "GET",
       "path": "/auth/me/username/availability/:username",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_username.dart",
+        "packages/features/fable_auth/lib/src/username_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc94_username_mock_test.dart",
+        "packages/features/fable_auth/test/auth_pages_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/username.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "GET name via :username path; server controls availability and reservation"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.username.update",
       "method": "PATCH",
       "path": "/auth/me/username",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_username.dart",
+        "packages/features/fable_auth/lib/src/username_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc94_username_mock_test.dart",
+        "packages/features/fable_auth/test/auth_pages_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/username.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "PATCH username and optional verified recent-auth proof; server controls uniqueness"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.2fa.login.request",
@@ -1164,64 +1519,198 @@
       "method": "POST",
       "path": "/auth/web/2fa/login/request",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/2fa/login/request",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.web.2fa.login.complete",
       "method": "POST",
       "path": "/auth/web/2fa/login/complete",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/2fa/login/complete",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.otp.login.complete",
       "method": "POST",
       "path": "/auth/otp/login/complete",
       "permission": null,
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_otp_login.dart",
+        "packages/features/fable_auth/lib/src/otp_login_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc95_public_otp_login_test.dart",
+        "packages/features/fable_auth/test/auth_pages_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "verified public OTP with purpose LOGIN only, 2FA cannot be bypassed, session only on authoritative confirmation"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.web.otp.login.complete",
       "method": "POST",
       "path": "/auth/web/otp/login/complete",
       "permission": null,
-      "reviewDomain": "WEB_TRANSPORT_REVIEW",
+      "reviewDomain": "WEB_OWNER_SOURCE_REVIEWED",
       "literalOperationReferences": [],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
+      "modelAndDtoReviewed": true,
       "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "WEB_CLIENT_SOURCE_REVIEWED_E2E_PENDING",
+      "clientFlowReviewed": true,
+      "ownerClient": "WEB_COOKIE",
+      "clientEvidence": [
+        "interop/web-admin/fable-web-admin-auth.mjs",
+        "test/web-admin-auth-client-rc97.test.mjs"
+      ],
+      "regressionTests": [
+        "test/web-admin-auth-client-rc97.test.mjs",
+        "test/feature-parity-master.test.mjs"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/clients/fable-web-admin-auth.mjs",
+        "Fable-Backend-RC66/test/web-admin-auth-client.test.mjs"
+      ],
+      "backendEffect": "Backend RC66 Web HttpOnly cookie transport, exact Origin, CSRF on refresh/mutations, protected 2FA/OTP and social challenges",
+      "requestModel": {
+        "owner": "browser_same_origin_cookie",
+        "endpoint": "/auth/web/otp/login/complete",
+        "method": "POST",
+        "serverContract": "Backend RC66 controller and DTO authority"
+      },
+      "responseModel": {
+        "ownerClient": "Web/Admin response envelope verified, no bearer secrets exposed to browser"
+      },
+      "otherBackendRequired": [
+        "Use own verified Web/Admin route contract, never Flutter bearer operationIds",
+        "Explicit same-origin/cookie/CSRF (Web) or permission/recent-auth (Admin) policy",
+        "Generated host application must integrate role-specific views and error recovery"
+      ],
+      "missingGates": [
+        "Actual Web/Admin host application integration (SDK source and simulated transport only)",
+        "Configured production Origin, HttpOnly cookies, CSRF, permissions and recent AAL2 against real Backend",
+        "Live multi-browser session, refresh/replay/race and audit tests with DB and provider"
+      ]
     },
     {
       "id": "auth.password.reset",
@@ -1287,54 +1776,141 @@
       "method": "POST",
       "path": "/auth/social/google/link",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [
         "packages/features/fable_social/lib/src/social_auth_repository.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_account_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/features/fable_social/test/social_auth_repository_test.dart",
+        "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/social-auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "authenticated Google link + native SDK, verified recent-auth OTP proof, provider-specific ACK"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.social.apple.link",
       "method": "POST",
       "path": "/auth/social/apple/link",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [
         "packages/features/fable_social/lib/src/social_auth_repository.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_account_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/features/fable_social/test/social_auth_repository_test.dart",
+        "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/social-auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "authenticated Apple link + native SDK, verified recent-auth OTP proof, provider-specific ACK"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.social.unlink",
       "method": "DELETE",
       "path": "/auth/social/:provider",
       "permission": "authenticated",
-      "reviewDomain": "MOBILE_RELEVANCE_REVIEW",
+      "reviewDomain": "MOBILE_SOURCE_REVIEWED",
       "literalOperationReferences": [
         "packages/features/fable_social/lib/src/social_auth_repository.dart"
       ],
       "literalPathReferences": [],
-      "modelAndDtoReviewed": false,
-      "uiFlowReviewed": false,
-      "permissionAndErrorReviewed": false,
+      "modelAndDtoReviewed": true,
+      "uiFlowReviewed": true,
+      "permissionAndErrorReviewed": true,
       "externalBackendMapped": false,
       "wizardDecisionReviewed": false,
       "realE2EVerified": false,
-      "disposition": "NOT_DECIDED"
+      "disposition": "SOURCE_IMPLEMENTED_E2E_PENDING",
+      "flutterEvidence": [
+        "packages/fable_core/lib/src/fable_auth_username.dart",
+        "packages/features/fable_social/lib/src/social_account_settings_page.dart"
+      ],
+      "regressionTests": [
+        "packages/fable_core/test/auth_rc94_username_mock_test.dart",
+        "packages/features/fable_social/test/social_account_settings_rc97_test.dart"
+      ],
+      "sourceEvidence": [
+        "Fable-Backend-RC66/src/platform/auth/auth.controller.ts",
+        "Fable-Backend-RC66/src/platform/auth/social-auth.service.ts"
+      ],
+      "requestModel": {
+        "sourceContract": "DELETE /auth/social/:provider with bearer and UUID4 recent-auth header; backend blocks deleting final sign-in method"
+      },
+      "responseModel": {
+        "serverAuthority": "Response validated by typed Fable gateway / repository; no local authentication inference"
+      },
+      "backendEffect": "Backend RC66 owns challenge validity, permissions, database changes and security audit",
+      "otherBackendRequired": [
+        "Own request/response DTO and operationId, never Fable route by default",
+        "Own session, permission, step-up and error semantics; reject missing or mismatched contract",
+        "Map SDK/provider and identity lifecycle explicitly; source parity is not live acceptance"
+      ],
+      "missingGates": [
+        "Live configured Backend RC66 with real DB and provider/OTP integration",
+        "Signed Google/Apple or OTP provider, actual device and 2FA expiry/replay tests",
+        "Other Backend mapping and Wizard contract selection checked in generated project"
+      ]
     },
     {
       "id": "auth.2fa.status",
@@ -1618,5 +2194,5 @@
       ]
     }
   ],
-  "snapshotUpdate": "RC93 source-reviewed 5 additional 2FA and authenticated contact operations (status, enable, disable, email and phone changes): Auth 22/40 SOURCE_IMPLEMENTED_E2E_PENDING, 18 NOT_DECIDED, 0 live E2E; Other Backend independent adapter and real devices pending."
+  "snapshotUpdate": "RC97: All 40 Auth operations source-classified; 31 Flutter Mobile source-implemented, 7 Web cookie client SDK source-reviewed, 2 Admin dashboard client SDK source-reviewed. 0/40 real E2E, 0/17 families production accepted. Backend runtime source unchanged; Web/Admin native host UI and configured provider acceptance belong to independent app/P6 gates. RC94-RC97 files/test references recorded, no production-ready assertion."
 }
