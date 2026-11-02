@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {copyFileSync,mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
@@ -126,5 +127,47 @@ test('RC90 inspects explicitly selected custom feature instead of silently hidin
     assert.equal(row.id,'custom_orders');
     assert.equal(row.state,'MISSING');
     assert.ok(row.missing.some(x=>x.code==='PER_FEATURE_REQUIREMENTS_NOT_DECLARED'));
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('RC90 --strict returns 2 for missing selected service and 0 for local-only',()=>{
+  const backend=fixture(['notifications']);
+  const client=fixture(['deeplinks']);
+  try{
+    const cmd=resolve('tools/audit-selected-feature-integration.mjs');
+    const run=root=>spawnSync(process.execPath,[cmd,'--root',root,'--strict','--json'],
+      {encoding:'utf8'});
+    const blocked=run(backend);
+    assert.equal(blocked.status,2,blocked.stderr);
+    assert.match(blocked.stdout,/"EXTERNAL_API_CATALOG_MISSING"/);
+    const onlyClient=run(client);
+    assert.equal(onlyClient.status,0,onlyClient.stderr);
+    assert.match(onlyClient.stdout,/"CLIENT_ONLY_NO_BACKEND_REQUIRED"/);
+  }finally{
+    rmSync(backend,{recursive:true,force:true});
+    rmSync(client,{recursive:true,force:true});
+  }
+});
+test('RC90 never mistakes a narrow Fable fixture contract for project completeness',()=>{
+  const root=fixture(['auth']);
+  try{
+    save(root,'assets/config/backend.json',{
+      schemaVersion:1,kind:'fable.mobile-backend-configuration',
+      backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
+      contractImported:true,
+    });
+    for(const name of ['contract.json','flutter-handoff.json',
+      'mobile-core-operations.json','openapi.json']){
+      const p='assets/contracts/'+name,full=join(root,p);
+      mkdirSync(dirname(full),{recursive:true});
+      copyFileSync(p,full);
+    }
+    const result=auditSelectedFeatureIntegration(root);
+    const feature=result.features[0];
+    assert.equal(feature.id,'auth');
+    assert.notEqual(feature.state,'CLIENT_ONLY_NO_BACKEND_REQUIRED');
+    assert.ok(feature.missing.some(x=>x.code==='LIVE_E2E_NOT_VERIFIED'));
+    assert.ok(feature.missing.some(x=>x.code==='PROJECT_CONTRACT_UNPINN'||
+      x.code==='FABLE_CONTRACT_AUDIT_UNAVAILABLE'));
   }finally{rmSync(root,{recursive:true,force:true});}
 });
