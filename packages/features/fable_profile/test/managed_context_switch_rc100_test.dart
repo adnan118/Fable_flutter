@@ -33,8 +33,8 @@ class _ControlledApi {
     }));
     return dio;
   }
-  void answer(int i, Object data) => pending[i].complete(Response<dynamic>(
-    requestOptions:seen[i],statusCode:200,data:data));
+  void answer(int i, Object data,{int statusCode=200}) => pending[i].complete(Response<dynamic>(
+    requestOptions:seen[i],statusCode:statusCode,data:data));
   Future<void> waitFor(int count) async {
     for(var attempt=0;attempt<200;attempt++){
       if(pending.length>=count)return;
@@ -126,4 +126,21 @@ void main(){
       .executeUsingStore(store,'business.read'),throwsStateError);
     expect(wire.seen,isEmpty);
   });
+  test('RC101 clears selected entity after a scoped authorization denial',()async{
+    final session=_Session('rc101.scoped.denial'),wire=_ControlledApi(),catalog=_catalog();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:catalog,secureSession:session,client:wire.dio());
+    addTearDown(gateway.dispose);
+    final store=FableManagedEntityStore(session:session);
+    addTearDown(store.dispose);
+    store.bindBackend('rc100|https://api.example.test');
+    store.activate(_choice(entityA));
+    final request=FableManagedAccountsRepository(gateway,catalog)
+      .executeUsingStore(store,'business.read');
+    await wire.waitFor(1);
+    wire.answer(0,{'error':'ACCESS_DENIED'},statusCode:403);
+    await expectLater(request,throwsA(isA<FableApiException>()));
+    expect(store.selected,isNull);
+  });
+
 }
