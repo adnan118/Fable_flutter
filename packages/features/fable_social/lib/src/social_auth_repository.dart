@@ -149,8 +149,10 @@ class FableSocialOperations {
 
 class FableSocialAuthResult {
   const FableSocialAuthResult({required this.signedIn, required this.requiresTwoFactor,
-    this.challengeData});
+    this.challengeData, this.mustChangePassword=false});
   final bool signedIn, requiresTwoFactor;
+  /// A successful Fable sign-in may still be restricted by Backend policy.
+  final bool mustChangePassword;
   /// Hand off to the existing Auth 2FA flow; no session is created yet.
   final Map<String, dynamic>? challengeData;
 }
@@ -205,16 +207,36 @@ class FableSocialRepository {
     }
     if (payload['requiresTwoFactor'] == true) {
       // A second factor does not grant an authenticated session.
+      final methods=payload['methods'],expiresAt=payload['expiresAt'];
+      final parsed=expiresAt is String ? DateTime.tryParse(expiresAt)?.toUtc() : null;
       if (payload['twoFactorToken'] is! String ||
           (payload['twoFactorToken'] as String).length < 32 ||
-          (payload['twoFactorToken'] as String).length > 512) {
-        throw const FormatException('Invalid second-factor challenge');
+          (payload['twoFactorToken'] as String).length > 512 ||
+          methods is! List || methods.isEmpty || methods.length > 2 ||
+          methods.any((m)=>m is! String ||
+            !const {'EMAIL_OTP','PHONE_OTP'}.contains(m)) ||
+          methods.toSet().length!=methods.length ||
+          parsed==null || !parsed.isAfter(DateTime.now().toUtc()) ||
+          !expiresAt.endsWith('Z')) {
+        throw const FormatException('Invalid social second-factor challenge');
       }
       return FableSocialAuthResult(signedIn:false, requiresTwoFactor:true,
         challengeData: FableImmutablePayload.object({
           'twoFactorToken':payload['twoFactorToken'],
-          if (payload['methods'] is List) 'methods':payload['methods'],
+          'methods':methods,
+          'expiresAt':expiresAt,
         }));
+    }
+    var mandatoryChange=false;
+    if (adapter is FableSocialBackendAdapter) {
+      final required=payload['mustChangePassword'],expires=payload['expiresAt'];
+      final date=expires is String?DateTime.tryParse(expires)?.toUtc():null;
+      if (required is! bool || expires is! String ||
+          !expires.endsWith('Z') || date==null ||
+          !date.isAfter(DateTime.now().toUtc())) {
+        throw const FormatException('Invalid Fable social login policy/expiry');
+      }
+      mandatoryChange=required;
     }
     final access = payload['accessToken'], refresh = payload['refreshToken'];
     if (access is! String || access.isEmpty || access.length > 8192 ||
@@ -225,7 +247,8 @@ class FableSocialRepository {
     final saved = await session.replaceTokensIfIdentity(expectedIdentity: identity,
       accessToken: access, refreshToken: refresh);
     if (!saved) return null;
-    return const FableSocialAuthResult(signedIn:true, requiresTwoFactor:false);
+    return FableSocialAuthResult(signedIn:true, requiresTwoFactor:false,
+      mustChangePassword:mandatoryChange);
   }
 
 }

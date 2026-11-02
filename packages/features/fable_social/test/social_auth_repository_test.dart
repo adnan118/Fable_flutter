@@ -63,7 +63,9 @@ void main() {
   test('two-factor response does not create authenticated session',() async {
     final api=_Gateway()..respond=(id)=>id=='auth.social.challenge'
       ? {'provider':'google','state':seq('s',32),'nonce':seq('n',32),'expiresInMs':600000}
-      : {'requiresTwoFactor':true,'twoFactorToken':seq('x',40),'methods':['totp']};
+      : {'requiresTwoFactor':true,'twoFactorToken':seq('x',40),
+        'methods':['EMAIL_OTP'], 'expiresAt':DateTime.now().toUtc()
+          .add(const Duration(minutes:5)).toIso8601String()};
     final provider=_Credentials()..credential=FableSocialCredential(
       provider:FableSocialProvider.google,nonce:seq('n',32),identityToken:seq('t',32));
     final repository=FableSocialRepository(gateway:api,
@@ -93,6 +95,34 @@ void main() {
     expect(api.calls,['auth.social.challenge','auth.social.google.link']);
     expect((api.bodies.last as Map)['securityChallengeId'],
       '550e8400-e29b-41d4-a716-446655440013');
+  });
+
+  test('RC95 Fable social rejects missing forced-password-change policy',()async{
+    final api=_Gateway()..respond=(id)=>id=='auth.social.challenge'
+      ? {'provider':'google','state':seq('s',32),'nonce':seq('n',32),'expiresInMs':600000}
+      : {'accessToken':'t-access','refreshToken':seq('r',64)};
+    final provider=_Credentials()..credential=FableSocialCredential(
+      provider:FableSocialProvider.google,nonce:seq('n',32),identityToken:seq('t',32));
+    final repository=FableSocialRepository(gateway:api,
+      operations:FableSocialOperations.fable(contract()),
+      session:_AuthenticatedSession(namespace:'rc95.social-security'),
+      credentials:provider,adapter:const FableSocialBackendAdapter());
+    await expectLater(repository.signIn(FableSocialProvider.google),throwsFormatException);
+    expect(api.calls,['auth.social.challenge','auth.social.google']);
+  });
+  test('RC95 malformed social 2FA methods never create a session',()async{
+    final api=_Gateway()..respond=(id)=>id=='auth.social.challenge'
+      ? {'provider':'google','state':seq('s',32),'nonce':seq('n',32),'expiresInMs':600000}
+      : {'requiresTwoFactor':true,'twoFactorToken':seq('x',40),
+         'methods':['totp'], 'expiresAt':DateTime.now().toUtc()
+          .add(const Duration(minutes:5)).toIso8601String()};
+    final provider=_Credentials()..credential=FableSocialCredential(
+      provider:FableSocialProvider.google,nonce:seq('n',32),identityToken:seq('t',32));
+    final repository=FableSocialRepository(gateway:api,
+      operations:FableSocialOperations.fable(contract()),
+      session:_AuthenticatedSession(namespace:'rc95.social-mfa'),
+      credentials:provider,adapter:const FableSocialBackendAdapter());
+    await expectLater(repository.signIn(FableSocialProvider.google),throwsFormatException);
   });
 
   test('Google / Apple credentials require original challenge and approved tokens',(){
