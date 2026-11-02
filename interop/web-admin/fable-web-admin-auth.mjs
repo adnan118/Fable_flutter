@@ -252,7 +252,9 @@ export class FableWebAuth {
     if(changes.forbidCommonPasswords===false)throw new TypeError('Cannot disable baseline common-password check');
     const data=await this.#request('/admin/auth/password-policy',changes,{
       method:'PUT',needsCsrf:true,headers:{'If-Match':String(version)}});
-    if(!data || typeof data !== 'object')throw new Error('Admin policy update not confirmed');
+    if(!data || typeof data !== 'object' ||
+      !Number.isSafeInteger(data.version) || data.version !== version+1)
+      throw new Error('Admin policy update version not confirmed by Backend');
     return data;
   }
 }
