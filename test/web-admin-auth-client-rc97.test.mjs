@@ -129,7 +129,7 @@ test('admin GET checks policy structure and PUT requires server version and CSRF
    '/auth/web/login':()=>cookie(),
    '/admin/auth/password-policy':(req)=>req.options.method==='GET'
      ? {schemaVersion:1,sourceOfTruth:'database',policy:{version:7},constraints:{},
-        fields:[]} : {policy:{version:8}},
+        fields:[]} : {version:8},
  });
  await client.login({identifier:'administrator',password:'very-long-password'});
  const policy=await client.readAdminPasswordPolicy();
