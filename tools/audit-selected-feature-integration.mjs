@@ -147,7 +147,7 @@ function externalEvidence(root,backend){
 /// must share one backend identity namespace and invalidate access snapshots.
 export function managedAccessContextBindingGaps(root) {
   root=resolve(root);
-  const source=(name)=>checkedFile(root,name)?readFileSync(safeFile(root,name),'utf8'):'';
+  const source=(name)=>checkedFile(root,name)?readFileSync(safePath(root,name),'utf8'):'';
   const app=source('lib/src/app.dart');
   const session=source('packages/features/fable_access_control/lib/src/access_session.dart');
   const bootstrap=source('packages/features/fable_access_control/lib/src/access_bootstrap.dart');
