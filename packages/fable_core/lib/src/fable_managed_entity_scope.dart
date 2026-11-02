@@ -31,7 +31,9 @@ class FableManagedEntityStore extends ChangeNotifier {
  /// Lets callers discard late responses without storing roles or secrets.
  int get selectionRevision => _selectionRevision;
  bool isBoundToCredentials(FableSecureSession credentials) =>
-   identical(credentials, _session);
+   _session.sharesIdentityNamespaceWith(credentials);
+ bool isBoundToBackend(String identity) =>
+   _backendIdentity != null && _backendIdentity == identity;
  static final _uuid=RegExp(
    r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
    caseSensitive:false);
