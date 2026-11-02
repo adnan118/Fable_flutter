@@ -13,6 +13,7 @@ import {verifyFableContract} from './verify-fable-contract.mjs';
 import {validateSessionPolicyForWizard} from './read-session-policy.mjs';
 import {classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 import {readFrontendOwnedDecisions,saveFrontendOwnedDecisions} from './frontend-owned-decisions.mjs';
+import {auditSelectedFeatureIntegration,formatIntegrationGapReport} from './audit-selected-feature-integration.mjs';
 
 const CONTRACT_FILES=['contract.json','flutter-handoff.json','openapi.json','mobile-core-operations.json'];
 const OUTPUT_PATH='assets/config/frontend-setup.json';
@@ -363,6 +364,26 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
   outputFile(project,PROJECT_PATH,snapshot);
   saveFrontendOwnedDecisions(project,frontendOwned,{apply:true});
   summary.frontendOwnedChoicesPreserved=true;
+  // After every approved Wizard write, print an actionable gap report for
+  // exactly the project's selected frontend features, without silently
+  // accepting source-only routes as a complete integration.
+  try {
+    const audit=auditSelectedFeatureIntegration(project);
+    summary.integrationGapAudit={
+      selectedFeatureCount:audit.selectedFeatureCount,counts:audit.counts,
+      fullLiveE2E:false,
+    };
+    if(audit.selectedFeatureCount>0)
+      console.log(formatIntegrationGapReport(audit));
+    else
+      console.warn('⚠ لم يُثبَّت اختيار ميزات المشروع؛ شغّل pnpm wizard:check بعد اختيارها');
+  }catch(error){
+    summary.integrationGapAudit={error:String(error?.message??error),
+      fullLiveE2E:false};
+    console.warn('⚠ لم يكتمل فحص ربط الميزات بالـBackend: '+
+      String(error?.message??error)+
+      '\n  شغّل pnpm wizard:check بعد إصلاح ملفات العقد');
+  }
   return summary;
 }
 async function interactiveManual(question=null,{backendAdapter='custom'}={}){
