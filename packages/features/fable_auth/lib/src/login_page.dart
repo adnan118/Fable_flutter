@@ -5,6 +5,7 @@ import 'package:fable_core/fable_core.dart';
 import 'sessions_page.dart';
 import 'change_password_page.dart';
 import 'password_reset_page.dart';
+import 'otp_login_page.dart';
 
 /// شاشة الدخول الخاصة بـFable تعتمد عقد مصادقة الموبايل ومعرّف الجهاز.
 /// نجاح هذه الشاشة لا يعني نقل تغيير البريد/الهاتف/كلمة المرور وOTP كلها.
@@ -389,6 +390,25 @@ class _FableLoginPageState extends State<FableLoginPage> {
             child:_busy?const SizedBox(height:18,width:18,child:CircularProgressIndicator(strokeWidth:2)):
               const Text('Sign in')),
         ]))),
+        if(!_signedIn&&_challenge==null&&
+            (_url.isNotEmpty||widget.gateway!=null)&&
+            _client().canLoginWithPublicOtp)
+          TextButton(onPressed:_busy?null:()async{
+            final outcome=await Navigator.of(context).push<FableLoginOutcome>(
+              MaterialPageRoute<FableLoginOutcome>(builder:(_)=>FableOtpLoginPage(
+                gateway:_client(),deviceName:widget.deviceName,
+                appVersion:widget.appVersion)));
+            if(!mounted||outcome==null||!outcome.authenticated)return;
+            _password.clear();
+            setState((){
+              _signedIn=true;
+              _passwordChangeRequired=outcome.mustChangePassword;
+              _savedSessionAvailable=false;
+              _message=outcome.mustChangePassword
+                ?'Backend requires changing the password before continuing.'
+                :'OTP login completed and session confirmed by Backend.';
+            });
+          },child:const Text('Sign in using a one-time code')),
         if(!_signedIn&&_challenge==null&&
             (_url.isNotEmpty||widget.gateway!=null)&&
             _client().canResetPasswordWithPublicOtp)
