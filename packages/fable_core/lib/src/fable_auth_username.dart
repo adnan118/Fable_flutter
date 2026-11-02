@@ -48,6 +48,15 @@ extension FableUsernameOperations on FableAuthGateway {
     return FableUsernameAvailability(value, payload['available'] as bool);
   }
 
+  Future<FableUsernameUpdate> updateUsernameWithProof(String username,
+      FableVerifiedSensitiveProof proof) {
+    if (!identical(proof._owner, this) ||
+        proof._identityRevision != session.identityRevision) {
+      throw StateError('Recent-auth proof belongs to another gateway or identity');
+    }
+    return updateUsername(username, securityChallengeId:proof._challengeId);
+  }
+
   Future<FableUsernameUpdate> updateUsername(String username,
       {String? securityChallengeId}) async {
     _requireAuthOperation('auth.username.update', 'PATCH',
