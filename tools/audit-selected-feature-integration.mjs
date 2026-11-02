@@ -10,7 +10,7 @@
 import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve,join,dirname,relative,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
-import {pathToFileURL} from 'node:url';
+import {pathToFileURL,fileURLToPath} from 'node:url';
 import {FEATURE_IDS,FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
 import {auditBackendFeatureParity} from './audit-backend-feature-parity.mjs';
 
@@ -300,7 +300,11 @@ export function auditSelectedFeatureIntegration(root,{overrideSelections=null}={
   if(!Array.isArray(selected.ids)||selected.ids.some(id=>!present(id)))
     throw Error('Invalid selected feature list');
   const backend=backendConfig(root);
-  const master=read(join(root,MASTER));
+  // Generated projects may contain the Wizard and feature packages without
+  // duplicating its reference checklists. Use the installed Fable tool's master.
+  const projectMaster=join(root,MASTER);
+  const bundledMaster=resolve(dirname(fileURLToPath(import.meta.url)),'..',MASTER);
+  const master=read(existsSync(projectMaster)?projectMaster:bundledMaster);
   if(!Array.isArray(master.features))throw Error('Missing feature parity master');
   const defs=new Map(master.features.map(x=>[x.id,x]));
   const req=requirements(root,selected.ids);
