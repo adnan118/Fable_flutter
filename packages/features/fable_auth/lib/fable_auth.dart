@@ -7,6 +7,7 @@ export 'src/sessions_page.dart';
 export 'src/password_reset_page.dart';
 export 'src/security_settings_page.dart';
 export 'src/username_settings_page.dart';
+export 'src/otp_login_page.dart';
 
 class FableAuthFeature extends FableFeature {
   const FableAuthFeature():super(id:'auth',title:'Authentication',icon:Icons.lock_outline,
