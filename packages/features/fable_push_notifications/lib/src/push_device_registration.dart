@@ -214,7 +214,11 @@ class FablePushDeviceRegistration {
       });
       if(!_sameIdentity(ticket)){
         // Never attribute an A response to the newly logged-in user B.
-            _scheduleCleanup();
+        // Auth identity events already queued local deletion. Do not queue
+        // a second deletion that might race with B's fresh native token.
+        if(_generation==ticket.generation&&!_needsTokenDeletion){
+          _scheduleCleanup();
+        }
         return false;
       }
       if(!_latestToken(ticket))return false;
