@@ -56,10 +56,14 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     super.didChangeDependencies();
     final incoming=FableManagedEntityScope.maybeOf(context);
     if(identical(incoming,_managedStore))return;
-    _managedStore?.removeListener(_onManagedStoreChanged);
+    final previous=_managedStore;
+    previous?.removeListener(_onManagedStoreChanged);
     _managedStore=incoming;
     incoming?.addListener(_onManagedStoreChanged);
-    if(_selected!=null&&_effectiveSelection==null){
+    // Losing an inherited scope is not permission to fall back to a local
+    // selection that was previously bound to an authenticated store.
+    if(_selected!=null&&((previous!=null&&incoming==null) ||
+       _effectiveSelection==null)){
       _selected=null;_pendingLifecycle=null;_lifecycleOtp.clear();
     }
   }
