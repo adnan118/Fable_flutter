@@ -828,7 +828,8 @@
       "frontendEvidence": [
         "packages/features/fable_profile/lib/src/fable_account_page.dart",
         "packages/features/fable_profile/lib/src/managed_accounts_repository.dart",
-        "packages/fable_core/lib/src/fable_managed_entity_scope.dart"
+        "packages/fable_core/lib/src/fable_managed_entity_scope.dart",
+        "packages/fable_core/lib/src/fable_managed_entity_executor.dart"
       ],
       "sourceStatus": "source_and_selected_ui",
       "externalStatus": "mapped_partial",
@@ -838,7 +839,8 @@
       "gaps": [
         "فحص 18 عملية Managed Accounts إحداها عامة وكل أدوار OWNER/MANAGER/VIEWER وأشكال البيانات",
         "تمرير الكيان إلى كل Repository نطاقي مربوط بعقد وصلاحيات ورفض العضوية الملغاة؛ لا تمرير عالمي للترويسات",
-        "ملف المستخدم الخاص بكل مشروع/الحسابات الفرعية والملكية والتعافي E2E"
+        "ملف المستخدم الخاص بكل مشروع/الحسابات الفرعية والملكية والتعافي E2E",
+        "RC105: المنفّذ المشترك للمشاريع المحددة بالسياق متاح في Flutter Core، لكنه لا يثبت أن كل عمليات كل مشروع محدد رُبطت بالكيان؛ يلزم Wizard contract + P6 E2E"
       ],
       "otherBackendContract": [
         "user profile schema and mutable fields with patch/validation",
@@ -1278,5 +1280,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC97 Auth source-closure: all 40 operations assigned to owners and source-evidenced: 31 Flutter Mobile, 7 separate Web cookie SDK, 2 separate Admin password-policy SDK. 0 real-provider/DB E2E accepted, 0/17 feature families production accepted. RC96 P2 managed invitations source and Flutter CI passed; Backend RC66 main unchanged. Backend Actions gate remains blocked, so Web/Admin mock tests run in Flutter CI mirror."
+  "latestSlice": "RC97 Auth source-closure: all 40 operations assigned to owners and source-evidenced: 31 Flutter Mobile, 7 separate Web cookie SDK, 2 separate Admin password-policy SDK. 0 real-provider/DB E2E accepted, 0/17 feature families production accepted. RC96 P2 managed invitations source and Flutter CI passed; Backend RC66 main unchanged. Backend Actions gate remains blocked, so Web/Admin mock tests run in Flutter CI mirror. RC105 P2: source-only reusable Fable managed-entity executor; guarded pre-dispatch and stale 403 A/B/A; Wizard per-operation explicit audit; simulated tests. P2 generated-feature wiring and P6 live Backend/device E2E remain pending."
 }
