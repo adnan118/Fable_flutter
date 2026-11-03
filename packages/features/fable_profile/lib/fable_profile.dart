@@ -5,6 +5,7 @@ import 'src/external_profile_page.dart';
 import 'src/fable_account_page.dart';
 
 export 'src/external_profile_repository.dart';
+export 'src/managed_accounts_repository.dart' show FableManagedScopedOperation, FableManagedAccountsRepository;
 export 'src/external_profile_page.dart';
 
 class FableProfileFeature extends FableFeature {
