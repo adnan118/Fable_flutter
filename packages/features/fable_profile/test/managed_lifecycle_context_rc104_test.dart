@@ -168,7 +168,8 @@ void main(){
     await tester.pumpAndSettle();
     expect(find.textContaining('Verification required:'),findsOneWidget);
     backend.currentAccess='VIEWER';
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    // Flutter permits inactive → resumed, but not paused → resumed directly.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
     expect(find.textContaining('Verification required:'),findsNothing);
