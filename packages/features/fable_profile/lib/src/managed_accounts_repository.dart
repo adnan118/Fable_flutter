@@ -621,15 +621,24 @@ class FableManagedAccountsRepository {
   Future<Object?> executeUsingStore(FableManagedEntityStore store,
       String operationId,{Map<String,dynamic>? path,
         Map<String,dynamic>? query,Object? body}) async {
-    if(!store.isBoundToCredentials(gateway.session) || !store.bound) {
+    if(!store.isBoundToCredentials(gateway.session) ||
+       !store.isBoundToBackend(gateway.managedEntityBackendIdentity)) {
       throw StateError('Selected entity store belongs to another Auth session or Backend');
     }
     final choice=store.selected;
     if(choice is! FableManagedAccountSelection)
       throw StateError('No Backend-confirmed Fable managed account selected');
     final generation=store.selectionRevision;
-    final result=await executeInContext(choice,operationId,
-      path:path,query:query,body:body);
+    Object? result;
+    try {
+      result=await executeInContext(choice,operationId,
+        path:path,query:query,body:body);
+    } on FableApiException catch(error) {
+      // A denial on an explicitly entity-scoped operation means this context
+      // must not remain selected. The Backend still decides the real access.
+      if(error.status==403 || error.code=='MANAGED_ACCOUNT_NOT_FOUND') store.clear();
+      rethrow;
+    }
     if(!store.isBoundToCredentials(gateway.session) ||
        generation!=store.selectionRevision ||
        !identical(store.selected,choice)) {

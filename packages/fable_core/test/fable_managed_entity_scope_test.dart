@@ -38,6 +38,21 @@ void main(){
   expect(store.selected,isNull);
   expect(()=>store.activate(choice),throwsStateError);
  });
+ test('separate gateways may share only the same identity namespace and Backend binding',()async{
+  final events=StreamController<FableIdentityEvent>.broadcast(sync:true);
+  final store=FableManagedEntityStore(session:_Session(events));
+  addTearDown(()async{store.dispose();await events.close();});
+  const backend='contract-hash|https://api.example.test';
+  store.bindBackend(backend);
+  expect(store.isBoundToCredentials(FableSecureSession(namespace:'fable')),isTrue);
+  expect(store.isBoundToCredentials(FableSecureSession(namespace:'other-project')),isFalse);
+  expect(store.isBoundToBackend(backend),isTrue);
+  expect(store.isBoundToBackend('different-contract|https://api.example.test'),isFalse);
+  final before=store.selectionRevision;
+  store.bindBackend('different-contract|https://api.example.test');
+  expect(store.selectionRevision,before+1);
+  expect(store.selected,isNull);
+ });
  test('role/identity input validation never grants a forged entity',()async{
   final events=StreamController<FableIdentityEvent>.broadcast(sync:true);
   final store=FableManagedEntityStore(session:_Session(events));

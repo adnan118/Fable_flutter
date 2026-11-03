@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'managed_accounts_repository.dart';
@@ -17,7 +18,8 @@ class FableManagedAccountsPage extends StatefulWidget {
   final VoidCallback? onCleared;
   @override State<FableManagedAccountsPage> createState()=>_FableManagedAccountsPageState();
 }
-class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
+class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
+    with WidgetsBindingObserver {
   late final FableManagedAccountsRepository _repo=
     FableManagedAccountsRepository(widget.gateway,widget.contract);
   StreamSubscription<FableIdentityEvent>? _events;
@@ -31,6 +33,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
   bool get _ar=>Localizations.localeOf(context).languageCode=='ar';
   @override void initState(){
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _events=widget.gateway.session.identityEvents.listen((_){
       if(!mounted)return;
       // External project context must be cleared on logout/account switch too,
@@ -43,6 +46,9 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
       });
     });
     WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)unawaited(_reload());});
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed&&mounted)unawaited(_reload());
   }
   Future<void> _reload()async{
     if(_busy||!_repo.canList)return;
@@ -399,7 +405,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage> {
     }
   }
 
-  @override void dispose(){unawaited(_events?.cancel());_lifecycleOtp.dispose();super.dispose();}
+  @override void dispose(){WidgetsBinding.instance.removeObserver(this);unawaited(_events?.cancel());_lifecycleOtp.dispose();super.dispose();}
   @override Widget build(BuildContext context){
     final ar=_ar;
     return Scaffold(appBar:AppBar(title:Text(ar?'الكيانات التي أديرها':'Managed entities')),

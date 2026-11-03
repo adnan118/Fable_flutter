@@ -16,6 +16,8 @@ class FableAccessSession extends ValueNotifier<FableAccessSnapshot?> {
   StreamSubscription<FableIdentityEvent>? _identitySubscription;
   StreamSubscription<void>? _denialSubscription;
   FableSecureSession? _credentials;
+  FableManagedEntityStore? _managedEntityStore;
+  int _managedSelectionRevision = 0;
 
   FableAccessSession(this.repository) : super(null);
 
@@ -31,11 +33,22 @@ class FableAccessSession extends ValueNotifier<FableAccessSnapshot?> {
 
   /// Bind ONCE to the real credential namespace shared by Auth and API clients.
   /// Works with Fable and explicitly mapped Other Backend Auth gateways.
-  Future<void> bindToCredentials(FableSecureSession credentials) async {
+  Future<void> bindToCredentials(FableSecureSession credentials, {
+    FableManagedEntityStore? managedEntityStore,
+  }) async {
     if (_closed) return;
+    if (managedEntityStore != null &&
+        (!managedEntityStore.bound ||
+         !managedEntityStore.isBoundToCredentials(credentials))) {
+      throw StateError('Managed entity context must share the authenticated Backend identity namespace');
+    }
+    _managedEntityStore?.removeListener(_onManagedSelectionChanged);
     await _identitySubscription?.cancel();
     await _denialSubscription?.cancel();
     _credentials = credentials;
+    _managedEntityStore = managedEntityStore;
+    _managedSelectionRevision = managedEntityStore?.selectionRevision ?? 0;
+    managedEntityStore?.addListener(_onManagedSelectionChanged);
     changeSession(null);
     _identitySubscription = credentials.identityEvents.listen((event) {
       // Synchronous invalidation before any asynchronous account read.
@@ -65,6 +78,25 @@ class FableAccessSession extends ValueNotifier<FableAccessSnapshot?> {
     if (token == null || token.isEmpty) { changeSession(null); return; }
     changeSession('identity:$revision');
     await _refreshIfCurrent(revision);
+  }
+
+  /// A managed-account switch invalidates the current UI snapshot immediately.
+  /// The permissions endpoint remains user-global: managed roles are a separate
+  /// Backend context and are never converted into global permission keys here.
+  void _onManagedSelectionChanged() {
+    final store = _managedEntityStore;
+    if (_closed || store == null) return;
+    final selectionRevision = store.selectionRevision;
+    if (selectionRevision == _managedSelectionRevision) return;
+    _managedSelectionRevision = selectionRevision;
+    final source = _credentials;
+    _epoch++;
+    _refreshingEpoch = null;
+    value = null;
+    if (source != null &&
+        _sessionId == 'identity:${source.identityRevision}') {
+      unawaited(_refreshIfCurrent(source.identityRevision));
+    }
   }
 
   Future<void> _refreshIfCurrent(int revision) async {
@@ -106,6 +138,8 @@ class FableAccessSession extends ValueNotifier<FableAccessSnapshot?> {
   @override
   void dispose() {
     _epoch++; _closed = true;
+    _managedEntityStore?.removeListener(_onManagedSelectionChanged);
+    _managedEntityStore = null;
     unawaited(_identitySubscription?.cancel() ?? Future<void>.value());
     unawaited(_denialSubscription?.cancel() ?? Future<void>.value());
     super.dispose();

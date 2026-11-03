@@ -14,9 +14,12 @@ import 'access_session.dart';
 /// This widget is generated ONLY when `access_control` is selected.
 class FableAccessBootstrap extends StatefulWidget {
   const FableAccessBootstrap({super.key, this.fableContract,
-    this.externalCatalog, required this.child});
+    this.externalCatalog, this.managedEntityStore, required this.child});
   final FableContract? fableContract;
   final ExternalOperationCatalog? externalCatalog;
+  /// Optional Fable-only app store. It must share the authenticated Backend
+  /// namespace and is used only to invalidate/revalidate user permission UI.
+  final FableManagedEntityStore? managedEntityStore;
   final Widget child;
 
   @override
@@ -47,7 +50,8 @@ class _FableAccessBootstrapState extends State<FableAccessBootstrap>
   void didUpdateWidget(covariant FableAccessBootstrap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.fableContract, oldWidget.fableContract) ||
-        !identical(widget.externalCatalog, oldWidget.externalCatalog)) {
+        !identical(widget.externalCatalog, oldWidget.externalCatalog) ||
+        !identical(widget.managedEntityStore, oldWidget.managedEntityStore)) {
       _setup();
     }
   }
@@ -88,6 +92,9 @@ class _FableAccessBootstrapState extends State<FableAccessBootstrap>
     _AccessRuntime? pendingRuntime;
     try {
       if ((widget.fableContract == null) == (widget.externalCatalog == null)) return;
+      if (widget.managedEntityStore != null && widget.fableContract == null) {
+        throw StateError('Fable managed-entity context cannot be bound to an Other Backend');
+      }
       final manifestRaw = jsonDecode(await rootBundle.loadString(
           'assets/contracts/access-policy.json'));
       if (manifestRaw is! Map<String, dynamic>) throw const FormatException('Invalid policy');
@@ -111,6 +118,13 @@ class _FableAccessBootstrapState extends State<FableAccessBootstrap>
         final auth = FableAuthGateway(baseUri: Uri.parse(base),
           contract: widget.fableContract!,
           allowHttpForLocalDevelopment: kDebugMode);
+        final managedStore = widget.managedEntityStore;
+        if (managedStore != null &&
+            (!managedStore.isBoundToCredentials(auth.session) ||
+             !managedStore.isBoundToBackend(auth.managedEntityBackendIdentity))) {
+          auth.dispose();
+          throw StateError('Managed entity store does not match the active Fable Backend session');
+        }
         credentials = auth.session;
         gateway = auth;
       } else {
@@ -134,7 +148,8 @@ class _FableAccessBootstrapState extends State<FableAccessBootstrap>
         _active = pendingRuntime;
         setState(() {});
         // Waiting for verified `/permissions/me` does not show stale grants.
-        await access.bindToCredentials(credentials);
+        await access.bindToCredentials(credentials,
+          managedEntityStore: widget.managedEntityStore);
       } else {
         // Public operations may be rendered; private grants are never guessed.
         final missingSnapshot = FableAccessSession(

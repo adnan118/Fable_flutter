@@ -6,7 +6,7 @@ import 'package:fable_access_control/fable_access_control.dart';
 import 'package:fable_core/fable_core.dart';
 
 class _Credentials extends FableSecureSession {
-  _Credentials() : super(namespace: 'fable.access.lifecycle.test');
+  _Credentials({String namespace='fable.access.lifecycle.test'}) : super(namespace: namespace);
   final _identities = StreamController<FableIdentityEvent>.broadcast(sync: true);
   final _denials = StreamController<void>.broadcast(sync: true);
   String? token;
@@ -166,4 +166,77 @@ void main() {
       await credentials.close();
     }
   });
+  test('managed selection invalidates grants and discards an earlier snapshot', () async {
+    final credentials = _Credentials();
+    final gateway = _PendingGateway();
+    final store = FableManagedEntityStore(session: credentials);
+    store.bindBackend('access-test|https://api.example.test');
+    final access = _access(gateway);
+    try {
+      await access.bindToCredentials(credentials, managedEntityStore: store);
+      credentials.login('token-A');
+      expect(gateway.requests.length, 1);
+      gateway.complete(0, 'A', ['global.read']);
+      await _drain();
+      expect(access.value!.keys, ['global.read']);
+
+      store.activate(const FableManagedEntitySelection(
+        id:'550e8400-e29b-41d4-a716-446655440001',
+        access:'MANAGER',nameAr:'Entity A',nameEn:'Entity A',
+        identityRevision:1,
+      ));
+      expect(access.value, isNull);
+      expect(gateway.requests.length, 2);
+
+      // Switching again starts a newer snapshot; A's late result cannot win.
+      store.activate(const FableManagedEntitySelection(
+        id:'550e8400-e29b-41d4-a716-446655440002',
+        access:'VIEWER',nameAr:'Entity B',nameEn:'Entity B',
+        identityRevision:1,
+      ));
+      expect(access.value, isNull);
+      expect(gateway.requests.length, 3);
+      gateway.complete(1, 'A', ['stale.grant']);
+      await _drain();
+      expect(access.value, isNull);
+      gateway.complete(2, 'A', ['global.read']);
+      await _drain();
+      expect(access.value!.keys, ['global.read']);
+
+      // The global permissions endpoint is re-read, but managed roles are
+      // never synthesized into global keys by the Flutter client.
+      store.clear();
+      expect(access.value, isNull);
+      expect(gateway.requests.length, 4);
+      gateway.complete(3, 'A', ['global.read']);
+      await _drain();
+      expect(access.value!.keys, ['global.read']);
+    } finally {
+      access.dispose();
+      store.dispose();
+      await credentials.close();
+    }
+  });
+
+  test('AccessSession rejects a managed store from another Backend identity namespace', () async {
+    final credentials = _Credentials();
+    final foreign = _Credentials(namespace:'fable.access.foreign.test');
+    final gateway = _PendingGateway();
+    final store = FableManagedEntityStore(session: foreign);
+    store.bindBackend('foreign|https://api.example.test');
+    final access = _access(gateway);
+    try {
+      await expectLater(
+        access.bindToCredentials(credentials, managedEntityStore: store),
+        throwsStateError,
+      );
+      expect(gateway.requests, isEmpty);
+    } finally {
+      access.dispose();
+      store.dispose();
+      await credentials.close();
+      await foreign.close();
+    }
+  });
+
 }

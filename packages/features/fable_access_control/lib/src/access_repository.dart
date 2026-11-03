@@ -38,6 +38,10 @@ class FableAccessRepository {
       requiresFableSuccessEnvelope:policy['provider']=='fable');
   }
 
+  /// Deliberately user-global: Fable's permissions/me snapshot is derived from
+  /// the signed-in user's global roles. Managed-entity membership is a separate
+  /// Backend context; never attach its header or translate MANAGER/VIEWER into
+  /// global permission keys here. Selection changes trigger a fresh read only.
   Future<FableAccessSnapshot> current() async {
     if (operationId.isEmpty) throw StateError('Access operation is not bound');
     final response = await gateway.execute(operationId);

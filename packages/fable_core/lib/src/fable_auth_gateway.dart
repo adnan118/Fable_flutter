@@ -22,7 +22,8 @@ class FableAuthGateway implements BackendApiGateway {
     FableSecureSession? secureSession,
     bool allowHttpForLocalDevelopment = false,
     Dio? client,
-  }) : session = secureSession ?? FableSecureSession(namespace: _sessionNamespace(baseUri,contract)) {
+  }) : _baseUri = baseUri,
+       session = secureSession ?? FableSecureSession(namespace: sessionNamespaceFor(baseUri,contract)) {
     _contract = contract;
     _api = FableApiClient(
       baseUri: baseUri,
@@ -35,10 +36,20 @@ class FableAuthGateway implements BackendApiGateway {
     );
   }
 
-  static String _sessionNamespace(Uri base, FableContract contract) =>
+  /// Stable namespace shared by FableAuthGateway instances for the same
+  /// Backend origin and project. Used by app-level identity-scoped stores.
+  static String sessionNamespaceFor(Uri base, FableContract contract) =>
     'fable.${sha256.convert(utf8.encode('${base.origin}|${contract.projectName}')).toString().substring(0,32)}';
 
+  /// Stable identity for a selected managed-entity store. A contract refresh
+  /// invalidates the old context even when the project origin is unchanged.
+  static String managedEntityBackendIdentityFor(Uri base, FableContract contract) =>
+    '${contract.contractHash}|${base.origin}';
+
+  final Uri _baseUri;
   final FableSecureSession session;
+  String get managedEntityBackendIdentity =>
+    managedEntityBackendIdentityFor(_baseUri,_contract);
   late final FableApiClient _api;
   late final FableContract _contract;
 

@@ -96,7 +96,7 @@ class _AppState extends State<FableStarterApp> {
   @override void dispose() {
     unawaited(_fablePushIdentityEvents?.cancel());
     FableNotificationNavigation.instance.reset();
-    _managedEntities.dispose();
+    _managedEntities?.dispose();
     super.dispose();
   }
   // FABLE_PUSH_ROUTES_END
@@ -108,7 +108,7 @@ class _AppState extends State<FableStarterApp> {
   // سياق الكيان يبقى بالذاكرة فقط، وينتهي مع تبديل هوية المستخدم.
   // لا ينقل هذا السياق أي صلاحية إلى Backend آخر ولا يضيف ترويسات HTTP.
   // التفاصيل: docs/integrations/FABLE-FLUTTER-PARITY-MASTER.ar.md
-  final FableManagedEntityStore _managedEntities=FableManagedEntityStore();
+  FableManagedEntityStore? _managedEntities;
   final GlobalKey<ScaffoldMessengerState> _localeMessengerKey=
     GlobalKey<ScaffoldMessengerState>();
   Locale? _locale; // null = follow device language
@@ -169,7 +169,15 @@ class _AppState extends State<FableStarterApp> {
     // Fable-specific contracts are never loaded for an external Backend.
     final contract=await FableContract.fromAssets(rootBundle);
     const apiBase=String.fromEnvironment('FABLE_API_BASE_URL');
-    if(mounted)_managedEntities.bindBackend('${contract.contractHash}|$apiBase');
+    if(mounted && apiBase.isNotEmpty){
+      final baseUri=Uri.parse(apiBase);
+      // Every FableAuthGateway for this origin/project shares the same
+      // namespace-scoped identity events and epoch, including feature pages.
+      _managedEntities ??= FableManagedEntityStore(session:FableSecureSession(
+        namespace:FableAuthGateway.sessionNamespaceFor(baseUri,contract)));
+      _managedEntities!.bindBackend(
+        FableAuthGateway.managedEntityBackendIdentityFor(baseUri,contract));
+    }
     return _Bootstrap(backend,contract,null,null,null);
   }
 
@@ -191,15 +199,17 @@ class _AppState extends State<FableStarterApp> {
       child:MaterialUiCompatibilityBridge(
         child:FutureBuilder<_Bootstrap>(future:_bootstrap,builder:(context,state) {
         final connection=state.data;
+        final managedStore=connection?.fableContract==null?null:_managedEntities;
         final surface=connection==null ? child! : FableAccessBootstrap(
           fableContract:connection.fableContract,
           externalCatalog:connection.externalContract,
+          managedEntityStore:managedStore,
           child:child!,
         );
-        // Only a verified Fable Backend can expose managed entity context.
-        // The scope does not insert request headers; each feature must opt in.
-        return connection?.fableContract==null?surface:
-          FableManagedEntityScope(store:_managedEntities,child:surface);
+        // Access Control and profile features share the same Backend identity
+        // namespace. The store never injects headers; scoped repositories opt in.
+        return managedStore==null?surface:
+          FableManagedEntityScope(store:managedStore,child:surface);
         })),
     ),
     // FABLE_ACCESS_BUILDER_END
