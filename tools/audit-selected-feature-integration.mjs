@@ -169,6 +169,8 @@ export function managedAccessContextBindingGaps(root) {
     ['SCOPED_REPOSITORY_GUARD',managedRepo.includes('store.isBoundToBackend(gateway.managedEntityBackendIdentity)')],
     ['SCOPED_DENIAL_CLEAR',managedRepo.includes('error.status==403')&&managedRepo.includes('store.clear()')],
     ['MANAGED_ROLE_RESUME_REFRESH',managedPage.includes('WidgetsBindingObserver')&&managedPage.includes('AppLifecycleState.resumed')&&managedPage.includes('unawaited(_reload())')],
+    ['MANAGED_PARENT_SCOPE_GUARD',managedPage.includes('FableManagedEntityScope.maybeOf(context)')&&managedPage.includes('identical(store.selected,choice)')&&managedPage.includes('_onManagedStoreChanged')],
+    ['MANAGED_PARENT_INVITE_GUARD',managedPage.includes('store.selectionRevision==storeRevision')&&managedPage.includes('!sameSelection()')],
     ['MEMBER_ROUTE_STORE',managedPage.includes('managedStore:FableManagedEntityScope.maybeOf(context)')],
     ['MEMBER_PAGE_SELECTION_REVISION',managedMembers.includes('_openedSelectionRevision==store.selectionRevision')&&managedMembers.includes('identical(store.selected,widget.selection)')],
     ['MEMBER_PAGE_CONFIRMATION_GUARD',managedMembers.includes('!_at(generation)||!_owner')&&managedMembers.includes('!_at(generation)||!_invitationAdmin')],
