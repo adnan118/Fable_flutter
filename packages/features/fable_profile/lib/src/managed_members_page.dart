@@ -109,6 +109,8 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
       final matches=entities.where((e)=>e.id==widget.selection.id &&
         e.status=='ACTIVE' && e.effectiveAccess==widget.selection.access &&
         (widget.selection.access!='OWNER'||e.isOwner) &&
+        e.collaborationEnabled==widget.entity.collaborationEnabled &&
+        e.managersCanInvite==widget.entity.managersCanInvite &&
         (widget.selection.access!='MANAGER'||e.collaborationEnabled)).toList();
       if(matches.length!=1){
         widget.managedStore?.clear();
@@ -217,6 +219,15 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
           _memberCursor=null;_membersComplete=false;
         });
       }
+    }on FableApiException catch(error){
+      if(_at(generation)){
+        if(error.status==403||error.code=='MANAGED_ACCOUNT_NOT_FOUND'){
+          widget.managedStore?.clear();
+          _invalidate('Backend revoked this managed administration context.');
+        }else{
+          setState(()=>_error='Backend rejected this removal.');
+        }
+      }
     }catch(_){
       if(_at(generation))setState(()=>_error='Backend rejected this removal.');
     }finally{if(_at(generation))setState(()=>_busy=false);}
@@ -235,6 +246,15 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
           _sentInvitations.removeWhere((item)=>item.id==invitation.id);
           _invitationCursor=null;_invitationsComplete=false;
         });
+      }
+    }on FableApiException catch(error){
+      if(_at(generation)){
+        if(error.status==403||error.code=='MANAGED_ACCOUNT_NOT_FOUND'){
+          widget.managedStore?.clear();
+          _invalidate('Backend revoked this managed administration context.');
+        }else{
+          setState(()=>_error='Backend rejected invitation revocation.');
+        }
       }
     }catch(_){
       if(_at(generation))setState(()=>_error='Backend rejected invitation revocation.');
