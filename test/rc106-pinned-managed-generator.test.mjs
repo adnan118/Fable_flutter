@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,existsSync,readFileSync,writeFileSync,mkdirSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import {
   planManagedScopedOperations,renderManagedScopedDart,
-  generatePinnedManagedScopedOperations,OUTPUT,
+  generatePinnedManagedScopedOperations,collectManagedSelectedFeatures,
+  writeManagedScopedOutput,OUTPUT,
 } from '../tools/generate-managed-scoped-operations.mjs';
 
 const HASH='a'.repeat(64);
@@ -86,5 +87,58 @@ test('RC106 dry-run/apply refuses a project without an independent verified pin'
       expectedProjectId:'',expectedContractHash:'invalid',apply:true,
     }),/Independent project ID/);
     assert.equal(existsSync(file),false);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('RC107 a disabled feature is removed from all selected manifests, never once only',()=>{
+  const root=mkdtempSync(join(tmpdir(),'fable-rc107-selection-'));
+  const save=(path,value)=>{
+    const output=join(root,path);mkdirSync(dirname(output),{recursive:true});
+    writeFileSync(output,JSON.stringify(value));
+  };
+  try{
+    save('.fable/mobile-features.json',{features:['billing','billing']});
+    save('.fable/project-features.json',{features:['billing','billing']});
+    save('.fable/frontend-owned-decisions.json',{
+      kind:'fable.flutter-owned-decisions',choices:{billing:{enabled:false}},
+    });
+    assert.deepEqual(collectManagedSelectedFeatures(root),[]);
+    save('.fable/frontend-owned-decisions.json',{
+      kind:'fable.flutter-owned-decisions',choices:{billing:{enabled:true}},
+    });
+    assert.deepEqual(collectManagedSelectedFeatures(root),['billing']);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('RC107 apply is idempotent but never overwrites existing manual or outdated bindings',()=>{
+  const root=mkdtempSync(join(tmpdir(),'fable-rc107-write-'));
+  try{
+    const file=join(root,OUTPUT);
+    const content=renderManagedScopedDart(
+      [{feature:'billing',operationId:'billing.list',
+        method:'GET',path:'/billing/invoices'}],HASH);
+    assert.equal(writeManagedScopedOutput(file,content),true);
+    assert.equal(writeManagedScopedOutput(file,content),false);
+    const changed=content+'// manually edited\n';
+    assert.throws(()=>writeManagedScopedOutput(file,changed),/Existing scoped bindings differ/);
+    assert.equal(readFileSync(file,'utf8'),content);
+    writeFileSync(file,'// human-written repository data');
+    assert.throws(()=>writeManagedScopedOutput(file,content),/Existing scoped bindings differ/);
+    assert.equal(readFileSync(file,'utf8'),'// human-written repository data');
+    assert.throws(()=>writeManagedScopedOutput(file,'not wizard generated'),
+      /Only reviewed Fable-generated/);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('RC107 output refuses a symlink, preserving target content',()=>{
+  const root=mkdtempSync(join(tmpdir(),'fable-rc107-symlink-'));
+  try{
+    const file=join(root,OUTPUT),target=join(root,'human-notes.txt');
+    mkdirSync(dirname(file),{recursive:true});
+    writeFileSync(target,'human data');
+    symlinkSync(target,file);
+    assert.throws(()=>writeManagedScopedOutput(file,renderManagedScopedDart([],HASH)),
+      /Refusing to follow a symlink/);
+    assert.equal(readFileSync(target,'utf8'),'human data');
   }finally{rmSync(root,{recursive:true,force:true});}
 });
