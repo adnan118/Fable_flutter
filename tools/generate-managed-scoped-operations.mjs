@@ -14,6 +14,7 @@ const REQUIREMENTS='.fable/feature-integration-requirements.json';
 const PROJECT_SETUP='.fable/frontend-setup.json';
 const SOURCE='assets/contracts/contract.json';
 const SAFE_ID=/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,190}$/;
+const validId=value=>typeof value==='string'&&SAFE_ID.test(value);
 const HASH=/^[a-f0-9]{64}$/;
 const METHODS=new Set(['GET','POST','PUT','PATCH','DELETE']);
 
@@ -43,11 +44,11 @@ export function planManagedScopedOperations(contract,requirements,selectedFeatur
      Array.isArray(requirements.features))
     throw Error('Project operation requirements not declared');
   if(!Array.isArray(selectedFeatures)||
-     selectedFeatures.some(id=>!SAFE_ID.test(id)))
+     selectedFeatures.some(id=>!validId(id)))
     throw Error('Explicit project feature selection required');
   const selected=new Set(selectedFeatures),mapped=new Map();
   for(const [feature,spec] of Object.entries(requirements.features)){
-    if(!SAFE_ID.test(feature)||!selected.has(feature))
+    if(!validId(feature)||!selected.has(feature))
       throw Error('Scoped feature not explicitly selected: '+feature);
     if(!Array.isArray(spec?.operations))
       throw Error('Required operation list missing: '+feature);
@@ -57,7 +58,7 @@ export function planManagedScopedOperations(contract,requirements,selectedFeatur
       if(requested.managedEntityScope!==true)
         throw Error('Managed scope flag must be boolean: '+feature);
       const {operationId,method,path}=requested;
-      if(!SAFE_ID.test(operationId)||!METHODS.has(method)||
+      if(!validId(operationId)||!METHODS.has(method)||
          forbiddenPath(path))
         throw Error('Unsafe or incomplete managed scope operation: '+feature);
       const imported=contract.operations.filter(op=>op.operationId===operationId);
