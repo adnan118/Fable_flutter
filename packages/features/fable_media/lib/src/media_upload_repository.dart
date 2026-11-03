@@ -354,6 +354,7 @@ class MediaUploadRepository {
     final initial=_progress(state,length);
     scope.check();
     onProgress?.call(initial);
+    scope.check(); // A UI progress callback may trigger an account replacement.
     if (state['status']=='COMPLETED') return state;
     if (state['status']=='ABORTED' || state['status']=='EXPIRED') throw StateError('Upload session expired or was cancelled');
     if (strategy=='LOCAL_RESUMABLE') {
