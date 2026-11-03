@@ -50,7 +50,9 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
   }
   void _clearManagedSelection(){
     _managedStore?.clear();
-    widget.onCleared?.call();ependencies(){
+    widget.onCleared?.call();
+  }
+  @override void didChangeDependencies(){
     super.didChangeDependencies();
     final incoming=FableManagedEntityScope.maybeOf(context);
     if(identical(incoming,_managedStore))return;
