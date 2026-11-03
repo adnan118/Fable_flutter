@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fable_core/fable_core.dart';
 import 'package:fable_media/fable_media.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 const _id='123e4567-e89b-42d3-a456-426614174000';
 final _scopeA=List.filled(64,'a').join();
@@ -130,6 +132,12 @@ Widget _page(File file,_Context context,{void Function(Map<String,dynamic>)? onC
       onCompleted:onCompleted))));
 
 void main(){
+  setUp((){
+    // SharedPreferencesAsync() resolves the registered platform even though
+    // _Store overrides read/write. Legacy setMockInitialValues is insufficient.
+    SharedPreferencesAsyncPlatform.instance=
+      InMemorySharedPreferencesAsync.empty();
+  });
   testWidgets('RC111 old prepare reply cannot complete after file and repository replacement',
     (tester)async{
     final files=await _files(tester);
