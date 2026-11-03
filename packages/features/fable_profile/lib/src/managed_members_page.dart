@@ -23,7 +23,7 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
   bool _membersComplete=false,_invitationsComplete=false,_busy=false;
   bool _verifying=false,_invalid=false;
   int _requestGeneration=0;
-  late final int? _openedSelectionRevision=widget.managedStore?.selectionRevision;
+  late final int? _openedSelectionRevision;
   StreamSubscription<FableIdentityEvent>? _identities;
   bool get _ar=>Localizations.localeOf(context).languageCode=='ar';
 
@@ -62,6 +62,8 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
   }
   @override void initState(){
     super.initState();
+    // Capture the exact selection epoch before any async route initialization.
+    _openedSelectionRevision=widget.managedStore?.selectionRevision;
     WidgetsBinding.instance.addObserver(this);
     widget.managedStore?.addListener(_onManagedSelectionChanged);
     _identities=widget.repo.gateway.session.identityEvents.listen((_){
@@ -151,7 +153,7 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
       if(loadInvitations){
         final page=await widget.repo.sentInvitations(widget.entity,widget.selection,
           after:moreInvitations?_invitationCursor:null);
-        if(!mounted||!_current)return;
+        if(!_at(generation))return;
         setState((){
           if(!moreInvitations)_sentInvitations.clear();
           for(final inv in page.items){
@@ -163,6 +165,15 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
           _invitationCursor=page.nextCursor;
           _invitationsComplete=page.nextCursor==null;
         });
+      }
+    }on FableApiException catch(error){
+      if(!_at(generation))return;
+      if(error.status==403||error.code=='MANAGED_ACCOUNT_NOT_FOUND'){
+        widget.managedStore?.clear();
+        _invalidate('Backend refused this managed role. Reopen after verification.');
+      }else{
+        setState(()=>_error=_ar?'تعذّر تحميل بيانات الإدارة الموثّقة من الخادم.'
+          :'Backend refused or returned an invalid member/admin page.');
       }
     }catch(_){
       if(_at(generation))
@@ -219,7 +230,7 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
     setState((){_busy=true;_error=null;});
     try{
       await widget.repo.revokeSentInvitation(widget.entity,widget.selection,invitation);
-      if(mounted&&_current&&rev==widget.repo.gateway.session.identityRevision){
+      if(_at(generation)){
         setState((){
           _sentInvitations.removeWhere((item)=>item.id==invitation.id);
           _invitationCursor=null;_invitationsComplete=false;
@@ -227,8 +238,7 @@ class _FableManagedMembersPageState extends State<FableManagedMembersPage>
       }
     }catch(_){
       if(_at(generation))setState(()=>_error='Backend rejected invitation revocation.');
-    }finally{if(mounted&&_current&&rev==widget.repo.gateway.session.identityRevision)
-      setState(()=>_busy=false);}
+    }finally{if(_at(generation))setState(()=>_busy=false);}
   }
   @override void dispose(){
     ++_requestGeneration;
