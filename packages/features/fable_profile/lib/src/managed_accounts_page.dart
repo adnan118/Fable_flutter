@@ -26,7 +26,47 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
   List<FableManagedAccount>? _entities;
   List<FableManagedInvitation>? _invitations;
   FableManagedAccountSelection? _selected;
+  FableManagedEntityStore? _managedStore;
   FableManagedLifecycleChallenge? _pendingLifecycle;
+
+  /// The parent route may remain open when another screen switches entities.
+  /// A stale local selection must never enable a new invitation or member UI.
+  FableManagedAccountSelection? get _effectiveSelection {
+    final choice=_selected,store=_managedStore;
+    if(choice==null)return null;
+    if(store==null)return choice; // Legacy app without a managed scope.
+    if(!store.isBoundToCredentials(widget.gateway.session) ||
+       !store.isBoundToBackend(widget.gateway.managedEntityBackendIdentity) ||
+       !identical(store.selected,choice)) return null;
+    return choice;
+  }
+  void _onManagedStoreChanged(){
+    if(!mounted||_selected==null)return;
+    if(_effectiveSelection!=null)return;
+    setState((){
+      _selected=null;_pendingLifecycle=null;_lifecycleOtp.clear();
+      _message='Managed entity changed. Verify the current account.';
+    });
+  }
+  void _clearManagedSelection(){
+    _managedStore?.clear();
+    widget.onCleared?.call();
+  }
+  @override void didChangeDependencies(){
+    super.didChangeDependencies();
+    final incoming=FableManagedEntityScope.maybeOf(context);
+    if(identical(incoming,_managedStore))return;
+    final previous=_managedStore;
+    previous?.removeListener(_onManagedStoreChanged);
+    _managedStore=incoming;
+    incoming?.addListener(_onManagedStoreChanged);
+    // Losing an inherited scope is not permission to fall back to a local
+    // selection that was previously bound to an authenticated store.
+    if(_selected!=null&&((previous!=null&&incoming==null) ||
+       _effectiveSelection==null)){
+      _selected=null;_pendingLifecycle=null;_lifecycleOtp.clear();
+    }
+  }
   final _lifecycleOtp=TextEditingController();
   bool _busy=false;
   String? _message;
@@ -38,7 +78,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       if(!mounted)return;
       // External project context must be cleared on logout/account switch too,
       // even when this page is no longer the current route.
-      widget.onCleared?.call();
+      _clearManagedSelection();
       setState((){
         _entities=null;_invitations=null;_selected=null;_busy=false;
         _pendingLifecycle=null;_lifecycleOtp.clear();
@@ -66,13 +106,13 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         if(selected!=null && !entities.any((e)=>
             e.id==selected.id && e.status=='ACTIVE' &&
             e.effectiveAccess==selected.access)) {
-          widget.onCleared?.call();
+          _clearManagedSelection();
           _selected=null;
         }
       });
     }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision){
       // A failed role refresh cannot preserve a privileged entity selection.
-      if(_selected!=null)widget.onCleared?.call();
+      if(_selected!=null)_clearManagedSelection();
       setState((){
         _selected=null;_entities=null;_invitations=null;
         _message='Backend did not confirm current managed membership.';
@@ -84,11 +124,26 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     if(_busy||!_repo.canActivate)return;
     final epoch=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;_selected=null;});
-    widget.onCleared?.call();
+    _clearManagedSelection();
+    final storeAtRequest=_managedStore;
+    final contextEpoch=storeAtRequest?.selectionRevision;
     try{
       final selected=await _repo.activate(entity);
-      if(!mounted||epoch!=widget.gateway.session.identityRevision)return;
+      if(!mounted||epoch!=widget.gateway.session.identityRevision ||
+         !identical(_managedStore,storeAtRequest) ||
+         (storeAtRequest!=null&&storeAtRequest.selectionRevision!=contextEpoch)){
+        return; // A different route selected an entity while activation waited.
+      }
       setState(()=>_selected=selected);
+      final store=_managedStore;
+      if(store!=null){
+        if(!store.isBoundToCredentials(widget.gateway.session) ||
+           !store.isBoundToBackend(widget.gateway.managedEntityBackendIdentity)){
+          setState(()=>_selected=null);
+          throw StateError('Wrong managed entity Backend identity');
+        }
+        store.activate(selected);
+      }
       widget.onActivated?.call(selected);
     }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision)
       setState(()=>_message='Backend rejected activation or membership.');}
@@ -147,7 +202,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           collaborationEnabled:collaboration,managersCanInvite:managerInvites);
         if(mounted&&rev==widget.gateway.session.identityRevision){
           setState(()=>_selected=null);
-          widget.onCleared?.call();
+          _clearManagedSelection();
           await _reloadAfterMutation();
         }
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
@@ -266,7 +321,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           managersCanInvite:invite,slug:slug.text);
         if(!mounted||rev!=widget.gateway.session.identityRevision)return;
         setState(()=>_selected=null);
-        widget.onCleared?.call();
+        _clearManagedSelection();
         await _reloadAfterMutation();
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message=_ar?'لم يؤكد الباك هذا التعديل؛ حدّث القائمة.':
@@ -277,19 +332,24 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
   }
 
   Future<void> _invite(FableManagedAccount entity)async{
-    final chosen=_selected;
+    final chosen=_effectiveSelection;
+    final store=_managedStore;
+    final storeRevision=store?.selectionRevision;
+    bool sameSelection()=>mounted&&identical(_effectiveSelection,chosen) &&
+      (store==null || (store.selectionRevision==storeRevision &&
+      identical(store.selected,chosen)));
     if(_busy||chosen==null||chosen.id!=entity.id||!_repo.canInvite||
        entity.status!='ACTIVE'||entity.visibility=='PRIVATE'||
        !entity.collaborationEnabled||
        !(chosen.access=='OWNER'||chosen.access=='MANAGER'&&entity.managersCanInvite))return;
-    final username=TextEditingController();
+    String username='';
     var access='VIEWER';
-    try{
+    {
       final agreed=await showDialog<bool>(context:context,builder:(ctx)=>
         StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
         title:Text(_ar?'دعوة عضو إلى الكيان':'Invite entity member'),
         content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-          TextField(controller:username,maxLength:30,decoration:InputDecoration(
+          TextField(onChanged:(value)=>username=value,maxLength:30,decoration:InputDecoration(
             labelText:_ar?'اسم المستخدم المسجّل':'Existing username')),
           DropdownButton<String>(value:access,items:[
             DropdownMenuItem(value:'VIEWER',
@@ -309,23 +369,24 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           FilledButton(onPressed:()=>Navigator.pop(ctx,true),
             child:Text(_ar?'إرسال الدعوة':'Send invitation')),
         ])));
-      if(agreed!=true||!mounted)return;
+      if(agreed!=true||!sameSelection())return;
       if(access=='MANAGER'){
         if(!await _confirm(_ar
           ?'سيُمنح المستخدم دور مدير وفق صلاحيات الخادم. هل تؤكد الدعوة؟'
           :'This grants the Backend-defined manager role. Confirm invitation?')||
-          !mounted)return;
+          !sameSelection())return;
       }
+      if(!sameSelection())return;
       final rev=widget.gateway.session.identityRevision;
       setState((){_busy=true;_message=null;});
       try{
-        await _repo.invite(entity,chosen,username:username.text,access:access);
-        if(mounted&&rev==widget.gateway.session.identityRevision)
+        await _repo.invite(entity,chosen,username:username,access:access);
+        if(sameSelection()&&rev==widget.gateway.session.identityRevision)
           setState(()=>_message='Backend accepted the invitation.');
-      }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+      }catch(_){if(sameSelection()&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message='Backend denied the invitation.');}
       finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
-    }finally{username.dispose();}
+    }
   }
   Future<void> _respond(FableManagedInvitation invite,bool accept)async{
     if(_busy||!await _confirm(accept?'Accept invitation?':'Decline invitation?'))return;
@@ -388,7 +449,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         _message=_ar?'أكد الخادم العملية، وتم تحديث وضع الكيان.'
           :'Backend confirmed the lifecycle action.';
       });
-      widget.onCleared?.call();
+      _clearManagedSelection();
       await _reloadAfterMutation();
     }catch(_){
       if(mounted&&rev==widget.gateway.session.identityRevision){
@@ -405,7 +466,13 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     }
   }
 
-  @override void dispose(){WidgetsBinding.instance.removeObserver(this);unawaited(_events?.cancel());_lifecycleOtp.dispose();super.dispose();}
+  @override void dispose(){
+    _managedStore?.removeListener(_onManagedStoreChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_events?.cancel());
+    _lifecycleOtp.dispose();
+    super.dispose();
+  }
   @override Widget build(BuildContext context){
     final ar=_ar;
     return Scaffold(appBar:AppBar(title:Text(ar?'الكيانات التي أديرها':'Managed entities')),
@@ -425,23 +492,23 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           ListTile(
             title:Text(ar?entity.nameAr:entity.nameEn),
             subtitle:Text(entity.type+' · '+entity.status+' · '+entity.visibility),
-            trailing:_selected?.id==entity.id
-              ?Chip(label:Text(_selected!.access))
+            trailing:_effectiveSelection?.id==entity.id
+              ?Chip(label:Text(_effectiveSelection!.access))
               :entity.status=='ACTIVE'&&_repo.canActivate
                 ?OutlinedButton(
                   onPressed:_busy?null:()=>unawaited(_activate(entity)),
                   child:Text(ar?'اختيار':'Select'))
                 :null),
-          if(_selected?.id==entity.id&&(
+          if(_effectiveSelection?.id==entity.id&&(
               entity.isOwner&&_repo.canListMembers ||
               entity.collaborationEnabled&&_repo.canViewSentInvitations&&
-              (_selected!.access=='OWNER'||
-                _selected!.access=='MANAGER'&&entity.managersCanInvite)))
+              (_effectiveSelection!.access=='OWNER'||
+                _effectiveSelection!.access=='MANAGER'&&entity.managersCanInvite)))
             TextButton.icon(
               icon:const Icon(Icons.groups_outlined),
               onPressed:_busy?null:()=>Navigator.of(context).push(
                 MaterialPageRoute<void>(builder:(_)=>FableManagedMembersPage(
-                  repo:_repo,entity:entity,selection:_selected!,
+                  repo:_repo,entity:entity,selection:_effectiveSelection!,
                   managedStore:FableManagedEntityScope.maybeOf(context)))),
               label:Text(ar?'الأعضاء والدعوات المرسلة':'Members and sent invitations')),
           if(entity.status=='ACTIVE'&&_repo.canReadDetails)
@@ -473,14 +540,14 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
               TextButton(onPressed:_busy?null:()=>unawaited(_requestLifecycle(entity,'restore')),
                 child:Text(_lifecycleLabel('restore'))),
           ],
-          if(_selected?.id==entity.id&&entity.collaborationEnabled&&
-            _repo.canInvite&&(_selected!.access=='OWNER'||
-            _selected!.access=='MANAGER'&&entity.managersCanInvite))
+          if(_effectiveSelection?.id==entity.id&&entity.collaborationEnabled&&
+            _repo.canInvite&&(_effectiveSelection!.access=='OWNER'||
+            _effectiveSelection!.access=='MANAGER'&&entity.managersCanInvite))
             TextButton(onPressed:_busy?null:()=>unawaited(_invite(entity)),
               child:Text(ar?'دعوة عضو':'Invite member')),
         ])),
-        if(_selected!=null)Text((ar?'السياق المعتمد: ':'Selected: ')+
-          (ar?_selected!.nameAr:_selected!.nameEn)+' ('+_selected!.access+
+        if(_effectiveSelection!=null)Text((ar?'السياق المعتمد: ':'Selected: ')+
+          (ar?_effectiveSelection!.nameAr:_effectiveSelection!.nameEn)+' ('+_effectiveSelection!.access+
           '). Backend re-verifies membership; this screen does not grant roles.'),
         if(_pendingLifecycle!=null)...[
           const Divider(),
