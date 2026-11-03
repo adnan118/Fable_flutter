@@ -30,6 +30,7 @@ FableContract _catalog(){
 class _Gateway implements BackendApiGateway {
   final calls=<String>[];
   final started=StreamController<String>.broadcast(sync:true);
+  final prepareDispatched=Completer<void>();
   Completer<void>? blockPrepare;
   int total=8,bytes=0;
 
@@ -39,6 +40,9 @@ class _Gateway implements BackendApiGateway {
   })async{
     calls.add(id);
     started.add(id);
+    if(id=='media.upload.prepare'&&!prepareDispatched.isCompleted){
+      prepareDispatched.complete();
+    }
     if(id=='media.upload.prepare' && blockPrepare!=null){
       await blockPrepare!.future;
     }
@@ -104,13 +108,19 @@ class _Context {
 }
 
 Future<List<File>> _files(WidgetTester tester)async{
-  final root=await Directory.systemTemp.createTemp('rc111-media-ui-');
-  addTearDown(()=>root.delete(recursive:true));
-  final x=File('${root.path}/a.jpg');
-  final y=File('${root.path}/b.jpg');
-  await x.writeAsBytes(List<int>.filled(8,1));
-  await y.writeAsBytes(List<int>.filled(8,2));
-  return [x,y];
+  // WidgetTester is FakeAsync; native filesystem futures need a real async
+  // zone or the test can stall before the upload widget is even mounted.
+  final files=await tester.runAsync(()async{
+    final root=await Directory.systemTemp.createTemp('rc111-media-ui-');
+    addTearDown(()=>root.delete(recursive:true));
+    final x=File('${root.path}/a.jpg');
+    final y=File('${root.path}/b.jpg');
+    await x.writeAsBytes(List<int>.filled(8,1));
+    await y.writeAsBytes(List<int>.filled(8,2));
+    return [x,y];
+  });
+  if(files==null)throw StateError('Real filesystem simulation unavailable');
+  return files;
 }
 
 Widget _page(File file,_Context context,{void Function(Map<String,dynamic>)? onCompleted})=>
@@ -130,15 +140,20 @@ void main(){
     a.gateway.blockPrepare=pending;
     var oldCompletions=0;
     var newCompletions=0;
+    final newFinished=Completer<void>();
     await tester.pumpWidget(_page(files[0],a,
       onCompleted:(_)=>oldCompletions++));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Upload'));
     await tester.pump();
+    await tester.runAsync(()=>a.gateway.prepareDispatched.future);
     expect(a.gateway.calls,contains('media.upload.prepare'));
 
     await tester.pumpWidget(_page(files[1],b,
-      onCompleted:(_)=>newCompletions++));
+      onCompleted:(_){
+        newCompletions++;
+        if(!newFinished.isCompleted)newFinished.complete();
+      }));
     await tester.pumpAndSettle();
     pending.complete();
     await tester.pumpAndSettle();
@@ -149,6 +164,8 @@ void main(){
     expect(find.text('Upload'),findsOneWidget);
 
     await tester.tap(find.text('Upload'));
+    await tester.pump();
+    await tester.runAsync(()=>newFinished.future);
     await tester.pumpAndSettle();
     expect(newCompletions,1);
     expect(find.text('Upload complete'),findsOneWidget);
@@ -166,6 +183,7 @@ void main(){
     await tester.pumpAndSettle();
     await tester.tap(find.text('Upload'));
     await tester.pump();
+    await tester.runAsync(()=>a.gateway.prepareDispatched.future);
     expect(a.gateway.calls,contains('media.upload.prepare'));
 
     a.changeIdentity();
@@ -209,6 +227,7 @@ void main(){
     await tester.pumpAndSettle();
     await tester.tap(find.text('Upload'));
     await tester.pump();
+    await tester.runAsync(()=>a.gateway.prepareDispatched.future);
     await tester.tap(find.text('Cancel'));
     await tester.pump();
     await tester.pumpWidget(_page(files[1],b));
