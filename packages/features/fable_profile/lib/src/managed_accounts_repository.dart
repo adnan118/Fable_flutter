@@ -209,6 +209,42 @@ class FableCursorPage<T> {
   final String? nextCursor;
 }
 
+/// Explicit opt-in for a project feature that the imported Fable Backend
+/// contract authorizes to run in a managed entity. This binding is NOT a
+/// permission and must not be inferred from route names or UI permissions.
+/// Each feature owner must declare the exact operation identity/method/path
+/// from the project's verified contract; all execution checks remain server
+/// authoritative and use the selected account's live store generation.
+class FableManagedScopedOperation {
+  const FableManagedScopedOperation({
+    required this.operationId,
+    required this.method,
+    required this.path,
+    required this.contractHash,
+  });
+  final String operationId,method,path,contractHash;
+
+  void validate(FableContract contract) {
+    if(operationId.isEmpty||path.isEmpty||contractHash!=contract.contractHash ||
+       !const {'GET','POST','PUT','PATCH','DELETE'}.contains(method) ||
+       !path.startsWith('/')||path.startsWith('//')||
+       path.contains('?')||path.contains('#')||path.contains('..') ||
+       path.contains('\\')) {
+      throw StateError('Invalid managed scoped operation binding for this Fable project');
+    }
+    final op=contract.require(operationId);
+    if(op.id!=operationId||op.method!=method||op.path!=path ||
+       op.contractHash!=contractHash || !op.requiresAuth ||
+       op.credentialHeader!=null ||
+       path=='/auth'||path.startsWith('/auth/') ||
+       path=='/managed-entities/public'||path.startsWith('/managed-entities/public/') ||
+       path=='/permissions'||path.startsWith('/permissions/') ||
+       path=='/admin'||path.startsWith('/admin/')) {
+      throw StateError('Managed scope not permitted by the verified Backend operation contract');
+    }
+  }
+}
+
 class FableManagedAccountsRepository {
   const FableManagedAccountsRepository(this.gateway,this.contract);
   final FableAuthGateway gateway;
@@ -620,6 +656,18 @@ class FableManagedAccountsRepository {
     if(gateway.session.identityRevision!=rev)
       throw FableApiException(409,'session_changed_discard_response');
     return _unwrap(changed.data);
+  }
+
+  /// Project feature contract binding. Unlike the legacy operation-ID entry
+  /// point, this requires an explicit project-approved scoped operation
+  /// identity. This never adds a header to unselected or Other Backend calls.
+  Future<Object?> executeBoundInStore(
+    FableManagedEntityStore store,FableManagedScopedOperation binding,{
+    Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
+  }) {
+    binding.validate(contract);
+    return executeUsingStore(store,binding.operationId,
+      path:path,query:query,body:body);
   }
 
   /// Preferred API for screens bound to a shared managed-entity store.

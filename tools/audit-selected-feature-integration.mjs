@@ -167,6 +167,7 @@ export function managedAccessContextBindingGaps(root) {
     ['SHARED_IDENTITY_NAMESPACE',store.includes('_session.sharesIdentityNamespaceWith(credentials)')&&auth.includes('sessionNamespaceFor')],
     ['BACKEND_IDENTITY_PIN',store.includes('isBoundToBackend(String identity)')&&auth.includes('managedEntityBackendIdentityFor')],
     ['SCOPED_REPOSITORY_GUARD',managedRepo.includes('store.isBoundToBackend(gateway.managedEntityBackendIdentity)')],
+    ['SCOPED_DECLARATION_GUARD',managedRepo.includes('class FableManagedScopedOperation')&&managedRepo.includes('executeBoundInStore(')],
     ['SCOPED_DENIAL_CLEAR',managedRepo.includes('error.status==403')&&managedRepo.includes('store.clear()')],
     ['MANAGED_ROLE_RESUME_REFRESH',managedPage.includes('WidgetsBindingObserver')&&managedPage.includes('AppLifecycleState.resumed')&&managedPage.includes('unawaited(_reload())')],
     ['MANAGED_PARENT_SCOPE_GUARD',managedPage.includes('FableManagedEntityScope.maybeOf(context)')&&managedPage.includes('identical(store.selected,choice)')&&managedPage.includes('_onManagedStoreChanged')],
@@ -180,6 +181,41 @@ export function managedAccessContextBindingGaps(root) {
     ['GLOBAL_PERMISSION_BOUNDARY',accessRepo.includes('Deliberately user-global')&&accessRepo.includes('gateway.execute(operationId)')],
   ];
   return checks.filter(([,ok])=>!ok).map(([code])=>code);
+}
+
+/// RC105 project-feature contract rule: explicit Managed Entity scope is
+/// Fable-only and requires source/test evidence for the exact imported op.
+/// This is a source audit, never an assertion of live E2E authorization.
+export function managedScopedOperationEvidenceGaps(root,backendKind,required) {
+  root=resolve(root);
+  if(required.managedEntityScope===undefined || required.managedEntityScope===false)
+    return [];
+  if(required.managedEntityScope!==true)
+    return ['MANAGED_SCOPE_MODE_INVALID'];
+  if(backendKind!=='fable')
+    return ['FABLE_MANAGED_SCOPE_NOT_AVAILABLE_FOR_OTHER_BACKEND'];
+  if(!present(required.operationId)||!present(required.path)||
+     !present(required.method))
+    return ['MANAGED_SCOPE_OPERATION_INCOMPLETE'];
+  const route=required.path;
+  if(route==='/auth'||route.startsWith('/auth/')||
+     route==='/permissions'||route.startsWith('/permissions/')||
+     route==='/admin'||route.startsWith('/admin/')||
+     route==='/managed-entities/public'||route.startsWith('/managed-entities/public/'))
+    return ['MANAGED_SCOPE_OPERATION_FORBIDDEN'];
+  const source=checkedFile(root,required.frontendFile)
+    ?readFileSync(safePath(root,required.frontendFile),'utf8'):'';
+  const tests=checkedFile(root,required.testFile)
+    ?readFileSync(safePath(root,required.testFile),'utf8'):'';
+  const misses=[];
+  if(!source.includes('FableManagedScopedOperation(') ||
+     !source.includes('executeBoundInStore(') ||
+     !source.includes(required.operationId))
+    misses.push('MANAGED_SCOPE_SOURCE_BINDING_UNVERIFIED');
+  if(!tests.includes('executeBoundInStore(') ||
+     !tests.includes(required.operationId))
+    misses.push('MANAGED_SCOPE_TEST_BINDING_UNVERIFIED');
+  return misses;
 }
 
 function classify({selected,problems,sourceMapped,needsBackend}){
@@ -300,6 +336,10 @@ function auditOne(root,feature,backend,master,external,explicit,selectedIds=[]){
       continue;
     }
     const id=op.operationId,method=op.method.toUpperCase();
+    for(const code of managedScopedOperationEvidenceGaps(root,backend.kind,op)){
+      add(code,id+': explicit managed context requires a pinned Fable contract operation and a scoped source/test binding',
+        'حدد FableManagedScopedOperation بـoperationId/method/path/contractHash من العقد، واستخدم executeBoundInStore مع مخزن الكيان المعتمد؛ لا تحقن الترويسة تلقائياً.',id);
+    }
     let declared=null;
     if(backend.kind==='other')declared=external.operations.get(id);
     if(backend.kind==='fable')declared=external?.fable?.operations.find(x=>x.id===id);
