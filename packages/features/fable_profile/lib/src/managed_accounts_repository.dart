@@ -591,8 +591,83 @@ class FableManagedAccountsRepository {
   /// authority or reusable proof is created and lifecycle changes are not
   /// automatically repeated on network errors.
   Future<Object?> verifyAndApplyLifecycle(
-    FableManagedLifecycleChallenge pending,String code)async{
-    if(!canLifecycle(pending.operation)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
+    FableManagedLifecycleChallenge pending,String code,{
+      bool Function()? contextStillValid,
+    })async{
+    // Check again AFTER OTP verification: the Backend may have consumed the
+    // proof while the user switched managed entities. Never then submit a
+    // sensitive lifecycle mutation for the former UI context.
+    bool validContext()=>contextStillValid?.call()??true;
+    if(!validContext())throw StateError('Managed lifecycle context changed');
+    if(!canLifecycle(pending.operation)||!RegExp(r'^[0-9]{4,10}
+    final rev=pending.identityRevision;
+    if(gateway.session.identityRevision!=rev)
+      throw StateError('Lifecycle challenge belongs to another login');
+    final verified=await gateway.execute(_operation('/auth/otp/verify','POST'),
+      body:{'challengeId':pending.challengeId,'code':code});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    final proof=_unwrap(verified.data);
+    if(proof is! Map||proof['verified']!=true||
+       proof['challengeId']!=pending.challengeId||
+       proof['purpose']!=pending.purpose)
+      throw const FormatException('Wrong security proof purpose or challenge');
+    if(!validContext())throw StateError('Managed lifecycle context changed after OTP verification');
+    final route=_lifecyclePaths[pending.operation]!;
+    final changed=await gateway.execute(_operation(route,'POST'),
+      path:{'id':pending.entityId},body:{'otpChallengeId':pending.challengeId});
+    if(gateway.session.identityRevision!=rev)
+      throw FableApiException(409,'session_changed_discard_response');
+    return _unwrap(changed.data);
+  }
+
+  /// Preferred API for screens bound to a shared managed-entity store.
+  /// A late response from entity A is never rendered into entity B after a
+  /// same-login switch, even when the authenticated identity epoch is stable.
+  /// The Backend still authorizes each operation independently.
+  Future<Object?> executeUsingStore(FableManagedEntityStore store,
+      String operationId,{Map<String,dynamic>? path,
+        Map<String,dynamic>? query,Object? body}) async {
+    if(!store.isBoundToCredentials(gateway.session) ||
+       !store.isBoundToBackend(gateway.managedEntityBackendIdentity)) {
+      throw StateError('Selected entity store belongs to another Auth session or Backend');
+    }
+    final choice=store.selected;
+    if(choice is! FableManagedAccountSelection)
+      throw StateError('No Backend-confirmed Fable managed account selected');
+    final generation=store.selectionRevision;
+    Object? result;
+    try {
+      result=await executeInContext(choice,operationId,
+        path:path,query:query,body:body);
+    } on FableApiException catch(error) {
+      // A denial on an explicitly entity-scoped operation means this context
+      // must not remain selected. The Backend still decides the real access.
+      if(error.status==403 || error.code=='MANAGED_ACCOUNT_NOT_FOUND') store.clear();
+      rethrow;
+    }
+    if(!store.isBoundToCredentials(gateway.session) ||
+       generation!=store.selectionRevision ||
+       !identical(store.selected,choice)) {
+      throw FableApiException(409,'managed_entity_context_changed_discard_response');
+    }
+    return result;
+  }
+
+  /// Legacy explicit selection API. UI code should prefer executeUsingStore
+  /// so selection changes invalidate in-flight response consumption.
+  Future<Object?> executeInContext(FableManagedAccountSelection selected,
+    String operationId,{Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body}) async {
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw StateError('Managed entity selection belongs to a different login');
+    final response=await gateway.executeInManagedEntity(
+      operationId,selected.id,path:path,query:query,body:body);
+    if(gateway.session.identityRevision!=selected.identityRevision)
+      throw FableApiException(409,'session_changed_discard_response');
+    return response.data;
+  }
+}
+).hasMatch(code))
       throw ArgumentError('Invalid lifecycle OTP or backend operation');
     final rev=pending.identityRevision;
     if(gateway.session.identityRevision!=rev)
