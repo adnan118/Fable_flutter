@@ -156,6 +156,7 @@ export function managedAccessContextBindingGaps(root) {
   const accessRepo=source('packages/features/fable_access_control/lib/src/access_repository.dart');
   const managedRepo=source('packages/features/fable_profile/lib/src/managed_accounts_repository.dart');
   const managedPage=source('packages/features/fable_profile/lib/src/managed_accounts_page.dart');
+  const managedMembers=source('packages/features/fable_profile/lib/src/managed_members_page.dart');
   const checks=[
     ['APP_STORE_NAMESPACE',app.includes('FableManagedEntityStore(session:FableSecureSession(')],
     ['APP_STORE_BACKEND_PIN',app.includes('FableAuthGateway.managedEntityBackendIdentityFor(baseUri,contract)')],
@@ -168,6 +169,10 @@ export function managedAccessContextBindingGaps(root) {
     ['SCOPED_REPOSITORY_GUARD',managedRepo.includes('store.isBoundToBackend(gateway.managedEntityBackendIdentity)')],
     ['SCOPED_DENIAL_CLEAR',managedRepo.includes('error.status==403')&&managedRepo.includes('store.clear()')],
     ['MANAGED_ROLE_RESUME_REFRESH',managedPage.includes('WidgetsBindingObserver')&&managedPage.includes('AppLifecycleState.resumed')&&managedPage.includes('unawaited(_reload())')],
+    ['MEMBER_ROUTE_STORE',managedPage.includes('managedStore:FableManagedEntityScope.maybeOf(context)')],
+    ['MEMBER_PAGE_SELECTION_REVISION',managedMembers.includes('_openedSelectionRevision==store.selectionRevision')&&managedMembers.includes('identical(store.selected,widget.selection)')],
+    ['MEMBER_PAGE_CONFIRMATION_GUARD',managedMembers.includes('!_at(generation)||!_owner')&&managedMembers.includes('!_at(generation)||!_invitationAdmin')],
+    ['MEMBER_PAGE_RESUME_ROLE_REVALIDATION',managedMembers.includes('AppLifecycleState.resumed')&&managedMembers.includes('widget.repo.listMine()')&&managedMembers.includes('widget.managedStore?.clear()')],
     ['GLOBAL_PERMISSION_BOUNDARY',accessRepo.includes('Deliberately user-global')&&accessRepo.includes('gateway.execute(operationId)')],
   ];
   return checks.filter(([,ok])=>!ok).map(([code])=>code);
