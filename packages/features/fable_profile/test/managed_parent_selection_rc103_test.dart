@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -121,4 +122,45 @@ void main(){
     expect(find.text('Invite member'),findsNothing);
     expect(find.textContaining('Selected: '),findsNothing);
   });
+  testWidgets('RC103 late activate A cannot override a newer selection B',
+  (tester)async{
+    final session=_Session(),contract=_contract();
+    final pending=Completer<Response<dynamic>>();
+    final client=Dio();
+    client.interceptors.add(InterceptorsWrapper(onRequest:(r,h)async{
+      if(r.path=='/managed-entities/$entityA/activate'){
+        h.resolve(await pending.future);
+        return;
+      }
+      h.resolve(Response<dynamic>(requestOptions:r,statusCode:200,
+        data:r.path=='/managed-entities'?[_entity()]:[]));
+    }));
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://api.example.test'),
+      contract:contract,secureSession:session,client:client);
+    addTearDown(gateway.dispose);
+    final store=FableManagedEntityStore(session:session);
+    store.bindBackend(gateway.managedEntityBackendIdentity);
+    addTearDown(store.dispose);
+    await tester.pumpWidget(MaterialApp(home:FableManagedEntityScope(
+      store:store,child:FableManagedAccountsPage(gateway:gateway,contract:contract),
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Select'));
+    await tester.pump();
+    store.activate(const FableManagedEntitySelection(
+      id:entityB,access:'VIEWER',nameAr:'كيان ب',
+      nameEn:'Entity B',identityRevision:0,
+    ));
+    pending.complete(Response<dynamic>(
+      requestOptions:RequestOptions(path:'/managed-entities/$entityA/activate'),
+      statusCode:200,
+      data:{'managedEntityId':entityA,'access':'OWNER',
+        'header':{'name':'X-Fable-Managed-Entity-Id','value':entityA}},
+    ));
+    await tester.pumpAndSettle();
+    expect(store.selected?.id,entityB);
+    expect(find.textContaining('Selected: Entity A'),findsNothing);
+    expect(find.text('Invite member'),findsNothing);
+  });
+
 }
