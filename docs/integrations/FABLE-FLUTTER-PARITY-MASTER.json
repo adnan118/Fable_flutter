@@ -859,7 +859,9 @@
       "frontendEvidence": [
         "packages/features/fable_notifications/lib/src/inbox_page.dart",
         "packages/features/fable_notifications/lib/src/inbox_repository.dart",
-        "packages/features/fable_push_notifications/lib/src/push_device_registration.dart"
+        "packages/features/fable_push_notifications/lib/src/push_device_registration.dart",
+        "packages/features/fable_notifications/lib/src/notification_navigation.dart",
+        "packages/features/fable_notifications/test/notification_identity_navigation_rc108_test.dart"
       ],
       "sourceStatus": "source_and_selected_ui",
       "externalStatus": "not_proven",
@@ -869,7 +871,8 @@
       "gaps": [
         "welcome/privacy/device/failed-limit events والتحقق من Outbox/FCM على بيئة حية",
         "تسجيل وإبطال FCM عند تبديل الحساب والجهاز وسيناريو Foreground/Background/deep-link",
-        "اللغة/توقيت النشر/انتهاء الإشعار والعدد الصحيح وعدم التكرار"
+        "اللغة/توقيت النشر/انتهاء الإشعار والعدد الصحيح وعدم التكرار",
+        "RC108: فحص هوية تنقل الإشعارات قبل وبعد await مع محاكاة تغيّر الهوية؛ لم يُثبت E2E حقيقي على Firebase/APNs أو Backend/DB"
       ],
       "otherBackendContract": [
         "inbox list, read and signed navigation target semantics",
@@ -1278,5 +1281,5 @@
     }
   ],
   "crossCuttingDecisions": "docs/integrations/FABLE-BACKEND-WIDE-DECISIONS-RC81.json",
-  "latestSlice": "RC97 Auth source-closure: all 40 operations assigned to owners and source-evidenced: 31 Flutter Mobile, 7 separate Web cookie SDK, 2 separate Admin password-policy SDK. 0 real-provider/DB E2E accepted, 0/17 feature families production accepted. RC96 P2 managed invitations source and Flutter CI passed; Backend RC66 main unchanged. Backend Actions gate remains blocked, so Web/Admin mock tests run in Flutter CI mirror. RC106 source-only P2 scoped transport guard: recheck managed selection before HTTP dispatch/retries and after response; delayed 403 for old entity never clears newer selection. Simulated Dio tests; P6 real DB and device E2E still pending. RC107: pinned Fable-only managed operation Dart constants generated from reviewed contract with preview/apply and safe no-overwrite; duplicate local disable flags handled, verified via CI simulation. RC106 scoped transport guards preserved. Backend/device live E2E and per-feature DTO/Repository not accepted."
+  "latestSlice": "RC97 Auth source-closure: all 40 operations assigned to owners and source-evidenced: 31 Flutter Mobile, 7 separate Web cookie SDK, 2 separate Admin password-policy SDK. 0 real-provider/DB E2E accepted, 0/17 feature families production accepted. RC96 P2 managed invitations source and Flutter CI passed; Backend RC66 main unchanged. Backend Actions gate remains blocked, so Web/Admin mock tests run in Flutter CI mirror. RC106 source-only P2 scoped transport guard: recheck managed selection before HTTP dispatch/retries and after response; delayed 403 for old entity never clears newer selection. Simulated Dio tests; P6 real DB and device E2E still pending. RC107: pinned Fable-only managed operation Dart constants generated from reviewed contract with preview/apply and safe no-overwrite; duplicate local disable flags handled, verified via CI simulation. RC106 scoped transport guards preserved. Backend/device live E2E and per-feature DTO/Repository not accepted. RC108 P3 Notifications: source-only identity epoch pin for push/inbox navigation, old-login tap rejected across async Auth and route dispatch; simulated Flutter + source tests. Real FCM/APNs/backend/device E2E pending P6."
 }
