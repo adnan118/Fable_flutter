@@ -35,6 +35,7 @@ jobs:
           node --test test/rc106-pinned-managed-generator.test.mjs
           node --test test/rc108-notification-identity-audit.test.mjs
           node --test test/rc110-media-identity-audit.test.mjs
+          node --test test/rc111-media-widget-audit.test.mjs
           node --test test/web-admin-auth-client-rc97.test.mjs
           node --test test/feature-parity-master.test.mjs
           node --test test/backend-wide-decision-review.test.mjs
