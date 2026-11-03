@@ -1,3 +1,4 @@
+> **RC106 — حماية النقل بعد RC105 (2026-11-03):** يصير رفض 403 المتأخر لحساب A غير قادر على إلغاء اختيار B، ويرفض العميل إرسال Mutation مقيّدة إذا تغيّر الحساب أثناء انتظار الاعتمادات أو Retry. اختبارات المحاكاة لا تغلق P6. [الدليل](./FABLE-P2-SCOPED-TRANSPORT-RACE-RC106.ar.md).
 # السجل الرئيسي الثابت — مطابقة Fable Backend ↔ Flutter ↔ Wizard ↔ Other Backend
 
 > **RC105 — الربط الصريح لعمليات المشروع ضمن الحساب المُدار (2026-11-03):** أُضيف `FableManagedScopedOperation` المستند حصراً إلى عقد Fable المصدَّر (operationId/method/path/contractHash)، و`executeBoundInStore` للتحقق من المخزن الجاري وإسقاط الردود المتأخرة عند تغيّر الكيان. في تدقيق Wizard، لا يكفي وجود حزمة Flutter أو اسم عملية؛ يجب أن يكون `managedEntityScope:true` اختياراً صريحاً مع دليل مصدر واختبار وعملية مطابقة، ولا يُورَّث هذا الاختيار إلى Other Backend أو Web/Admin. **لا يُنشئ RC105 مستودعات الميزات المخصصة تلقائياً، ولا يُثبت E2E حيّاً.** [دليل RC105](./FABLE-P2-SCOPED-FEATURE-BINDING-RC105.ar.md).

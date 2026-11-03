@@ -73,7 +73,12 @@ class UnifiedApiClient implements BackendApiGateway {
   int? _refreshingIdentity;
   Future<Response<dynamic>> request(String operationId,{Map<String,dynamic>? path,
     Map<String,dynamic>? query,Object? body,bool? authorized,CancelToken? cancelToken,
-    String? ifMatch,String? securityChallengeId,String? managedEntityId}) async {
+    String? ifMatch,String? securityChallengeId,String? managedEntityId,
+    bool Function()? contextStillValid}) async {
+    // Entity-scoped operations must fail before any network dispatch if the
+    // selected entity changes while obtaining credentials or retrying.
+    if(contextStillValid!=null&&managedEntityId==null)
+      throw ArgumentError('Context guard requires an explicit managed entity');
     final op=contract.require(operationId);
     // A quote revision must come from an immediately preceding authoritative
     // server GET; never let shared cache/ARB supply a payment precondition.
@@ -174,7 +179,8 @@ class UnifiedApiClient implements BackendApiGateway {
       throw FableApiException(409, 'session_changed_discard_response');
     }
     final response=await _send(op,endpoint,headers,query,body,cancelToken,
-      expectedIdentity: useAuthorization ? requestIdentity : null);
+      expectedIdentity: useAuthorization ? requestIdentity : null,
+      contextStillValid:contextStillValid);
     // Discard in-flight responses for a previous account, including successes.
     if (useAuthorization && op.credentialHeader == null &&
         session.identityRevision != requestIdentity) {
@@ -200,7 +206,7 @@ class UnifiedApiClient implements BackendApiGateway {
         throw FableApiException(0, 'request_cancelled');
       }
       return _checked(await _send(op,endpoint,headers,query,body,cancelToken,
-        expectedIdentity: requestIdentity));
+        expectedIdentity: requestIdentity,contextStillValid:contextStillValid));
     }
 
     if (adapter.sessionMode != BackendSessionMode.rotatingBearer || refreshSession == null) {
@@ -272,7 +278,7 @@ class UnifiedApiClient implements BackendApiGateway {
     }
     headers['Authorization']='Bearer $fresh';
     final retried=await _send(op,endpoint,headers,query,body,cancelToken,
-      expectedIdentity: requestIdentity);
+      expectedIdentity: requestIdentity,contextStillValid:contextStillValid);
     if (session.identityRevision != requestIdentity) {
       throw FableApiException(409, 'session_changed_discard_response');
     }
@@ -288,9 +294,14 @@ class UnifiedApiClient implements BackendApiGateway {
   }
   Future<Response<dynamic>> _send(FableOperation op,String endpoint,Map<String,String> headers,
       Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,
-      {int? expectedIdentity}) async {
+      {int? expectedIdentity,bool Function()? contextStillValid}) async {
     final safeRead = retryPolicy.canRetryMethod(op.method);
+    void rejectChangedContext(){
+      if(contextStillValid!=null&&!contextStillValid())
+        throw FableApiException(409,'managed_entity_context_changed_discard_response');
+    }
     for (var attempt = 0;; attempt++) {
+      rejectChangedContext();
       if (expectedIdentity != null && session.identityRevision != expectedIdentity) {
         throw FableApiException(409, 'session_changed_discard_response');
       }
@@ -305,6 +316,7 @@ class UnifiedApiClient implements BackendApiGateway {
             validateStatus: (status) => status != null && status < 500),
           queryParameters: query, data: body, cancelToken: cancelToken,
         );
+        rejectChangedContext();
         if (safeRead && attempt < retryPolicy.maxReadRetries &&
             retryPolicy.retryableStatus(response.statusCode ?? 0)) {
           final delay = retryPolicy.backoff(attempt,
@@ -316,6 +328,7 @@ class UnifiedApiClient implements BackendApiGateway {
         }
         return response;
       } on DioException catch (error) {
+        rejectChangedContext();
         final status = error.response?.statusCode ?? 0;
         if (safeRead && attempt < retryPolicy.maxReadRetries &&
             (retryPolicy.retryableTransport(error) ||
