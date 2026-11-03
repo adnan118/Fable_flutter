@@ -138,6 +138,23 @@ export function generatePinnedManagedScopedOperations(root,{
       selected.push(typeof feature==='string'?feature:feature?.id);
     }
   }
+  // Frontend-owned decisions may disable a package even if it still appears
+  // in a previously imported source inventory. Never regenerate its scope.
+  const localChoices=join(root,'.fable','frontend-owned-decisions.json');
+  if(existsSync(localChoices)){
+    const owned=readJson(localChoices);
+    if(owned.kind!=='fable.flutter-owned-decisions' ||
+       !owned.choices || typeof owned.choices!=='object')
+      throw Error('Malformed local feature decisions');
+    for(const [name,choice] of Object.entries(owned.choices)){
+      if(choice?.enabled===false){
+        const index=selected.indexOf(name);
+        if(index>=0)selected.splice(index,1);
+      }else if(choice?.enabled===true&&!selected.includes(name)){
+        selected.push(name);
+      }
+    }
+  }
   const operations=planManagedScopedOperations(contract,required,[...new Set(selected)]);
   const output=join(root,OUTPUT);
   if(apply){
