@@ -175,16 +175,51 @@ class CloudflareR2PartTransport implements MediaPresignedPartTransport {
   @override void dispose() => _dio.close(force:true);
 }
 
+/// One upload is bound to one authenticated identity, even during async file
+/// hashing, presigned R2 PUTs and server-confirmed resume/complete.
+class _MediaSessionFence {
+  const _MediaSessionFence(this.epoch,this.current,this.cancelToken);
+  final int epoch;
+  final bool Function(int) current;
+  final CancelToken? cancelToken;
+  void check(){
+    if(cancelToken?.isCancelled??false)throw StateError('Media upload cancelled');
+    if(!current(epoch))throw StateError('Media session changed; discard stale upload');
+  }
+}
+
 /// Resumes from SERVER-confirmed bytes/parts. Never assumes client-sent bytes
 /// were committed. A failed mutation is NOT automatically replayed by Core.
 class MediaUploadRepository {
   MediaUploadRepository({required this.gateway, required OperationCatalog catalog,
-    required this.bindings, this.partTransport}) {
+    required this.bindings, this.partTransport,
+    int Function()? identityRevision,bool Function()? isSessionCurrent})
+      : _identityRevision=gateway is FableAuthGateway
+          ? ()=>(gateway as FableAuthGateway).session.identityRevision
+          : identityRevision ?? (()=>throw StateError('Other Backend Auth epoch required')),
+        _isSessionCurrent=isSessionCurrent ?? (()=>gateway is FableAuthGateway) {
     bindings.verify(catalog);
+    if(gateway is FableAuthGateway && identityRevision!=null){
+      throw ArgumentError('Fable media must use Fable secure-session epoch');
+    }
+    if(gateway is! FableAuthGateway && (identityRevision==null||isSessionCurrent==null)){
+      throw ArgumentError('Other Backend media requires verified session epoch and active-session check');
+    }
   }
   final BackendApiGateway gateway;
   final MediaUploadBindings bindings;
   final MediaPresignedPartTransport? partTransport;
+  final int Function() _identityRevision;
+  final bool Function() _isSessionCurrent;
+  _MediaSessionFence _fence(CancelToken? token)=>_MediaSessionFence(
+    _identityRevision(),(epoch)=>_isSessionCurrent()&&_identityRevision()==epoch,token);
+  Future<Response<dynamic>> _execute(_MediaSessionFence scope,String id,
+      {Map<String,dynamic>? path,Object? body}) async {
+    scope.check();
+    final response=await gateway.execute(id,path:path,body:body,cancelToken:scope.cancelToken);
+    scope.check();
+    return response;
+  }
 
   static Map<String, dynamic> _body(Object? raw) {
     if (raw is! Map) throw const FormatException('Invalid backend media response');
@@ -231,16 +266,23 @@ class MediaUploadRepository {
   }
   Future<Map<String,dynamic>> prepare(File file, {
     required String kind,required String mimeType,
+    String? purpose,String visibility='PRIVATE',CancelToken? cancelToken})=>
+      _prepare(file,kind:kind,mimeType:mimeType,purpose:purpose,
+        visibility:visibility,scope:_fence(cancelToken));
+  Future<Map<String,dynamic>> _prepare(File file, {
+    required String kind,required String mimeType,required _MediaSessionFence scope,
     String? purpose,String visibility='PRIVATE'}) async {
+    scope.check();
     if (!const {'IMAGE','VIDEO','AUDIO','DOCUMENT'}.contains(kind) ||
         !const {'PUBLIC','PRIVATE'}.contains(visibility) ||
         mimeType.isEmpty || mimeType.length > 180 ||
         purpose != null && purpose.length > 80) throw ArgumentError('Invalid media metadata');
     final size=await file.length();
+    scope.check();
     if (size <= 0) throw ArgumentError('Cannot upload an empty file');
     final name=file.uri.pathSegments.last;
     if (name.isEmpty || name.length>255) throw ArgumentError('Invalid media file name');
-    final response=await gateway.execute(bindings.prepare,body:{
+    final response=await _execute(scope,bindings.prepare,body:{
       'kind':kind,'mimeType':mimeType,'originalName':name,'sizeBytes':size,
       'visibility':visibility,if(purpose!=null)'purpose':purpose,
     });
@@ -251,18 +293,24 @@ class MediaUploadRepository {
     _progress(state,size);
     return state;
   }
-  Future<Map<String,dynamic>> status(String sessionId) async =>
-      _body((await gateway.execute(bindings.status,path:{'id':_id(sessionId)})).data);
-  Future<Map<String,dynamic>> abort(String sessionId) async =>
-      _body((await gateway.execute(bindings.abort,path:{'id':_id(sessionId)})).data);
+  Future<Map<String,dynamic>> status(String sessionId,{CancelToken? cancelToken})=>
+      _status(sessionId,_fence(cancelToken));
+  Future<Map<String,dynamic>> _status(String sessionId,_MediaSessionFence scope)async=>
+      _body((await _execute(scope,bindings.status,path:{'id':_id(sessionId)})).data);
+  Future<Map<String,dynamic>> abort(String sessionId,{CancelToken? cancelToken})=>
+      _abort(sessionId,_fence(cancelToken));
+  Future<Map<String,dynamic>> _abort(String sessionId,_MediaSessionFence scope)async=>
+      _body((await _execute(scope,bindings.abort,path:{'id':_id(sessionId)})).data);
   /// A user-initiated cancellation must durably stop any pending domain publish
   /// BEFORE contacting the backend, even if the DELETE request then fails.
   Future<Map<String,dynamic>> cancel(String sessionId, {
     required Future<void> Function(String sessionId) persistCancelIntent,
   }) async {
     _id(sessionId);
+    final scope=_fence(null);
     await persistCancelIntent(sessionId);
-    return abort(sessionId);
+    scope.check(); // Never send A's DELETE under a later B login.
+    return _abort(sessionId,scope);
   }
 
   /// On restart the caller supplies a securely stored checkpoint scoped to
@@ -271,29 +319,40 @@ class MediaUploadRepository {
       String? purpose, String visibility='PRIVATE',
       required Future<void> Function(MediaUploadCheckpoint) saveCheckpoint,
       void Function(MediaUploadProgress)? onProgress, CancelToken? cancelToken}) async {
-    final prepared=await prepare(file,kind:kind,mimeType:mimeType,
-      purpose:purpose,visibility:visibility);
+    final scope=_fence(cancelToken);
+    final prepared=await _prepare(file,kind:kind,mimeType:mimeType,
+      purpose:purpose,visibility:visibility,scope:scope);
+    scope.check();
+    final digest=await MediaUploadCheckpoint.sha256ForFile(file);
+    scope.check();
+    final size=await file.length();
+    scope.check();
     final checkpoint=MediaUploadCheckpoint(
-      sessionId:prepared['id'] as String,
-      sha256:await MediaUploadCheckpoint.sha256ForFile(file),
-      sizeBytes:await file.length());
-    // Persist checkpoint before uploading a single chunk/part.
+      sessionId:prepared['id'] as String,sha256:digest,sizeBytes:size);
+    // An old session must never publish a new checkpoint after identity switch.
     await saveCheckpoint(checkpoint);
-    return _transfer(file,checkpoint.sessionId,onProgress:onProgress,cancelToken:cancelToken);
+    scope.check();
+    return _transfer(file,checkpoint.sessionId,scope,onProgress:onProgress);
   }
   Future<Map<String,dynamic>> resume(File file, MediaUploadCheckpoint checkpoint,
       {void Function(MediaUploadProgress)? onProgress,CancelToken? cancelToken}) async {
+    final scope=_fence(cancelToken);
     await checkpoint.verify(file);
-    return _transfer(file,checkpoint.sessionId,onProgress:onProgress,cancelToken:cancelToken);
+    scope.check(); // The file may take minutes to hash.
+    return _transfer(file,checkpoint.sessionId,scope,onProgress:onProgress);
   }
   Future<Map<String,dynamic>> _transfer(File file,String sessionId,
-      {void Function(MediaUploadProgress)? onProgress,CancelToken? cancelToken}) async {
+      _MediaSessionFence scope,
+      {void Function(MediaUploadProgress)? onProgress}) async {
     _id(sessionId);
+    scope.check();
     final length=await file.length();
-    var state=await status(sessionId);
+    scope.check();
+    var state=await _status(sessionId,scope);
     _fileMatches(state,length);
     final strategy=_strategy(state);
     final initial=_progress(state,length);
+    scope.check();
     onProgress?.call(initial);
     if (state['status']=='COMPLETED') return state;
     if (state['status']=='ABORTED' || state['status']=='EXPIRED') throw StateError('Upload session expired or was cancelled');
@@ -303,17 +362,18 @@ class MediaUploadRepository {
       final chunkSize=_integer(upload['chunkSizeBytes'],'chunkSizeBytes');
       if (chunkSize<1 || chunkSize>32*1024*1024 || offset>length) throw const FormatException('Invalid local chunk contract');
       while(offset<length){
-        if(cancelToken?.isCancelled??false) throw StateError('Upload cancelled');
+        scope.check();
         final next=(offset+chunkSize>length)?length:offset+chunkSize;
         final binary=MultipartFile.fromStream(()=>file.openRead(offset,next),next-offset,filename:'chunk');
         final form=FormData.fromMap({'offset':offset.toString(),'chunk':binary});
         // Do not replay a failed write: ask GET status on the NEXT explicit resume.
-        final reply=await gateway.execute(bindings.chunk,path:{'id':sessionId},body:form,cancelToken:cancelToken);
+        final reply=await _execute(scope,bindings.chunk,path:{'id':sessionId},body:form);
         state=_body(reply.data);
         _fileMatches(state,length);
         final confirmed=_integer(state['nextOffsetBytes'],'nextOffsetBytes');
         if(confirmed<=offset || confirmed>next) throw const FormatException('Server offset did not advance consistently');
         offset=confirmed;
+        scope.check();
         onProgress?.call(_progress(state,length));
       }
     }else{
@@ -338,9 +398,9 @@ class MediaUploadRepository {
       }
       for(var n=1;n<=count;n++){
         if(confirmed.contains(n))continue;
-        if(cancelToken?.isCancelled??false) throw StateError('Upload cancelled');
-        final signed=_body((await gateway.execute(bindings.partUrl,
-          path:{'id':sessionId,'partNumber':n},cancelToken:cancelToken)).data);
+        scope.check();
+        final signed=_body((await _execute(scope,bindings.partUrl,
+          path:{'id':sessionId,'partNumber':n})).data);
         final address=signed['url'];
         if(address is! String || address.length>8192) throw const FormatException('Invalid presigned PUT URL');
         final start=(n-1)*partSize;
@@ -348,17 +408,21 @@ class MediaUploadRepository {
         if(_integer(signed['expectedSizeBytes'],'expectedSizeBytes')!=end-start) throw const FormatException('Presigned part size differs');
         final url=Uri.tryParse(address);
         if(url==null) throw const FormatException('Invalid signed upload URL');
-        final etag=await putter.putPart(url,file,start,end,cancelToken:cancelToken);
-        state=_body((await gateway.execute(bindings.partAck,
+        scope.check();
+        final etag=await putter.putPart(url,file,start,end,cancelToken:scope.cancelToken);
+        scope.check(); // Never ACK a part completed after account replacement.
+        state=_body((await _execute(scope,bindings.partAck,
           path:{'id':sessionId,'partNumber':n},
-          body:{'etag':etag,'sizeBytes':end-start},cancelToken:cancelToken)).data);
+          body:{'etag':etag,'sizeBytes':end-start})).data);
+        scope.check();
         onProgress?.call(_progress(state,length));
       }
     }
     // Finalize only after all bytes/parts were acknowledged by the server.
-    state=await status(sessionId);
-    if(_progress(state,length).uploadedBytes!=length) throw StateError('Upload not fully acknowledged by server');
-    return _body((await gateway.execute(bindings.complete,
-        path:{'id':sessionId},body:{'parts':<Object>[]},cancelToken:cancelToken)).data);
+    state=await _status(sessionId,scope);
+    scope.check();
+    if(_progress(state,length).uploadedBytes!=length)throw StateError('Upload not fully acknowledged by server');
+    return _body((await _execute(scope,bindings.complete,
+        path:{'id':sessionId},body:{'parts':<Object>[]})).data);
   }
 }
