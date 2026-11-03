@@ -157,6 +157,9 @@ export function managedAccessContextBindingGaps(root) {
   const managedRepo=source('packages/features/fable_profile/lib/src/managed_accounts_repository.dart');
   const managedPage=source('packages/features/fable_profile/lib/src/managed_accounts_page.dart');
   const managedMembers=source('packages/features/fable_profile/lib/src/managed_members_page.dart');
+  const executor=source('packages/fable_core/lib/src/fable_managed_entity_executor.dart');
+  const core=source('packages/fable_core/lib/fable_core.dart');
+  const transport=source('packages/fable_core/lib/src/fable_api.dart');
   const checks=[
     ['APP_STORE_NAMESPACE',app.includes('FableManagedEntityStore(session:FableSecureSession(')],
     ['APP_STORE_BACKEND_PIN',app.includes('FableAuthGateway.managedEntityBackendIdentityFor(baseUri,contract)')],
@@ -178,6 +181,10 @@ export function managedAccessContextBindingGaps(root) {
     ['MEMBER_PAGE_CONFIRMATION_GUARD',managedMembers.includes('!_at(generation)||!_owner')&&managedMembers.includes('!_at(generation)||!_invitationAdmin')],
     ['MEMBER_PAGE_RESUME_ROLE_REVALIDATION',managedMembers.includes('AppLifecycleState.resumed')&&managedMembers.includes('widget.repo.listMine()')&&managedMembers.includes('widget.managedStore?.clear()')],
     ['GLOBAL_PERMISSION_BOUNDARY',accessRepo.includes('Deliberately user-global')&&accessRepo.includes('gateway.execute(operationId)')],
+    ['SCOPED_EXECUTOR_EXPORTED',core.includes("export 'src/fable_managed_entity_executor.dart'")&&executor.includes('class FableManagedEntityExecutor')],
+    ['SCOPED_EXECUTOR_REVISION_GUARD',executor.includes('store.selectionRevision==revision')&&executor.includes('identical(store.selected,selection)')&&executor.includes('contextStillValid:valid')],
+    ['SCOPED_TRANSPORT_GUARD',transport.includes('rejectChangedContext();')&&transport.includes('contextStillValid:contextStillValid')&&auth.includes('contextStillValid:contextStillValid')],
+    ['SCOPED_PROFILE_REUSE',managedRepo.includes('FableManagedEntityExecutor(gateway,store).execute(')],
   ];
   return checks.filter(([,ok])=>!ok).map(([code])=>code);
 }
@@ -319,6 +326,26 @@ function auditOne(root,feature,backend,master,external,explicit,selectedIds=[]){
         add('OPERATION_EVIDENCE_MISSING',id+' → '+key,
           'قدّم دليلاً موثقاً للحقل '+key+' (لا يكفي اسم operationId)',id);
       }
+    }
+    // Entity-scoped requests are explicitly opted in per imported Fable
+    // operation. Do not infer scoping from a URL, feature name, or Other Backend.
+    if(op.managedEntityScoped===true){
+      if(backend.kind!=='fable'){
+        add('FABLE_SCOPE_NOT_APPLICABLE_TO_OTHER_BACKEND',id,
+          'لا تطبق ترويسة حساب Fable على Backend آخر؛ استخدم عقده المستقل',id);
+      }else{
+        const file=present(op.frontendFile)&&checkedFile(root,op.frontendFile)
+          ?readFileSync(safePath(root,op.frontendFile),'utf8'):'';
+        if(!file.includes('FableManagedEntityExecutor(')&&
+           !file.includes('executeUsingStore(')){
+          add('MANAGED_SCOPED_EXECUTOR_NOT_USED',id,
+            'اربط عملية الكيان المثبتة بمُنفذ FableManagedEntityExecutor مع اختبار تبديل السياق',id);
+        }
+      }
+    }else if(op.managedEntityScoped!==undefined&&
+             typeof op.managedEntityScoped!=='boolean'){
+      add('MANAGED_SCOPING_DECLARATION_INVALID',id,
+        'حدد managedEntityScoped كقيمة boolean موثقة لكل عملية',id);
     }
     for(const key of ['frontendFile','testFile']){
       if(present(op[key])&&!checkedFile(root,op[key]))
