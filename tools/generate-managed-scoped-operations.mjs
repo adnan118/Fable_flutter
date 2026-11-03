@@ -118,30 +118,8 @@ export function writeManagedScopedOutput(output,content){
   return true;
 }
 
-export function generatePinnedManagedScopedOperations(root,{
-  expectedProjectId,expectedContractHash,apply=false,
-}={}){
+export function collectManagedSelectedFeatures(root){
   root=resolve(root);
-  if(typeof expectedProjectId!=='string'||!expectedProjectId||
-     !HASH.test(expectedContractHash))
-    throw Error('Independent project ID and SHA-256 contract pin required');
-  const setupPath=join(root,PROJECT_SETUP),requirementsPath=join(root,REQUIREMENTS);
-  if(!existsSync(setupPath)||!existsSync(requirementsPath))
-    throw Error('Approved frontend setup and explicit scoped operation requirements required');
-  const setup=readJson(setupPath);
-  if(setup.kind!=='fable.flutter-frontend-setup'||
-     setup.source!=='backend-contract-export'||setup.mode!=='import'||
-     setup.backendAuthority!==true||setup.projectBound!==true||
-     setup.projectId!==expectedProjectId||
-     setup.contractHash!==expectedContractHash)
-    throw Error('Frontend project not independently pinned to active Fable Backend');
-  const verification=verifyFableContract(root,{
-    mode:'project',expectedProjectId,expectedContractHash,
-  });
-  if(!verification.ok||!verification.projectBound||verification.fixture)
-    throw Error('Cannot generate bindings from unverified or fixture Fable Backend');
-  const contract=readJson(join(root,SOURCE));
-  const required=readJson(requirementsPath);
   const selectionPath=join(root,'.fable','mobile-features.json');
   const customPath=join(root,'.fable','project-features.json');
   const selected=new Set();
@@ -177,7 +155,35 @@ export function generatePinnedManagedScopedOperations(root,{
       }
     }
   }
-  const operations=planManagedScopedOperations(contract,required,[...selected]);
+  return [...selected];
+}
+
+export function generatePinnedManagedScopedOperations(root,{
+  expectedProjectId,expectedContractHash,apply=false,
+}={}){
+  root=resolve(root);
+  if(typeof expectedProjectId!=='string'||!expectedProjectId||
+     !HASH.test(expectedContractHash))
+    throw Error('Independent project ID and SHA-256 contract pin required');
+  const setupPath=join(root,PROJECT_SETUP),requirementsPath=join(root,REQUIREMENTS);
+  if(!existsSync(setupPath)||!existsSync(requirementsPath))
+    throw Error('Approved frontend setup and explicit scoped operation requirements required');
+  const setup=readJson(setupPath);
+  if(setup.kind!=='fable.flutter-frontend-setup'||
+     setup.source!=='backend-contract-export'||setup.mode!=='import'||
+     setup.backendAuthority!==true||setup.projectBound!==true||
+     setup.projectId!==expectedProjectId||
+     setup.contractHash!==expectedContractHash)
+    throw Error('Frontend project not independently pinned to active Fable Backend');
+  const verification=verifyFableContract(root,{
+    mode:'project',expectedProjectId,expectedContractHash,
+  });
+  if(!verification.ok||!verification.projectBound||verification.fixture)
+    throw Error('Cannot generate bindings from unverified or fixture Fable Backend');
+  const contract=readJson(join(root,SOURCE));
+  const required=readJson(requirementsPath);
+  const operations=planManagedScopedOperations(contract,required,
+    collectManagedSelectedFeatures(root));
   const output=join(root,OUTPUT);
   if(apply){
     // Never overwrite a manually edited/stale generated file silently.
