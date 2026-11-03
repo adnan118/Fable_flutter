@@ -125,9 +125,15 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     final epoch=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;_selected=null;});
     _clearManagedSelection();
+    final storeAtRequest=_managedStore;
+    final contextEpoch=storeAtRequest?.selectionRevision;
     try{
       final selected=await _repo.activate(entity);
-      if(!mounted||epoch!=widget.gateway.session.identityRevision)return;
+      if(!mounted||epoch!=widget.gateway.session.identityRevision ||
+         !identical(_managedStore,storeAtRequest) ||
+         (storeAtRequest!=null&&storeAtRequest.selectionRevision!=contextEpoch)){
+        return; // A different route selected an entity while activation waited.
+      }
       setState(()=>_selected=selected);
       final store=_managedStore;
       if(store!=null){
