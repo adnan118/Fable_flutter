@@ -9,13 +9,13 @@ const _tokenB='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const _tokenC='cccccccccccccccccccccccccccccccc';
 
 FableContract _contract()=>FableContract(
-  contractHash:'a'*64,
+  contractHash:List.filled(64,'a').join(),
   operations:{
-    'push.device.register':const FableOperation(
-      'push.device.register','POST','/push/devices','b'*64,
+    'push.device.register':FableOperation(
+      'push.device.register','POST','/push/devices',List.filled(64,'b').join(),
       requiresAuth:true,enforceAuth:true),
-    'push.device.unregister':const FableOperation(
-      'push.device.unregister','DELETE','/push/devices','b'*64,
+    'push.device.unregister':FableOperation(
+      'push.device.unregister','DELETE','/push/devices',List.filled(64,'b').join(),
       requiresAuth:true,enforceAuth:true),
   },
   featureIds:const <String>{'notifications'},
@@ -123,7 +123,7 @@ void main(){
       h.native.permissionGate!.complete(true);
       expect(await registering,false);
       expect(h.gateway.calls,isEmpty);
-      await h.service.dispose();
+      await Future<void>.delayed(Duration.zero);
       expect(h.native.deletes,greaterThanOrEqualTo(1));
     }finally{await h.close();}
   });
