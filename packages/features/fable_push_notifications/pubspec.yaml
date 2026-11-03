@@ -14,5 +14,6 @@ dependencies:
   fable_notifications:
     path: ../fable_notifications
 dev_dependencies:
+  dio: ^5.9.0
   flutter_test:
     sdk: flutter
