@@ -685,19 +685,23 @@ class FableManagedAccountsRepository {
     if(choice is! FableManagedAccountSelection)
       throw StateError('No Backend-confirmed Fable managed account selected');
     final generation=store.selectionRevision;
+    bool sameContext()=>store.isBoundToCredentials(gateway.session)&&
+      store.isBoundToBackend(gateway.managedEntityBackendIdentity)&&
+      gateway.session.identityRevision==choice.identityRevision&&
+      store.selectionRevision==generation&&identical(store.selected,choice);
     Object? result;
     try {
       result=await executeInContext(choice,operationId,
-        path:path,query:query,body:body);
+        path:path,query:query,body:body,contextStillValid:sameContext);
     } on FableApiException catch(error) {
-      // A denial on an explicitly entity-scoped operation means this context
-      // must not remain selected. The Backend still decides the real access.
-      if(error.status==403 || error.code=='MANAGED_ACCOUNT_NOT_FOUND') store.clear();
+      // رد رفض متأخر من A لا يمسح سياق B؛ لا نستنتج صلاحية من Flutter.
+      if(!sameContext()) {
+        throw FableApiException(409,'managed_entity_context_changed_discard_response');
+      }
+      if(error.status==403 || error.code=='MANAGED_ACCOUNT_NOT_FOUND')store.clear();
       rethrow;
     }
-    if(!store.isBoundToCredentials(gateway.session) ||
-       generation!=store.selectionRevision ||
-       !identical(store.selected,choice)) {
+    if(!sameContext()){
       throw FableApiException(409,'managed_entity_context_changed_discard_response');
     }
     return result;
@@ -706,11 +710,15 @@ class FableManagedAccountsRepository {
   /// Legacy explicit selection API. UI code should prefer executeUsingStore
   /// so selection changes invalidate in-flight response consumption.
   Future<Object?> executeInContext(FableManagedAccountSelection selected,
-    String operationId,{Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body}) async {
+    String operationId,{Map<String,dynamic>? path,Map<String,dynamic>? query,
+      Object? body,bool Function()? contextStillValid}) async {
+    if(contextStillValid!=null&&!contextStillValid())
+      throw FableApiException(409,'managed_entity_context_changed_discard_response');
     if(gateway.session.identityRevision!=selected.identityRevision)
       throw StateError('Managed entity selection belongs to a different login');
     final response=await gateway.executeInManagedEntity(
-      operationId,selected.id,path:path,query:query,body:body);
+      operationId,selected.id,path:path,query:query,body:body,
+      contextStillValid:contextStillValid);
     if(gateway.session.identityRevision!=selected.identityRevision)
       throw FableApiException(409,'session_changed_discard_response');
     return response.data;
