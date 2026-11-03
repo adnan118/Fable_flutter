@@ -22,6 +22,8 @@ test('Wizard audit fails closed when the shared managed context wiring is absent
     assert.ok(gaps.includes('MEMBER_PAGE_SELECTION_REVISION'));
     assert.ok(gaps.includes('MEMBER_PAGE_CONFIRMATION_GUARD'));
     assert.ok(gaps.includes('MEMBER_PAGE_RESUME_ROLE_REVALIDATION'));
-    assert.equal(gaps.length,16);
+    assert.ok(gaps.includes('MANAGED_PARENT_SCOPE_GUARD'));
+    assert.ok(gaps.includes('MANAGED_PARENT_INVITE_GUARD'));
+    assert.equal(gaps.length,18);
   }finally{rmSync(root,{recursive:true,force:true});}
 });
