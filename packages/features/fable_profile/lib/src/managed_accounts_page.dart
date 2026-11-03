@@ -50,9 +50,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
   }
   void _clearManagedSelection(){
     _managedStore?.clear();
-    widget.onCleared?.call();
-  }
-  @override void didChangeDependencies(){
+    widget.onCleared?.call();ependencies(){
     super.didChangeDependencies();
     final incoming=FableManagedEntityScope.maybeOf(context);
     if(identical(incoming,_managedStore))return;
@@ -192,7 +190,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           collaborationEnabled:collaboration,managersCanInvite:managerInvites);
         if(mounted&&rev==widget.gateway.session.identityRevision){
           setState(()=>_selected=null);
-          widget.onCleared?.call();
+          _clearManagedSelection();
           await _reloadAfterMutation();
         }
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
@@ -311,7 +309,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           managersCanInvite:invite,slug:slug.text);
         if(!mounted||rev!=widget.gateway.session.identityRevision)return;
         setState(()=>_selected=null);
-        widget.onCleared?.call();
+        _clearManagedSelection();
         await _reloadAfterMutation();
       }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message=_ar?'لم يؤكد الباك هذا التعديل؛ حدّث القائمة.':
@@ -439,7 +437,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         _message=_ar?'أكد الخادم العملية، وتم تحديث وضع الكيان.'
           :'Backend confirmed the lifecycle action.';
       });
-      widget.onCleared?.call();
+      _clearManagedSelection();
       await _reloadAfterMutation();
     }catch(_){
       if(mounted&&rev==widget.gateway.session.identityRevision){
