@@ -441,7 +441,8 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
               icon:const Icon(Icons.groups_outlined),
               onPressed:_busy?null:()=>Navigator.of(context).push(
                 MaterialPageRoute<void>(builder:(_)=>FableManagedMembersPage(
-                  repo:_repo,entity:entity,selection:_selected!))),
+                  repo:_repo,entity:entity,selection:_selected!,
+                  managedStore:FableManagedEntityScope.maybeOf(context)))),
               label:Text(ar?'الأعضاء والدعوات المرسلة':'Members and sent invitations')),
           if(entity.status=='ACTIVE'&&_repo.canReadDetails)
             TextButton.icon(icon:const Icon(Icons.info_outline),
