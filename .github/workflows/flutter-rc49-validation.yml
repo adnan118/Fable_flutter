@@ -41,6 +41,7 @@ jobs:
           node tools/verify-cross-repo-source-pair.mjs
           node --test test/offline-sync-wizard-rc89.test.mjs
           node --test test/selected-feature-integration-rc90.test.mjs
+          node --test test/managed-scoped-wizard-rc105.test.mjs
           # CI starter is not production-backed: show all gaps but do not
           # claim missing integration was verified or block builds of fixtures.
           node tools/audit-selected-feature-integration.mjs
