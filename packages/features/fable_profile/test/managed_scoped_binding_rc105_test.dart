@@ -65,6 +65,17 @@ class _Wire {
   }
 }
 
+class _BlockedSession extends _Session {
+  _BlockedSession():super('rc106.blocked');
+  final requested=Completer<void>();
+  final release=Completer<void>();
+  @override Future<String?> get accessToken async {
+    if(!requested.isCompleted)requested.complete();
+    await release.future;
+    return 'mock-token';
+  }
+}
+
 void main(){
   test('RC105 rejects unknown, stale, public, Auth, Admin or global permission binding',(){
     final contract=_contract();
@@ -138,4 +149,64 @@ void main(){
     await expectLater(repo.executeBoundInStore(store,scoped),throwsStateError);
     expect(wire.seen,isEmpty);
   });
+  test('RC106 delayed 403 for A never clears newly selected B',()async{
+    final session=_Session('rc106.stale-403'),catalog=_contract(),wire=_Wire();
+    final gateway=FableAuthGateway(baseUri:Uri.parse(backendUri),
+      contract:catalog,secureSession:session,client:wire.dio);
+    addTearDown(gateway.dispose);
+    final store=FableManagedEntityStore(session:session);
+    addTearDown(store.dispose);
+    store.bindBackend(gateway.managedEntityBackendIdentity);
+    store.activate(_selection(a));
+    final pending=FableManagedAccountsRepository(gateway,catalog)
+      .executeBoundInStore(store,scoped);
+    await wire.expectCount(1);
+    store.activate(_selection(b));
+    wire.complete(0,{'errorCode':'ACCESS_DENIED'},statusCode:403);
+    await expectLater(pending,throwsA(isA<FableApiException>().having(
+      (error)=>error.code,'code','managed_entity_context_changed_discard_response')));
+    expect(store.selected?.id,b);
+  });
+
+  test('RC106 authoritative 403 on active entity clears its own selection',()async{
+    final session=_Session('rc106.current-403'),catalog=_contract(),wire=_Wire();
+    final gateway=FableAuthGateway(baseUri:Uri.parse(backendUri),
+      contract:catalog,secureSession:session,client:wire.dio);
+    addTearDown(gateway.dispose);
+    final store=FableManagedEntityStore(session:session);
+    addTearDown(store.dispose);
+    store.bindBackend(gateway.managedEntityBackendIdentity);
+    store.activate(_selection(a));
+    final pending=FableManagedAccountsRepository(gateway,catalog)
+      .executeBoundInStore(store,scoped);
+    await wire.expectCount(1);
+    wire.complete(0,{'errorCode':'ACCESS_DENIED'},statusCode:403);
+    await expectLater(pending,throwsA(isA<FableApiException>().having(
+      (error)=>error.status,'status',403)));
+    expect(store.selected,isNull);
+  });
+
+  test('RC106 entity switch while token is pending prevents scoped PATCH dispatch',()async{
+    final session=_BlockedSession(),catalog=_contract(),wire=_Wire();
+    final gateway=FableAuthGateway(baseUri:Uri.parse(backendUri),
+      contract:catalog,secureSession:session,client:wire.dio);
+    addTearDown(gateway.dispose);
+    final store=FableManagedEntityStore(session:session);
+    addTearDown(store.dispose);
+    store.bindBackend(gateway.managedEntityBackendIdentity);
+    store.activate(_selection(a));
+    const binding=FableManagedScopedOperation(operationId:'business.write',
+      method:'PATCH',path:'/business/records/{id}',contractHash:'rc105-source');
+    final pending=FableManagedAccountsRepository(gateway,catalog)
+      .executeBoundInStore(store,binding,
+        path:{'id':a},body:{'note':'simulation only'});
+    await session.requested.future;
+    store.activate(_selection(b));
+    session.release.complete();
+    await expectLater(pending,throwsA(isA<FableApiException>().having(
+      (error)=>error.code,'code','managed_entity_context_changed_discard_response')));
+    expect(wire.seen,isEmpty);
+    expect(store.selected?.id,b);
+  });
+
 }
