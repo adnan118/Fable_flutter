@@ -193,24 +193,28 @@ class _MediaSessionFence {
 class MediaUploadRepository {
   MediaUploadRepository({required this.gateway, required OperationCatalog catalog,
     required this.bindings, this.partTransport,
-    int Function()? identityRevision,bool Function()? isSessionCurrent})
-      : _identityRevision=gateway is FableAuthGateway
-          ? ()=>(gateway as FableAuthGateway).session.identityRevision
-          : identityRevision ?? (()=>throw StateError('Other Backend Auth epoch required')),
-        _isSessionCurrent=isSessionCurrent ?? (()=>gateway is FableAuthGateway) {
+    int Function()? identityRevision,bool Function()? isSessionCurrent}) {
     bindings.verify(catalog);
-    if(gateway is FableAuthGateway && identityRevision!=null){
-      throw ArgumentError('Fable media must use Fable secure-session epoch');
-    }
-    if(gateway is! FableAuthGateway && (identityRevision==null||isSessionCurrent==null)){
-      throw ArgumentError('Other Backend media requires verified session epoch and active-session check');
+    if(gateway is FableAuthGateway){
+      if(identityRevision!=null){
+        throw ArgumentError('Fable media must use Fable secure-session epoch');
+      }
+      final fable=gateway as FableAuthGateway;
+      _identityRevision=()=>fable.session.identityRevision;
+      _isSessionCurrent=isSessionCurrent??(()=>true);
+    }else{
+      if(identityRevision==null||isSessionCurrent==null){
+        throw ArgumentError('Other Backend media requires verified session epoch and active-session check');
+      }
+      _identityRevision=identityRevision;
+      _isSessionCurrent=isSessionCurrent;
     }
   }
   final BackendApiGateway gateway;
   final MediaUploadBindings bindings;
   final MediaPresignedPartTransport? partTransport;
-  final int Function() _identityRevision;
-  final bool Function() _isSessionCurrent;
+  late final int Function() _identityRevision;
+  late final bool Function() _isSessionCurrent;
   _MediaSessionFence _fence(CancelToken? token)=>_MediaSessionFence(
     _identityRevision(),(epoch)=>_isSessionCurrent()&&_identityRevision()==epoch,token);
   Future<Response<dynamic>> _execute(_MediaSessionFence scope,String id,
