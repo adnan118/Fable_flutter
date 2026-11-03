@@ -342,14 +342,14 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
        entity.status!='ACTIVE'||entity.visibility=='PRIVATE'||
        !entity.collaborationEnabled||
        !(chosen.access=='OWNER'||chosen.access=='MANAGER'&&entity.managersCanInvite))return;
-    final username=TextEditingController();
+    String username='';
     var access='VIEWER';
-    try{
+    {
       final agreed=await showDialog<bool>(context:context,builder:(ctx)=>
         StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
         title:Text(_ar?'دعوة عضو إلى الكيان':'Invite entity member'),
         content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-          TextField(controller:username,maxLength:30,decoration:InputDecoration(
+          TextField(onChanged:(value)=>username=value,maxLength:30,decoration:InputDecoration(
             labelText:_ar?'اسم المستخدم المسجّل':'Existing username')),
           DropdownButton<String>(value:access,items:[
             DropdownMenuItem(value:'VIEWER',
@@ -380,13 +380,13 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       final rev=widget.gateway.session.identityRevision;
       setState((){_busy=true;_message=null;});
       try{
-        await _repo.invite(entity,chosen,username:username.text,access:access);
+        await _repo.invite(entity,chosen,username:username,access:access);
         if(sameSelection()&&rev==widget.gateway.session.identityRevision)
           setState(()=>_message='Backend accepted the invitation.');
       }catch(_){if(sameSelection()&&rev==widget.gateway.session.identityRevision)
         setState(()=>_message='Backend denied the invitation.');}
       finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
-    }finally{username.dispose();}
+    }
   }
   Future<void> _respond(FableManagedInvitation invite,bool accept)async{
     if(_busy||!await _confirm(accept?'Accept invitation?':'Decline invitation?'))return;
