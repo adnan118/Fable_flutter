@@ -31,11 +31,13 @@ RC111:
 ## 2. Deterministic widget simulation, not real E2E
 
 `packages/features/fable_media/test/media_widget_lifecycle_rc111_test.dart` exercises:
-old prepare response after file+repository replacement, account change event during pending
-upload, delayed checkpoint restore, cancel followed by new account widget, and an Other
-Backend repository with no identity events (actions disabled). Other existing RC110 tests
-continue to cover R2/local chunk/network races. Flutter widget tests use fake HTTP and
-in-memory checkpoint storage; they do not prove native filesystem/DB/R2/real session behavior.
+delayed fake repository result after file+repository replacement, account change event during
+pending upload, delayed checkpoint restore, cancel followed by new account widget, and an Other
+Backend repository with no identity events (actions disabled). Existing RC110 tests
+separately cover real temporary-file reads and mocked R2/local chunk/network races.
+RC111 widget tests deliberately avoid native File I/O and HTTP, use a fake Repository
+with completers, and exercise only UI generations and in-memory checkpoint state.
+They do not prove native filesystem/DB/R2/real session behavior.
 
 ## 3. Backend playback contract review — not guessed or implemented in RC111
 
