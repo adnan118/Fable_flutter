@@ -16,5 +16,6 @@ dependencies:
   fable_core:
     path: ../../fable_core
 dev_dependencies:
+  shared_preferences_platform_interface: ^2.4.2
   flutter_test:
     sdk: flutter
