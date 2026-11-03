@@ -31,6 +31,7 @@ class _FakeMediaGateway implements BackendApiGateway {
   int size=8,bytes=0;
   String strategy='LOCAL_RESUMABLE';
   Future<void> Function(String id)? waitBeforeReply;
+  void Function(String id)? onDispatch;
   Map<String,dynamic> get state=> <String,dynamic>{
     'id':_id,'sizeBytes':size,'status':bytes==size?'UPLOADING':'UPLOADING',
     'upload':{'strategy':strategy,
@@ -46,6 +47,7 @@ class _FakeMediaGateway implements BackendApiGateway {
     CancelToken? cancelToken,String? ifMatch,
   })async{
     calls.add(id);
+    onDispatch?.call(id);
     await waitBeforeReply?.call(id);
     Map<String,dynamic> payload;
     switch(id){
@@ -75,11 +77,13 @@ class _FakeMediaGateway implements BackendApiGateway {
 
 class _DelayedR2 implements MediaPresignedPartTransport {
   final delay=Completer<String>();
+  final started=Completer<void>();
   int puts=0;
   @override Future<String> putPart(Uri url,File file,int start,int end,
       {CancelToken? cancelToken})async {
     CloudflareR2PartTransport.validatePresignedUri(url);
     puts++;
+    if(!started.isCompleted)started.complete();
     return delay.future;
   }
   @override void dispose(){}
@@ -95,9 +99,6 @@ Future<void> _withFile(Future<void> Function(File) test)async{
     await dir.delete(recursive:true);
   }
 }
-
-MediaUploadCheckpoint _checkpoint(int size)=>MediaUploadCheckpoint(
-  sessionId:_id,sha256:List.filled(64,'a').join(),sizeBytes:size);
 
 void main(){
   late _FakeMediaGateway gateway;
@@ -124,9 +125,11 @@ void main(){
       gateway.waitBeforeReply=(id)=>id=='media.upload.prepare'
         ?pending.future:Future<void>.value();
       var persisted=false;
+      final dispatched=Completer<void>();
+      gateway.onDispatch=(id){if(id=='media.upload.prepare'&&!dispatched.isCompleted)dispatched.complete();};
       final start=repository.start(file,kind:'IMAGE',mimeType:'image/jpeg',
         saveCheckpoint:(_ )async{persisted=true;});
-      await Future<void>.delayed(const Duration(milliseconds:20));
+      await dispatched.future;
       expect(gateway.calls,contains('media.upload.prepare'));
       epoch++;pending.complete();
       await expectLater(start,throwsStateError);
@@ -143,9 +146,11 @@ void main(){
       final progress=<MediaUploadProgress>[];
       final prepare=repository.prepare(file,kind:'IMAGE',mimeType:'image/jpeg');
       await prepare;
+      final dispatched=Completer<void>();
+      gateway.onDispatch=(id){if(id=='media.upload.status'&&!dispatched.isCompleted)dispatched.complete();};
       final resume=repository.start(file,kind:'IMAGE',mimeType:'image/jpeg',
         saveCheckpoint:(_ )async{},onProgress:progress.add);
-      await Future<void>.delayed(const Duration(milliseconds:20));
+      await dispatched.future;
       expect(gateway.calls,contains('media.upload.status'));
       epoch++;waiting.complete();
       await expectLater(resume,throwsStateError);
@@ -160,9 +165,11 @@ void main(){
       gateway.waitBeforeReply=(id)=>id=='media.upload.chunk'
         ?delayed.future:Future<void>.value();
       final progress=<MediaUploadProgress>[];
+      final dispatched=Completer<void>();
+      gateway.onDispatch=(id){if(id=='media.upload.chunk'&&!dispatched.isCompleted)dispatched.complete();};
       final operation=repository.start(file,kind:'IMAGE',mimeType:'image/jpeg',
         saveCheckpoint:(_ )async{},onProgress:progress.add);
-      await Future<void>.delayed(const Duration(milliseconds:20));
+      await dispatched.future;
       expect(gateway.calls,contains('media.upload.chunk'));
       epoch++;delayed.complete();
       await expectLater(operation,throwsStateError);
@@ -186,9 +193,13 @@ void main(){
   test('RC110 user switch while saving durable checkpoint blocks transfer',()async{
     await _withFile((file)async{
       final pending=Completer<void>();
+      final checkpointEntered=Completer<void>();
       final operation=repository.start(file,kind:'IMAGE',mimeType:'image/jpeg',
-        saveCheckpoint:(_ )async{await pending.future;});
-      await Future<void>.delayed(const Duration(milliseconds:20));
+        saveCheckpoint:(_ )async{
+          checkpointEntered.complete();
+          await pending.future;
+        });
+      await checkpointEntered.future;
       epoch++;pending.complete();
       await expectLater(operation,throwsStateError);
       expect(gateway.calls.where((x)=>x=='media.upload.status'),isEmpty);
@@ -219,7 +230,7 @@ void main(){
         identityRevision:()=>epoch,isSessionCurrent:()=>authenticated);
       final operation=repository.start(file,kind:'IMAGE',mimeType:'image/jpeg',
         saveCheckpoint:(_ )async{});
-      await Future<void>.delayed(const Duration(milliseconds:20));
+      await r2.started.future;
       expect(r2.puts,1);
       epoch++;r2.delay.complete('"etag"');
       await expectLater(operation,throwsStateError);
