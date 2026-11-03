@@ -106,7 +106,6 @@ class FablePushDeviceRegistration {
   Future<void> _tail=Future<void>.value();
   Future<void>? _identityCleanup;
   int _generation=0,_tokenSerial=0;
-  int? _registeredIdentityRevision;
   bool _needsTokenDeletion=false;
   bool _optedIn=false;
   bool _disposed=false;
@@ -138,7 +137,6 @@ class FablePushDeviceRegistration {
     _generation++;
     _tokenSerial++;
     _optedIn=false;
-    _registeredIdentityRevision=null;
     _scheduleCleanup();
   }
 
@@ -216,12 +214,10 @@ class FablePushDeviceRegistration {
       });
       if(!_sameIdentity(ticket)){
         // Never attribute an A response to the newly logged-in user B.
-        _registeredIdentityRevision=null;
-        _scheduleCleanup();
+            _scheduleCleanup();
         return false;
       }
       if(!_latestToken(ticket))return false;
-      _registeredIdentityRevision=ticket.identity;
       return true;
     });
   }
@@ -232,7 +228,8 @@ class FablePushDeviceRegistration {
     _tokens=_tokenPlatform.tokenChanges.listen((next){
       if(_sameIdentity(attempt)){
         // Event order, not network completion order, owns token freshness.
-        unawaited(_register(next,attempt).catchError((Object _) => false));
+        unawaited(_register(next,attempt).then<void>((_) {},
+          onError:(Object _,StackTrace __) {}));
       }
     });
   }
@@ -261,7 +258,6 @@ class FablePushDeviceRegistration {
     final epoch=++_generation;
     _tokenSerial++;
     _optedIn=false;
-    _registeredIdentityRevision=null;
     await _serial<void>(()async{
       await _tokens?.cancel();_tokens=null;
       await _foreground?.cancel();_foreground=null;
@@ -289,7 +285,12 @@ class FablePushDeviceRegistration {
     _tokenSerial++;
     _optedIn=false;
     await _identityEvents?.cancel();
-    await _tail;
+    // A stale request can enqueue a cleanup while an older queue tail drains.
+    for(;;){
+      final pending=_tail;
+      await pending;
+      if(identical(pending,_tail))break;
+    }
     await _tokens?.cancel();_tokens=null;
     await _foreground?.cancel();_foreground=null;
   }
