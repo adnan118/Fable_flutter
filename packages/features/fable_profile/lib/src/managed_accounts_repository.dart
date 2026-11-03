@@ -591,7 +591,14 @@ class FableManagedAccountsRepository {
   /// authority or reusable proof is created and lifecycle changes are not
   /// automatically repeated on network errors.
   Future<Object?> verifyAndApplyLifecycle(
-    FableManagedLifecycleChallenge pending,String code)async{
+    FableManagedLifecycleChallenge pending,String code,{
+      bool Function()? contextStillValid,
+    })async{
+    // Check again AFTER OTP verification: the Backend may have consumed the
+    // proof while the user switched managed entities. Never then submit a
+    // sensitive lifecycle mutation for the former UI context.
+    bool validContext()=>contextStillValid?.call()??true;
+    if(!validContext())throw StateError('Managed lifecycle context changed');
     if(!canLifecycle(pending.operation)||!RegExp(r'^[0-9]{4,10}$').hasMatch(code))
       throw ArgumentError('Invalid lifecycle OTP or backend operation');
     final rev=pending.identityRevision;
@@ -606,6 +613,7 @@ class FableManagedAccountsRepository {
        proof['challengeId']!=pending.challengeId||
        proof['purpose']!=pending.purpose)
       throw const FormatException('Wrong security proof purpose or challenge');
+    if(!validContext())throw StateError('Managed lifecycle context changed after OTP verification');
     final route=_lifecyclePaths[pending.operation]!;
     final changed=await gateway.execute(_operation(route,'POST'),
       path:{'id':pending.entityId},body:{'otpChallengeId':pending.challengeId});
@@ -660,3 +668,4 @@ class FableManagedAccountsRepository {
     return response.data;
   }
 }
+

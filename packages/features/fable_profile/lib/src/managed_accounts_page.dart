@@ -28,6 +28,23 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
   FableManagedAccountSelection? _selected;
   FableManagedEntityStore? _managedStore;
   FableManagedLifecycleChallenge? _pendingLifecycle;
+  FableManagedEntityStore? _pendingLifecycleStore;
+  int? _pendingLifecycleRevision;
+
+  bool _sameLifecycleContext(FableManagedEntityStore? store,int? revision)=>
+    mounted && identical(_managedStore,store) &&
+    (store==null || (store.selectionRevision==revision &&
+      store.isBoundToCredentials(widget.gateway.session) &&
+      store.isBoundToBackend(widget.gateway.managedEntityBackendIdentity)));
+
+  bool _ownerStillListed(String id)=>_entities?.any((e)=>
+    e.id==id && e.isOwner && const {'ACTIVE','DISABLED','PENDING_DELETE'}
+      .contains(e.status))==true;
+
+  void _discardLifecycleProof(){
+    _pendingLifecycle=null;_pendingLifecycleStore=null;
+    _pendingLifecycleRevision=null;_lifecycleOtp.clear();
+  }
 
   /// The parent route may remain open when another screen switches entities.
   /// A stale local selection must never enable a new invitation or member UI.
@@ -41,10 +58,14 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     return choice;
   }
   void _onManagedStoreChanged(){
-    if(!mounted||_selected==null)return;
-    if(_effectiveSelection!=null)return;
+    if(!mounted)return;
+    final lostSelection=_selected!=null&&_effectiveSelection==null;
+    final lostProof=_pendingLifecycle!=null&&
+      !_sameLifecycleContext(_pendingLifecycleStore,_pendingLifecycleRevision);
+    if(!lostSelection&&!lostProof)return;
     setState((){
-      _selected=null;_pendingLifecycle=null;_lifecycleOtp.clear();
+      if(lostSelection)_selected=null;
+      _discardLifecycleProof();
       _message='Managed entity changed. Verify the current account.';
     });
   }
@@ -64,7 +85,12 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     // selection that was previously bound to an authenticated store.
     if(_selected!=null&&((previous!=null&&incoming==null) ||
        _effectiveSelection==null)){
-      _selected=null;_pendingLifecycle=null;_lifecycleOtp.clear();
+      _selected=null;
+      _discardLifecycleProof();
+    }
+    if(_pendingLifecycle!=null && !_sameLifecycleContext(
+      _pendingLifecycleStore,_pendingLifecycleRevision)){
+      _discardLifecycleProof();
     }
   }
   final _lifecycleOtp=TextEditingController();
@@ -81,7 +107,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       _clearManagedSelection();
       setState((){
         _entities=null;_invitations=null;_selected=null;_busy=false;
-        _pendingLifecycle=null;_lifecycleOtp.clear();
+        _discardLifecycleProof();
         _message='Login identity changed. Refresh the new account.';
       });
     });
@@ -102,6 +128,12 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         _entities=entities;_invitations=invites;
         // A managed context is never preserved solely because its entity
         // still exists. Refresh must confirm the *same user's* active role.
+        final pending=_pendingLifecycle;
+        if(pending!=null && !entities.any((e)=>
+          e.id==pending.entityId && e.isOwner &&
+          const {'ACTIVE','DISABLED','PENDING_DELETE'}.contains(e.status))){
+          _discardLifecycleProof();
+        }
         final selected=_selected;
         if(selected!=null && !entities.any((e)=>
             e.id==selected.id && e.status=='ACTIVE' &&
@@ -115,6 +147,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       if(_selected!=null)_clearManagedSelection();
       setState((){
         _selected=null;_entities=null;_invitations=null;
+        _discardLifecycleProof();
         _message='Backend did not confirm current managed membership.';
       });
     }}
@@ -418,34 +451,59 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     }
   }
   Future<void> _requestLifecycle(FableManagedAccount entity,String action) async {
-    if(_busy||!entity.isOwner||!_repo.canLifecycle(action))return;
-    if(!await _confirm(_lifecycleLabel(action)+'?')||!mounted)return;
-    final rev=widget.gateway.session.identityRevision;
-    setState((){_busy=true;_message=null;_pendingLifecycle=null;_lifecycleOtp.clear();});
+    if(_busy||!entity.isOwner||!_repo.canLifecycle(action)||
+       !_ownerStillListed(entity.id))return;
+    final store=_managedStore;
+    final contextRevision=store?.selectionRevision;
+    final loginRevision=widget.gateway.session.identityRevision;
+    bool valid()=>_sameLifecycleContext(store,contextRevision) &&
+      loginRevision==widget.gateway.session.identityRevision &&
+      _ownerStillListed(entity.id);
+    if(!await _confirm(_lifecycleLabel(action)+'?')||!valid())return;
+    setState((){
+      _busy=true;_message=null;
+      _discardLifecycleProof();
+    });
     try{
       final pending=await _repo.requestLifecycleChallenge(entity,action);
-      if(!mounted||rev!=widget.gateway.session.identityRevision)return;
-      setState(()=>_pendingLifecycle=pending);
+      if(!valid())return; // OTP arrived for an obsolete managed context.
+      setState((){
+        _pendingLifecycle=pending;
+        _pendingLifecycleStore=store;
+        _pendingLifecycleRevision=contextRevision;
+      });
     }catch(_){
-      if(mounted&&rev==widget.gateway.session.identityRevision)
-        setState(()=>_message=_ar
-          ?'تعذر طلب رمز العملية الحساسة وفق سياسة الباك.'
-          :'Backend could not issue a verified lifecycle OTP.');
+      if(valid())setState(()=>_message=_ar
+        ?'تعذر طلب رمز العملية الحساسة وفق سياسة الباك.'
+        :'Backend could not issue a verified lifecycle OTP.');
     }finally{
-      if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);
+      if(mounted&&loginRevision==widget.gateway.session.identityRevision)
+        setState(()=>_busy=false);
     }
   }
   Future<void> _applyLifecycle() async{
     final pending=_pendingLifecycle;
     if(_busy||pending==null)return;
+    final store=_pendingLifecycleStore;
+    final contextRevision=_pendingLifecycleRevision;
     final rev=widget.gateway.session.identityRevision;
-    if(rev!=pending.identityRevision)return;
+    bool valid()=>_sameLifecycleContext(store,contextRevision) &&
+       identical(_pendingLifecycle,pending) &&
+       rev==pending.identityRevision &&
+       widget.gateway.session.identityRevision==rev &&
+       _ownerStillListed(pending.entityId);
+    if(!valid()){
+      if(mounted)setState(_discardLifecycleProof);
+      return;
+    }
     setState((){_busy=true;_message=null;});
     try{
-      await _repo.verifyAndApplyLifecycle(pending,_lifecycleOtp.text.trim());
-      if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+      await _repo.verifyAndApplyLifecycle(pending,_lifecycleOtp.text.trim(),
+        contextStillValid:valid);
+      if(!valid())return;
       setState((){
-        _pendingLifecycle=null;_lifecycleOtp.clear();_selected=null;
+        _discardLifecycleProof();
+        _selected=null;
         _message=_ar?'أكد الخادم العملية، وتم تحديث وضع الكيان.'
           :'Backend confirmed the lifecycle action.';
       });
@@ -454,15 +512,16 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     }catch(_){
       if(mounted&&rev==widget.gateway.session.identityRevision){
         setState((){
-          // A verified proof may have been consumed even if the mutation
-          // response was lost. Require new challenge; do not replay POST.
-          _pendingLifecycle=null;_lifecycleOtp.clear();
+          // The one-time proof may have been consumed while context switched.
+          // Do not replay the same challenge or lifecycle mutation.
+          _discardLifecycleProof();
           _message=_ar?'لم تؤكد العملية؛ حدّث القائمة قبل إعادة المحاولة.'
             :'Action was not confirmed. Refresh before retrying with a new proof.';
         });
       }
     }finally{
-      if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);
+      if(mounted&&rev==widget.gateway.session.identityRevision)
+        setState(()=>_busy=false);
     }
   }
 
