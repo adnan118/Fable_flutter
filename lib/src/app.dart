@@ -34,6 +34,7 @@ class _Bootstrap {
 class _AppState extends State<FableStarterApp> {
   // FABLE_PUSH_ROUTES_BEGIN
   StreamSubscription<FableIdentityEvent>? _fablePushIdentityEvents;
+  FableSecureSession? _notificationAuthSession;
   Future<void> _fableSetupNotificationAuth()async {
     try {
       final snapshot=await _bootstrap;
@@ -53,9 +54,15 @@ class _AppState extends State<FableStarterApp> {
       }
       if(!mounted||credentials==null)return;
       final safeSession=credentials;
+      _notificationAuthSession=safeSession;
+      FableNotificationNavigation.instance.identityRevision=()=>
+        safeSession.identityRevision;
       FableNotificationNavigation.instance.isAuthenticated=()async =>
         (await safeSession.accessToken)?.isNotEmpty==true;
       _fablePushIdentityEvents=safeSession.identityEvents.listen((event){
+        // User/account replacement revokes even a pending asynchronous tap.
+        // The old task must never navigate into the newly authenticated account.
+        FableNotificationNavigation.instance.invalidateInFlight();
         if(!event.authenticated)FableNotificationNavigation.instance.clearPending();
         else unawaited(FableNotificationNavigation.instance.resumeAfterLogin());
       });
@@ -72,8 +79,12 @@ class _AppState extends State<FableStarterApp> {
     
   }
   Future<bool> _fableNavigateFromNotification(String target, Map<String,String> data) async {
+    final session=_notificationAuthSession;
+    final identityAtDispatch=session?.identityRevision;
+    if(session==null)return false;
     final snapshot=await _bootstrap;
-    if(!mounted)return false;
+    if(!mounted||!identical(session,_notificationAuthSession)||
+       session.identityRevision!=identityAtDispatch)return false;
     final nav=FableNotificationNavigation.instance.navigatorKey.currentState;
     if(nav==null)return false;
     for(final feature in installedFeatures){
@@ -95,6 +106,7 @@ class _AppState extends State<FableStarterApp> {
   
   @override void dispose() {
     unawaited(_fablePushIdentityEvents?.cancel());
+    _notificationAuthSession=null;
     FableNotificationNavigation.instance.reset();
     _managedEntities?.dispose();
     super.dispose();
