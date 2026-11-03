@@ -34,6 +34,7 @@ jobs:
           # RC97: Web/Admin are separate browser-client contracts, never Flutter runtime endpoints.
           node --test test/rc106-pinned-managed-generator.test.mjs
           node --test test/rc108-notification-identity-audit.test.mjs
+          node --test test/rc110-media-identity-audit.test.mjs
           node --test test/web-admin-auth-client-rc97.test.mjs
           node --test test/feature-parity-master.test.mjs
           node --test test/backend-wide-decision-review.test.mjs
