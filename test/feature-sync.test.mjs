@@ -155,3 +155,47 @@ test('Explicit selection cannot activate an unavailable server operation, but ma
     assert.equal(plan.byId.offline.retainPackage,true);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+test('RC115 project feature sync is read-only on architecture preview failure',()=>{
+  const f=fixture();
+  try{
+    write(f.root,'packages/features/fable_orders/lib/src/presentation/screen.dart',
+      "import 'package:dio/dio.dart';");
+    const before=readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8');
+    const preview=syncProjectFeatures(f.root,f.verified);
+    assert.equal(preview.applied,false);
+    assert.ok(preview.architecture.findings.some(x=>x.includes('orders')));
+    assert.ok(preview.architecture.enforced.includes('orders'));
+    assert.throws(()=>syncProjectFeatures(f.root,f.verified,{apply:true}),
+      /RC115 feature architecture gate rejected project apply/);
+    assert.equal(readFileSync(join(f.root,'lib/src/generated/feature_registry.dart'),'utf8'),
+      before);
+    assert.equal(existsSync(join(f.root,'.fable/feature-backups')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('RC115 validated layered custom feature passes project sync before mutation',()=>{
+  const f=fixture();
+  try{
+    const prefix='packages/features/fable_orders/';
+    write(f.root,prefix+'.fable-architecture.json',{
+      kind:'fable.flutter-feature-architecture',schemaVersion:1,
+      featureId:'orders',mode:'four-layer-typed',enforced:true,
+    });
+    write(f.root,prefix+'lib/src/domain/port.dart',
+      'abstract interface class OrdersPort {}');
+    write(f.root,prefix+'lib/src/application/use_case.dart',
+      "import '../domain/port.dart';\nfinal class OrdersUseCase {const OrdersUseCase(this.port); final OrdersPort port;}");
+    write(f.root,prefix+'lib/src/data/adapter.dart',
+      "import 'package:dio/dio.dart';\nfinal class OrdersAdapter { const OrdersAdapter(); }");
+    write(f.root,prefix+'lib/src/presentation/state.dart',
+      "import 'package:flutter/foundation.dart';\nfinal class OrdersState extends ChangeNotifier {}");
+    const preview=syncProjectFeatures(f.root,f.verified);
+    assert.deepEqual(preview.architecture.findings,[]);
+    assert.ok(preview.architecture.enforced.includes('orders'));
+    const applied=syncProjectFeatures(f.root,f.verified,{apply:true});
+    assert.equal(applied.applied,true);
+    assert.ok(applied.architecture.enforced.includes('orders'));
+    assert.equal(existsSync(join(f.root,prefix+'lib/src/domain/port.dart')),true);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
