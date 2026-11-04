@@ -8,7 +8,7 @@ const repository=readFileSync('packages/features/fable_media/lib/src/protected_m
 const simulations=readFileSync('packages/features/fable_media/test/protected_media_range_rc113_test.dart','utf8');
 
 test('RC113 protected ranges reuse verified Fable Auth with no arbitrary headers or URLs',()=>{
-  assert.match(core,/op\.path\.replaceAll\('\{id\}',':id'\)!=='\/media\/:id\/content'/);
+  assert.ok(core.includes("op.path.replaceAll('{id}',':id')!='/media/:id/content'"));
   assert.match(core,/op\.requiresAuth/);
   assert.match(core,/adapter is! FableTransportAdapter/);
   assert.match(core,/mediaRange\.endInclusive-mediaRange\.start>=524288/);
