@@ -28,7 +28,12 @@ test('RC117 end, account change, refresh and dispose publish revocation',()=>{
   assert.match(repo,/cancelReadsForView\(/);
 });
 test('RC117 Fable adapter blocks stale reads before and after network',()=>{
-  assert.match(data,/implements SessionBoundMediaByteSource/);
+  // RC118's additive metadata port MUST still implement the RC117
+  // session invalidation contract; this is not a relaxed security check.
+  assert.match(data,/implements DescribedMediaByteSource/);
+  const described=readFileSync(root+'domain/media_byte_chunk.dart','utf8');
+  assert.match(described,/implements SessionBoundMediaByteSource/);
+  assert.match(data,/Future<MediaByteChunk> readChunk/);
   assert.match(data,/if\(!isActive\)/);
   assert.match(data,/repository\.invalidations\.listen/);
   assert.match(data,/repository\.cancelReadsForView\(playback\)/);
