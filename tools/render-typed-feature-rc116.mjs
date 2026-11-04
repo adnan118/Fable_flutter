@@ -53,8 +53,10 @@ function dto(op){
   }
   parts.push('    return '+name+'Dto(');
   for(const f of op.fields){
-    const conv=f.type==='double'?(f.required?'('+f.name+' as num).toDouble()':'('+f.name+' as num?)?.toDouble()'):
-      f.name+' as '+fieldType(f);
+    // Dart promotes each checked local variable after its fail-closed guard.
+    // Avoid unnecessary casts that become analyzer warnings in generated code.
+    const conv=f.type==='double'?(f.required?f.name+'.toDouble()':f.name+'?.toDouble()'):
+      f.name;
     parts.push('      '+f.name+': '+conv+',');
   }
   parts.push('    );','  }',
