@@ -53,10 +53,10 @@ function dto(op){
   }
   parts.push('    return '+name+'Dto(');
   for(const f of op.fields){
-    // Dart promotes each checked local variable after its fail-closed guard.
-    // Avoid unnecessary casts that become analyzer warnings in generated code.
-    const conv=f.type==='double'?(f.required?f.name+'.toDouble()':f.name+'?.toDouble()'):
-      f.name;
+    // Required locals are promoted by the throwing guard. For optional
+    // values a conjunction guard retains Object?, so keep only those casts.
+    const conv=f.type==='double'?(f.required?f.name+'.toDouble()':'('+f.name+' as num?)?.toDouble()'):
+      (f.required?f.name:f.name+' as '+fieldType(f));
     parts.push('      '+f.name+': '+conv+',');
   }
   parts.push('    );','  }',
