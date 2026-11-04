@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
 
 /// RC112 is intentionally Fable Backend-only. The Backend's published media
@@ -65,6 +67,7 @@ class FableProtectedMediaPlaybackRepository {
       // a previous user's delayed response can become visible to the next.
       _generation++;
       _state=null;
+      _cancelReads();
       _opening=false;
       _refreshing=false;
     });
@@ -75,6 +78,14 @@ class FableProtectedMediaPlaybackRepository {
   _PlaybackState? _state;
   int _generation=0;
   bool _disposed=false,_opening=false,_refreshing=false;
+  final Set<CancelToken> _reads=<CancelToken>{};
+
+  void _cancelReads(){
+    for(final token in _reads.toList()){
+      token.cancel('Protected playback session invalidated');
+    }
+    _reads.clear();
+  }
 
   static final RegExp _uuid=RegExp(
     r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$');
@@ -235,6 +246,7 @@ class FableProtectedMediaPlaybackRepository {
         accessTokenExpiresAt:accessExpires,streamPath:view.streamPath);
       _assertCurrent(epoch,generation);
       if(!identical(_state,active))throw StateError('Playback ended during refresh');
+      _cancelReads();
       _state=_PlaybackState(next,token,epoch);
       return next;
     }finally{
@@ -254,6 +266,7 @@ class FableProtectedMediaPlaybackRepository {
     final epoch=gateway.session.identityRevision;
     final generation=++_generation;
     _state=null;
+    _cancelReads();
     _refreshing=false;
     _opening=false;
     _assertCurrent(epoch,generation);
@@ -265,8 +278,109 @@ class FableProtectedMediaPlaybackRepository {
     }
   }
 
+
+  /// Discover signed GET content independently. RC112 projects that only
+  /// expose playback control still work; bytes are disabled until the project
+  /// explicitly exports this protected operation.
+  String _contentOperationId(){
+    final found=gateway.verifiedContract.operations.values.where((op)=>
+      op.method=='GET' &&
+      op.path.replaceAll('{id}',':id')=='/media/:id/content' &&
+      op.requiresAuth && op.enforceAuth && op.credentialHeader==null &&
+      RegExp(r'^[a-f0-9]{64}$').hasMatch(op.contractHash)).toList();
+    if(found.length!=1){
+      throw StateError('Signed Fable project contract lacks a unique protected content GET');
+    }
+    return found.single.id;
+  }
+
+  /// Fetch at most 512 KiB directly from the verified Fable origin. A native
+  /// player integration MAY consume the returned bytes, but no secret bearer
+  /// or URL is handed to that player. This does NOT implement native DRM.
+  Future<Uint8List> readContentRange(ProtectedMediaPlaybackView view,{
+    required int start,required int length,
+  }) async {
+    if(start<0 || length<=0 || length>524288 || start>0x7fffffffffffffff-length){
+      throw ArgumentError('Invalid bounded protected media Range');
+    }
+    final op=_contentOperationId();
+    final active=_state;
+    // The validated, short-lived access token never escapes this repository.
+    currentContentHeader(view);
+    if(active==null)throw StateError('Protected playback unavailable');
+    final epoch=active.epoch,generation=_generation;
+    final cancel=CancelToken();
+    _reads.add(cancel);
+    void ensureActive(){
+      if(cancel.isCancelled || !identical(_state,active) ||
+         !_stillCurrent(epoch,generation) ||
+         !_future(view.expiresAt)||!_future(view.idleExpiresAt)||
+         !_future(view.accessTokenExpiresAt)){
+        throw StateError('Protected playback Range revoked or expired');
+      }
+    }
+    try{
+      ensureActive();
+      final response=await gateway.requestProtectedContentRange(op,
+        assetId:view.assetId,mediaToken:active.token,
+        start:start,endInclusive:start+length-1,cancelToken:cancel);
+      ensureActive();
+      if(response.statusCode!=206){
+        throw StateError('Protected media server did not honor bounded Range');
+      }
+      final header=response.headers.value('content-range');
+      final match=header==null?null:
+        RegExp(r'^bytes ([0-9]+)-([0-9]+)/([0-9]+)$').firstMatch(header);
+      if(match==null){
+        throw const FormatException('Missing or malformed protected Content-Range');
+      }
+      final first=int.tryParse(match.group(1)!);
+      final last=int.tryParse(match.group(2)!);
+      final total=int.tryParse(match.group(3)!);
+      if(first!=start || last==null || total==null || total<=0 ||
+         last<start || last>=total ||
+         last!=((start+length-1)<total?start+length-1:total-1)){
+        throw const FormatException('Protected Content-Range mismatch');
+      }
+      final expected=last-start+1;
+      final contentLength=int.tryParse(
+        response.headers.value('content-length')??'');
+      final cacheControl=(response.headers.value('cache-control')??'').toLowerCase();
+      final contentType=(response.headers.value('content-type')??'').toLowerCase();
+      final contentEncoding=(response.headers.value('content-encoding')??'identity').toLowerCase();
+      if(contentLength!=expected || !cacheControl.contains('no-store') ||
+         contentType.isEmpty || contentType.startsWith('text/html') ||
+         contentEncoding!='identity'){
+        throw const FormatException('Untrusted protected media response headers');
+      }
+      final body=response.data;
+      if(body is! ResponseBody){
+        throw const FormatException('Expected streamed protected media response');
+      }
+      final sink=BytesBuilder(copy:false);
+      await for(final part in body.stream){
+        ensureActive();
+        if(part.isEmpty)continue;
+        if(sink.length+part.length>expected){
+          cancel.cancel('Protected server exceeded declared Range');
+          throw const FormatException('Protected stream exceeded byte Range');
+        }
+        sink.add(part);
+      }
+      ensureActive();
+      if(sink.length!=expected){
+        throw const FormatException('Truncated protected media Range');
+      }
+      return sink.takeBytes();
+    }finally{
+      _reads.remove(cancel);
+      if(!cancel.isCancelled)cancel.cancel('Protected Range finished');
+    }
+  }
+
   Future<void> dispose()async{
     _disposed=true;
+    _cancelReads();
     _generation++;
     _state=null;
     _opening=false;

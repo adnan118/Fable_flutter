@@ -6,6 +6,15 @@ import 'backend_transport_adapter.dart';
 import 'backend_credential_provider.dart';
 import 'fable_retry_policy.dart';
 
+/// A bounded media Range request, restricted to the verified Fable content GET.
+class FableProtectedMediaByteRange {
+  const FableProtectedMediaByteRange({required this.accessToken,
+    required this.start,required this.endInclusive});
+  final String accessToken;
+  final int start,endInclusive;
+  @override String toString()=>'FableProtectedMediaByteRange([redacted])';
+}
+
 /// The refresh callback must use the backend's published auth contract.
 /// It is intentionally NOT implemented by guessing /auth/refresh.
 typedef RefreshSession = Future<bool> Function();
@@ -74,12 +83,30 @@ class UnifiedApiClient implements BackendApiGateway {
   Future<Response<dynamic>> request(String operationId,{Map<String,dynamic>? path,
     Map<String,dynamic>? query,Object? body,bool? authorized,CancelToken? cancelToken,
     String? ifMatch,String? securityChallengeId,String? managedEntityId,
-    bool Function()? contextStillValid}) async {
+    bool Function()? contextStillValid,FableProtectedMediaByteRange? mediaRange}) async {
     // Entity-scoped operations must fail before any network dispatch if the
     // selected entity changes while obtaining credentials or retrying.
     if(contextStillValid!=null&&managedEntityId==null)
       throw ArgumentError('Context guard requires an explicit managed entity');
     final op=contract.require(operationId);
+    if(mediaRange!=null){
+      final id=path?['id'];
+      if(contract is! FableContract || adapter is! FableTransportAdapter ||
+         op.method!='GET' ||
+         op.path.replaceAll('{id}',':id')!='/media/:id/content' ||
+         !op.requiresAuth || !op.enforceAuth || op.credentialHeader!=null ||
+         id is! String || path!.length!=1 ||
+         !RegExp(r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$').hasMatch(id) ||
+         query!=null || body!=null || ifMatch!=null ||
+         securityChallengeId!=null || managedEntityId!=null ||
+         (cancelToken?.isCancelled??false) ||
+         mediaRange.start<0 || mediaRange.endInclusive<mediaRange.start ||
+         mediaRange.endInclusive-mediaRange.start>=524288 ||
+         mediaRange.accessToken.length<24 || mediaRange.accessToken.length>8192 ||
+         mediaRange.accessToken.contains(RegExp(r'[\r\n\x00-\x1f\x7f]'))){
+        throw ArgumentError('Invalid verified Fable protected media Range request');
+      }
+    }
     // A quote revision must come from an immediately preceding authoritative
     // server GET; never let shared cache/ARB supply a payment precondition.
     if (ifMatch != null && (!RegExp(r'^[a-f0-9]{64}$').hasMatch(ifMatch) ||
@@ -117,6 +144,13 @@ class UnifiedApiClient implements BackendApiGateway {
     }
     final headers=await adapter.headersFor(op,session);
     if (ifMatch != null) headers['If-Match']='"$ifMatch"';
+    if(mediaRange!=null){
+      headers['Accept']='application/octet-stream';
+      headers['Accept-Encoding']='identity';
+      headers['Cache-Control']='no-store';
+      headers['X-Fable-Media-Token']=mediaRange.accessToken;
+      headers['Range']='bytes=${mediaRange.start}-${mediaRange.endInclusive}';
+    }
     if(securityChallengeId!=null){
       const eligiblePaths={'/auth/sessions/revoke-selected','/auth/logout-all',
         '/auth/sessions/{id}/revoke','/auth/social/:provider'};
@@ -180,7 +214,7 @@ class UnifiedApiClient implements BackendApiGateway {
     }
     final response=await _send(op,endpoint,headers,query,body,cancelToken,
       expectedIdentity: useAuthorization ? requestIdentity : null,
-      contextStillValid:contextStillValid);
+      contextStillValid:contextStillValid,mediaRange:mediaRange);
     // Discard in-flight responses for a previous account, including successes.
     if (useAuthorization && op.credentialHeader == null &&
         session.identityRevision != requestIdentity) {
@@ -206,7 +240,8 @@ class UnifiedApiClient implements BackendApiGateway {
         throw FableApiException(0, 'request_cancelled');
       }
       return _checked(await _send(op,endpoint,headers,query,body,cancelToken,
-        expectedIdentity: requestIdentity,contextStillValid:contextStillValid));
+        expectedIdentity: requestIdentity,contextStillValid:contextStillValid,
+        mediaRange:mediaRange));
     }
 
     if (adapter.sessionMode != BackendSessionMode.rotatingBearer || refreshSession == null) {
@@ -278,7 +313,8 @@ class UnifiedApiClient implements BackendApiGateway {
     }
     headers['Authorization']='Bearer $fresh';
     final retried=await _send(op,endpoint,headers,query,body,cancelToken,
-      expectedIdentity: requestIdentity,contextStillValid:contextStillValid);
+      expectedIdentity: requestIdentity,contextStillValid:contextStillValid,
+      mediaRange:mediaRange);
     if (session.identityRevision != requestIdentity) {
       throw FableApiException(409, 'session_changed_discard_response');
     }
@@ -294,7 +330,8 @@ class UnifiedApiClient implements BackendApiGateway {
   }
   Future<Response<dynamic>> _send(FableOperation op,String endpoint,Map<String,String> headers,
       Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,
-      {int? expectedIdentity,bool Function()? contextStillValid}) async {
+      {int? expectedIdentity,bool Function()? contextStillValid,
+       FableProtectedMediaByteRange? mediaRange}) async {
     final safeRead = retryPolicy.canRetryMethod(op.method);
     void rejectChangedContext(){
       if(contextStillValid!=null&&!contextStillValid())
@@ -313,6 +350,7 @@ class UnifiedApiClient implements BackendApiGateway {
           endpoint,
           options: Options(method: op.method, headers: headers,
             followRedirects: false,
+            responseType:mediaRange==null?ResponseType.json:ResponseType.stream,
             validateStatus: (status) => status != null && status < 500),
           queryParameters: query, data: body, cancelToken: cancelToken,
         );
