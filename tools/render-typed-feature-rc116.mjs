@@ -81,7 +81,7 @@ function adapter(op,projectHash){
     '    final contract=gateway.verifiedContract;',
     '    final op=contract.operations['+dart(op.operationId)+'];',
     '    if(contract.contractHash!='+dart(projectHash)+' || op==null ||',
-    '       op.method!='+dart(op.method)+' || op.path!='+dart(op.path)+' ||',
+    '       op.method!='+dart(op.method)+' || op.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
     '       op.contractHash!='+dart(op.contractHash)+' || !op.requiresAuth ||',
     '       !op.enforceAuth){',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
