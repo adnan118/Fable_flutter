@@ -735,6 +735,16 @@ class FableAuthGateway implements BackendApiGateway {
     Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
     CancelToken? cancelToken,String? ifMatch,
   }) => _api.execute(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
+  /// Streams bounded, origin-locked media bytes via the same verified Fable
+  /// Bearer transport (including session refresh). Not a native-player URL.
+  /// No operation ID is inferred: the caller supplies the verified GET ID.
+  Future<Response<dynamic>> requestProtectedContentRange(
+    String operationId,{required String assetId,required String mediaToken,
+    required int start,required int endInclusive,CancelToken? cancelToken}) =>
+      _api.request(operationId,path:{'id':assetId},cancelToken:cancelToken,
+        mediaRange:FableProtectedMediaByteRange(
+          accessToken:mediaToken,start:start,endInclusive:endInclusive));
+
   void dispose() => _api.dispose();
 }
 
