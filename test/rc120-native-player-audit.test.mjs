@@ -11,7 +11,7 @@ const appDelegate = readFileSync('ios/Runner/AppDelegate.swift', 'utf8');
 test('RC120 Android has real Media3 progressive DataSource and bounded Dart bytes', () => {
   for(const required of ['ExoPlayer.Builder','ProgressiveMediaSource.Factory',
       'DataSource.Factory','FableProtectedRangeDataSource','override fun read(',
-      'CountDownLatch','count > 524288','channel.invokeMethod("readRange"',
+      'CountDownLatch','length > 524288','channel.invokeMethod("readRange"',
       'player?.clearMediaItems()','player?.release()']) {
     assert.ok(android.includes(required), required);
   }

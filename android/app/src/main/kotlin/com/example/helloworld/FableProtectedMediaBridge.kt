@@ -109,6 +109,9 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
         surface: FableProtectedMediaSurface, generation: Long,
         offset: Long, length: Int, epoch: Int, abandoned: () -> Boolean
     ): ByteArray {
+        if (length <= 0 || length > 524288 || offset < 0) {
+            throw IOException("Invalid bounded native media request")
+        }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw IOException("Never block Flutter main thread for media bytes")
         }
