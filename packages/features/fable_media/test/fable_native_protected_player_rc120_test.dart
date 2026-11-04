@@ -36,13 +36,14 @@ void main() {
       (request) async => ProtectedPlayerBytes(
         chunk(request.start, request.length)),
     );
-    final read = await FableNativeProtectedPlayerPort.handleNativeCallForTesting(
+    final rawRead = await FableNativeProtectedPlayerPort.handleNativeCallForTesting(
       const MethodCall('readRange', <String, Object>{
         'viewId': 24, 'requestId': 1, 'start': 5, 'length': 4,
         'rangeEpoch': 0,
       }),
     );
-    expect((read as Map)['status'], 'bytes');
+    final read = rawRead as Map;
+    expect(read['status'], 'bytes');
     expect(read['bytes'], [7, 7, 7, 7]);
     expect(read['start'], 5);
     expect(read.keys, isNot(contains('url')));

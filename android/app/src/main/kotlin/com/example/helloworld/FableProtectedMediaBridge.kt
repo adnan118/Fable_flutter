@@ -298,7 +298,7 @@ private class FableProtectedRangeDataSource(
             }
             cachePosition = 0
         }
-        val copied = min(readLength, min(cache.size - cachePosition, remaining.toInt()))
+        val copied = min(readLength, cache.size - cachePosition)
         if (copied <= 0) throw IOException("No protected media bytes")
         System.arraycopy(cache, cachePosition, buffer, bufferOffset, copied)
         cachePosition += copied

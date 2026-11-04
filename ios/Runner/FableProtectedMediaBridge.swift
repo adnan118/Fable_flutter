@@ -97,6 +97,7 @@ final class FableProtectedMediaBridge: NSObject {
 
   func read(
     id: Int64, offset: Int64, count: Int, epoch: Int,
+    expectedTotal: Int64, expectedType: String,
     completion: @escaping (Data?) -> Void
   ) {
     guard count > 0 && count <= 524288 && offset >= 0 else {
@@ -113,6 +114,10 @@ final class FableProtectedMediaBridge: NSObject {
         payload["status"] as? String == "bytes",
         let start = payload["start"] as? NSNumber,
         start.int64Value == offset,
+        let total = payload["totalLength"] as? NSNumber,
+        total.int64Value == expectedTotal,
+        let mime = payload["mimeType"] as? String,
+        mime == expectedType,
         let wrapped = payload["bytes"] as? FlutterStandardTypedData,
         !wrapped.data.isEmpty, wrapped.data.count <= count else {
         completion(nil)
@@ -183,7 +188,7 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
     let queue = DispatchQueue(label: "fable.secure.media.loader.\(identifier)")
     let delegate = FableProtectedAssetLoader(
       bridge: bridge, viewId: identifier, total: total,
-      uniformType: uti, epoch: epoch, queue: queue)
+      uniformType: uti, mimeType: mime, epoch: epoch, queue: queue)
     let url = URL(string: "fable-media://session/content")!
     let nativeAsset = AVURLAsset(url: url)
     nativeAsset.resourceLoader.setDelegate(delegate, queue: queue)
@@ -247,6 +252,7 @@ private final class FableProtectedAssetLoader: NSObject, AVAssetResourceLoaderDe
   private let viewId: Int64
   private let total: Int64
   private let uniformType: String
+  private let mediaType: String
   private let queue: DispatchQueue
   private var epoch: Int
   private var active = true
@@ -254,12 +260,14 @@ private final class FableProtectedAssetLoader: NSObject, AVAssetResourceLoaderDe
 
   init(
     bridge: FableProtectedMediaBridge, viewId: Int64,
-    total: Int64, uniformType: String, epoch: Int, queue: DispatchQueue
+    total: Int64, uniformType: String, mimeType: String,
+    epoch: Int, queue: DispatchQueue
   ) {
     self.bridge = bridge
     self.viewId = viewId
     self.total = total
     self.uniformType = uniformType
+    self.mediaType = mimeType
     self.epoch = epoch
     self.queue = queue
     super.init()
@@ -347,7 +355,9 @@ private final class FableProtectedAssetLoader: NSObject, AVAssetResourceLoaderDe
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
       self.bridge.read(id: self.viewId, offset: start,
-                       count: count, epoch: tokenEpoch) { [weak self] data in
+                       count: count, epoch: tokenEpoch,
+                       expectedTotal: self.total,
+                       expectedType: self.mediaType) { [weak self] data in
         guard let self else { return }
         self.queue.async {
           guard self.active, let (nextRequest, state) = self.pending[id],
