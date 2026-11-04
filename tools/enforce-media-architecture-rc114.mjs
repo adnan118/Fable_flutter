@@ -56,6 +56,14 @@ export function auditMediaLayerFile(layer,source,filename='packages/features/fab
       if(layer!=='data' && /^(dart:io|dart:html|dart:ffi|dart:mirrors)$/.test(uri)){
         errors.push(layer+': platform-specific library in '+uri);
       }
+    }else if(kind==='outside' && (
+      (layer==='data' &&
+        /^(package:(dio|fable_core|crypto|shared_preferences)\/)/.test(uri)) ||
+      (layer==='presentation' &&
+        /^(package:(flutter|flutter_riverpod|fable_design_system|material_ui)\/)/.test(uri))
+    )){
+      // A Data adapter MAY use transport/persistence; Presentation MAY use
+      // Flutter, DI state tools and the project's design system only.
     }else if(!allowed[layer].has(kind)){
       errors.push(layer+': forbidden import/export '+uri+' -> '+kind);
     }
