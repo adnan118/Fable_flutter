@@ -355,14 +355,33 @@ void main(){
     }finally{await h.close();}
   });
 
-  test('RC118 refuses nonmedia MIME and changed metadata within one view',()async{
+  test('RC118 preserves nonvideo legacy ranges but refuses native playback',()async{
+    for(final mime in ['image/jpeg','application/json']){
+      final h=Harness();
+      try{
+        h.contentTypeHeader=mime;
+        final view=await h.repository.open(asset,platform:'ANDROID');
+        expect(await h.repository.readContentRange(view,start:0,length:6),
+          [1,2,3,4,5,6]);
+        final source=FableMediaByteSource(repository:h.repository,playback:view);
+        try{
+          expect(await source.read(const MediaByteRange(start:0,length:6)),
+            [1,2,3,4,5,6]);
+          await expectLater(source.readChunk(
+            const MediaByteRange(start:0,length:6)),
+            throwsA(isA<MediaReadFailure>().having(
+              (failure)=>failure.kind,'kind',
+              MediaReadFailureKind.unsupported)));
+          expect(source.isActive,true);
+        }finally{await source.close();}
+      }finally{await h.close();}
+    }
+  });
+
+  test('RC118 rejects changed metadata across one verified playback view',()async{
     final h=Harness();
     try{
       final view=await h.repository.open(asset,platform:'ANDROID');
-      h.contentTypeHeader='application/json';
-      await expectLater(h.repository.readContentRangeChunk(view,
-        start:0,length:6),throwsFormatException);
-      h.contentTypeHeader='video/mp4';
       final source=FableMediaByteSource(repository:h.repository,playback:view);
       final invalidations=<MediaSessionInvalidation>[];
       final subscription=source.invalidations.listen(invalidations.add);
