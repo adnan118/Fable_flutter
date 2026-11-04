@@ -259,4 +259,38 @@ void main() {
     expect(source.closes, 1);
     expect(platform.calls.last, 'dispose');
   });
+  test('RC119 timeout cancels range and stops native player', () async {
+    final source = FakeSource();
+    final platform = FakePlatform();
+    final session = ProtectedPlayerSession(
+      source: source, platform: platform,
+      rangeTimeout: const Duration(milliseconds: 25));
+    await session.prepare();
+    final pending = Completer<MediaByteChunk>();
+    source.produce = (_) => pending.future;
+    final result = await platform.reader!(const ProtectedPlayerReadRequest(
+      requestId: 44, start: 0, length: 3));
+    expect((result as ProtectedPlayerReadRejected).reason,
+        MediaReadFailureKind.timedOut);
+    expect(session.state.phase, ProtectedPlayerPhase.failed);
+    expect(platform.calls, contains('stop'));
+    expect(source.cancellations, greaterThan(0));
+    pending.complete(chunk(const MediaByteRange(start: 0, length: 3)));
+    await session.dispose();
+  });
+
+  test('RC119 silent expiry during probe cannot leave preparing player', () async {
+    final pending = Completer<MediaByteChunk>();
+    final source = FakeSource(produce: (_) => pending.future);
+    final platform = FakePlatform();
+    final session = ProtectedPlayerSession(source: source, platform: platform);
+    final prepare = session.prepare();
+    source.active = false; // Provider failed to emit: broker still fail-closes.
+    pending.complete(chunk(const MediaByteRange(start: 0, length: 6)));
+    await prepare;
+    expect(session.state.phase, ProtectedPlayerPhase.revoked);
+    expect(platform.calls, contains('stop'));
+    await session.dispose();
+  });
+
 }

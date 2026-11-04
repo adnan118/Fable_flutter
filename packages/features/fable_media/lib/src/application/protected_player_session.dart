@@ -13,10 +13,13 @@ final class ProtectedPlayerSession {
     required ProtectedPlayerPlatformPort platform,
     this.maxConcurrentReads = 2,
     this.probeBytes = 32 * 1024,
+    this.rangeTimeout = const Duration(seconds: 15),
   })  : _source = source,
         _platform = platform {
     if (maxConcurrentReads < 1 || maxConcurrentReads > 4 ||
-        probeBytes < 1 || probeBytes > MediaByteRange.maxLength) {
+        probeBytes < 1 || probeBytes > MediaByteRange.maxLength ||
+        rangeTimeout <= Duration.zero ||
+        rangeTimeout > const Duration(minutes: 2)) {
       throw ArgumentError('Invalid player buffering limits');
     }
     _subscription = source.invalidations.listen((reason) {
@@ -28,6 +31,7 @@ final class ProtectedPlayerSession {
   final ProtectedPlayerPlatformPort _platform;
   final int maxConcurrentReads;
   final int probeBytes;
+  final Duration rangeTimeout;
   final StreamController<ProtectedPlayerState> _states =
       StreamController<ProtectedPlayerState>.broadcast(sync: true);
   final Map<int, int> _inFlight = <int, int>{};
@@ -128,7 +132,11 @@ final class ProtectedPlayerSession {
     _emit(ProtectedPlayerPhase.preparing);
     try {
       final first = await _source.readChunk(
-          MediaByteRange(start: 0, length: probeBytes));
+          MediaByteRange(start: 0, length: probeBytes)).timeout(rangeTimeout);
+      if (!_authorized) {
+        _revoke(MediaSessionInvalidation.sourceClosed);
+        return;
+      }
       if (!_current(operation)) return;
       _metadata = ProtectedPlayerMetadata(
           totalLength: first.totalLength, mimeType: first.mimeType);
@@ -143,9 +151,19 @@ final class ProtectedPlayerSession {
       }
       _emit(ProtectedPlayerPhase.ready);
     } on MediaReadFailure catch (error) {
-      if (_current(operation)) _fail(error.kind);
+      if (!_authorized) {
+        _revoke(MediaSessionInvalidation.sourceClosed);
+      } else if (_current(operation)) {
+        _fail(error.kind);
+      }
+    } on TimeoutException {
+      if (_current(operation)) _fail(MediaReadFailureKind.timedOut);
     } catch (_) {
-      if (_current(operation)) _fail(MediaReadFailureKind.unknown);
+      if (!_authorized) {
+        _revoke(MediaSessionInvalidation.sourceClosed);
+      } else if (_current(operation)) {
+        _fail(MediaReadFailureKind.unknown);
+      }
     }
   }
 
@@ -192,7 +210,11 @@ final class ProtectedPlayerSession {
     _inFlight[request.requestId] = rangeEpoch;
     try {
       final chunk = await _source.readChunk(MediaByteRange(
-          start: request.start, length: request.length));
+          start: request.start, length: request.length))
+          .timeout(rangeTimeout);
+      if (!_authorized) {
+        _revoke(MediaSessionInvalidation.sourceClosed);
+      }
       if (!_current(epoch) || rangeEpoch != _rangeEpoch || !_canServe) {
         return const ProtectedPlayerReadRejected(
             MediaReadFailureKind.sessionChanged);
@@ -207,14 +229,25 @@ final class ProtectedPlayerSession {
       }
       return ProtectedPlayerBytes(chunk);
     } on MediaReadFailure catch (error) {
-      if (_current(epoch) && rangeEpoch == _rangeEpoch) {
-        _fail(error.kind);
+      if (!_authorized) _revoke(MediaSessionInvalidation.sourceClosed);
+      if (!_current(epoch) || rangeEpoch != _rangeEpoch) {
+        return const ProtectedPlayerReadRejected(
+            MediaReadFailureKind.sessionChanged);
       }
+      _fail(error.kind);
       return ProtectedPlayerReadRejected(error.kind);
-    } catch (_) {
+    } on TimeoutException {
       if (_current(epoch) && rangeEpoch == _rangeEpoch) {
-        _fail(MediaReadFailureKind.unknown);
+        _fail(MediaReadFailureKind.timedOut);
       }
+      return const ProtectedPlayerReadRejected(MediaReadFailureKind.timedOut);
+    } catch (_) {
+      if (!_authorized) _revoke(MediaSessionInvalidation.sourceClosed);
+      if (!_current(epoch) || rangeEpoch != _rangeEpoch) {
+        return const ProtectedPlayerReadRejected(
+            MediaReadFailureKind.sessionChanged);
+      }
+      _fail(MediaReadFailureKind.unknown);
       return const ProtectedPlayerReadRejected(
           MediaReadFailureKind.unknown);
     } finally {
