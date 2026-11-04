@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
+import 'domain/media_byte_chunk.dart';
 
 /// RC112 is intentionally Fable Backend-only. The Backend's published media
 /// blueprint and controller are evidence of routes, NOT proof that the current
@@ -332,6 +333,13 @@ class FableProtectedMediaPlaybackRepository {
   /// or URL is handed to that player. This does NOT implement native DRM.
   Future<Uint8List> readContentRange(ProtectedMediaPlaybackView view,{
     required int start,required int length,
+  }) async =>
+      (await readContentRangeChunk(view,start:start,length:length)).bytes;
+
+  /// Single verified progressive-media chunk with server-confirmed length and
+  /// MIME. This remains Fable-only and never returns bearer/media credentials.
+  Future<MediaByteChunk> readContentRangeChunk(ProtectedMediaPlaybackView view,{
+    required int start,required int length,
   }) async {
     if(start<0 || length<=0 || length>524288 || start>0x7fffffffffffffff-length){
       throw ArgumentError('Invalid bounded protected media Range');
@@ -382,7 +390,52 @@ class FableProtectedMediaPlaybackRepository {
       final contentType=(response.headers.value('content-type')??'').toLowerCase();
       final contentEncoding=(response.headers.value('content-encoding')??'identity').toLowerCase();
       if(contentLength!=expected || !cacheControl.contains('no-store') ||
-         contentType.isEmpty || contentType.startsWith('text/html') ||
+         !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*
+         contentEncoding!='identity'){
+        throw const FormatException('Untrusted protected media response headers');
+      }
+      final body=response.data;
+      if(body is! ResponseBody){
+        throw const FormatException('Expected streamed protected media response');
+      }
+      final sink=BytesBuilder(copy:false);
+      await for(final part in body.stream){
+        ensureActive();
+        if(part.isEmpty)continue;
+        if(sink.length+part.length>expected){
+          cancel.cancel('Protected server exceeded declared Range');
+          throw const FormatException('Protected stream exceeded byte Range');
+        }
+        sink.add(part);
+      }
+      ensureActive();
+      if(sink.length!=expected){
+        throw const FormatException('Truncated protected media Range');
+      }
+      return MediaByteChunk(start:start,totalLength:total,
+        mimeType:contentType,bytes:sink.takeBytes());
+    }finally{
+      _reads.remove(cancel);
+      if(!cancel.isCancelled)cancel.cancel('Protected Range finished');
+    }
+  }
+
+  Future<void> dispose()async{
+    if(_disposed)return;
+    _disposed=true;
+    _cancelReads();
+    _notifyInvalidation(ProtectedPlaybackInvalidation.disposed);
+    _generation++;
+    _state=null;
+    _opening=false;
+    _refreshing=false;
+    await _identities?.cancel();
+    _identities=null;
+    await _invalidations.close();
+  }
+}
+)
+              .hasMatch(contentType) ||
          contentEncoding!='identity'){
         throw const FormatException('Untrusted protected media response headers');
       }
