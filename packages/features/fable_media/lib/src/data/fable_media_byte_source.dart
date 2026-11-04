@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
 import '../domain/media_byte_range.dart';
-import '../domain/media_byte_source.dart';
 import '../domain/media_read_result.dart';
 import '../domain/media_session_bound_source.dart';
 import '../protected_media_playback_repository.dart';
