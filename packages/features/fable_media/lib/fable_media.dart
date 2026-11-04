@@ -7,6 +7,7 @@ export 'src/domain/media_byte_range.dart';
 export 'src/domain/media_byte_chunk.dart';
 export 'src/domain/protected_player_port.dart';
 export 'src/application/protected_player_session.dart';
+export 'src/presentation/fable_native_protected_player.dart';
 export 'src/domain/media_byte_source.dart';
 export 'src/domain/media_session_bound_source.dart';
 export 'src/domain/media_read_result.dart';
