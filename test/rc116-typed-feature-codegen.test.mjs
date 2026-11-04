@@ -34,12 +34,12 @@ export function mockTypedFeatureInput(){
         operationId:idA,'x-fable-public':false,'x-fable-contract-hash':opHash,
         security:[{bearerAuth:[]}],
         parameters:[{name:'id',in:'path',required:true,schema:{type:'string'}}],
-        responses:{'200':{content:{'application/json':{schema:response}}}},
+        responses:{'200':{content:{'application/json':{schema:structuredClone(response)}}}},
       }},
       '/orders/summary':{get:{
         operationId:idB,'x-fable-public':false,'x-fable-contract-hash':opHash,
         security:[{bearerAuth:[]}],parameters:[],
-        responses:{'200':{content:{'application/json':{schema:response}}}},
+        responses:{'200':{content:{'application/json':{schema:structuredClone(response)}}}},
       }},
     }},
     requirements:{
