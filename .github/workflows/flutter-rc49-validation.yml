@@ -45,6 +45,8 @@ jobs:
           node --test test/rc116-typed-feature-codegen.test.mjs
           node --test test/rc117-player-session-boundary-audit.test.mjs
           node --test test/rc119-protected-player-broker-audit.test.mjs
+          python3 tools/verify-uiscene-rc120.py
+          node --test test/rc120-native-player-audit.test.mjs
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
@@ -142,3 +144,15 @@ jobs:
         run: xcodebuild -version
       - name: Build iOS simulator (does not require signing)
         run: flutter build ios --simulator --debug --no-codesign
+      - name: Verify compiled Runner UIScene manifest (iOS 27 prerequisite)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify-uiscene-rc120.py
+          plist="build/ios/iphonesimulator/Runner.app/Info.plist"
+          test -f "$plist"
+          python3 tools/verify-uiscene-rc120.py "$plist"
+          /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneDelegateClassName" "$plist"
+          # This is a build + manifest gate, not evidence of launch on an
+          # iOS 27 device; retain the physical simulator/device requirement.
+
