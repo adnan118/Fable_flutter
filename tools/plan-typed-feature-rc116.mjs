@@ -130,6 +130,18 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
        params.some(name=>!route.parameters.some(p=>p.in==='path'&&
          p.name===name&&p.required===true&&p.schema?.type==='string')))
       fail('only explicitly-typed string path parameters supported: '+id);
+    // Verify parameter formats against the signed operation response/source,
+    // not merely against the OpenAPI route's untrusted body.
+    const sourceParams=op.request?.params;
+    if(!Array.isArray(sourceParams)||sourceParams.length!==params.length||
+       sourceParams.some(p=>{
+         const declared=route.parameters.find(x=>x.in==='path'&&x.name===p.name);
+         return !params.includes(p.name)||p.required!==true||
+           !['string','uuid'].includes(p.type)||!declared||
+           (declared.schema?.format??null)!==(p.type==='uuid'?'uuid':null);
+       })){
+      fail('OpenAPI path parameters contradict signed Backend operation: '+id);
+    }
     const okStatuses=Object.entries(route.responses??{}).filter(([k])=>
       /^2\d\d$/.test(k));
     if(okStatuses.length!==1)fail('one unambiguous success response required: '+id);
