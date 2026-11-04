@@ -18,6 +18,14 @@ export const architectureLayers=Object.freeze([
   'domain','application','data','presentation',
 ]);
 const layerSet=new Set(architectureLayers);
+// RC115 explicit pre-migration legacy baseline (source inventory from RC114).
+// New names cannot inherit a blanket legacy exception. Existing features are
+// intentionally NOT labelled clean until each adds four-layer source+manifest.
+const legacyBaseline=new Set([
+  'access_control','analytics','auth','biometrics','content','deeplinks',
+  'localization','location','messaging','notifications','offline','payments',
+  'profile','push_notifications','realtime','social','support',
+]);
 const allowedInternal={
   domain:new Set(['domain']),
   application:new Set(['domain','application']),
@@ -146,7 +154,10 @@ export function checkFeatureArchitecture(root,featureId){
   // enrolled in strict enforcement, even if its manifest is deleted.
   const adopted=architectureLayers.some(layer=>existsSync(join(sourceDir,layer))) ||
     existsSync(marker);
-  if(!adopted)return []; // legacy (not architecturally certified)
+  if(!adopted && legacyBaseline.has(featureId))return []; // known legacy
+  if(!adopted){
+    return [featureId+': new feature lacks typed four-layer architecture and manifest'];
+  }
   if(!existsSync(marker)){
     findings.push(featureId+': architecture manifest missing');
   }else if(lstatSync(marker).isSymbolicLink()){
@@ -207,10 +218,12 @@ export function auditFeatureArchitectures(root=process.cwd()){
     const marker=join(packageDir,'.fable-architecture.json');
     const layered=architectureLayers.some(x=>
       existsSync(join(packageDir,'lib/src',x)))||existsSync(marker);
-    if(!layered){
+    if(!layered && legacyBaseline.has(id)){
       legacy.push(id);
       continue;
     }
+    // Include non-adopted NEW packages in the enforced set: otherwise a
+    // generator could bypass the rule just by omitting src/domain entirely.
     adopted.push(id);
     findings.push(...checkFeatureArchitecture(root,id));
   }
