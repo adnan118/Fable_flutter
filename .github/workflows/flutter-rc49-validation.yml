@@ -47,6 +47,7 @@ jobs:
           node --test test/rc119-protected-player-broker-audit.test.mjs
           python3 tools/verify-uiscene-rc120.py
           node --test test/rc120-native-player-audit.test.mjs
+          node --test test/rc120-uiscene-launch-gate-audit.test.mjs
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
@@ -163,44 +164,7 @@ jobs:
           # A compiled plist alone does not prove UIScene launches successfully.
       - name: Launch iOS 27 Runner on iPhone and iPad simulators (UIScene smoke)
         shell: bash
+        timeout-minutes: 35
         run: |
           set -euo pipefail
-          app="build/ios/iphonesimulator/Runner.app"
-          bundle="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")"
-          # Select available 27.x device pair; never run this gate on iOS 26.
-          python3 - > "$RUNNER_TEMP/fable-27-simulators.txt" <<'PY'
-          import json, subprocess
-          raw = subprocess.check_output(
-              ["xcrun", "simctl", "list", "-j", "devices", "available"], text=True)
-          devices = json.loads(raw)["devices"]
-          result = {}
-          for runtime, entries in devices.items():
-              if "iOS-27" not in runtime:
-                  continue
-              for entry in entries:
-                  if not entry.get("isAvailable", False):
-                      continue
-                  name = entry.get("name", "")
-                  key = "iphone" if name.startswith("iPhone") else (
-                      "ipad" if name.startswith("iPad") else None)
-                  if key and key not in result:
-                      result[key] = entry["udid"]
-          if set(result) != {"iphone", "ipad"}:
-              raise SystemExit("Xcode 27 runner lacks iPhone and iPad iOS 27 simulators")
-          print(result["iphone"])
-          print(result["ipad"])
-          PY
-          while IFS= read -r sim; do
-            echo "::group::UIScene launch $sim"
-            xcrun simctl boot "$sim" || true
-            xcrun simctl bootstatus "$sim" -b
-            xcrun simctl install "$sim" "$app"
-            xcrun simctl launch "$sim" "$bundle"
-            sleep 5
-            # Fail if process crashed immediately after launch.
-            xcrun simctl terminate "$sim" "$bundle"
-            xcrun simctl shutdown "$sim"
-            echo "::endgroup::"
-          done < "$RUNNER_TEMP/fable-27-simulators.txt"
-          echo "RC120 UIScene iOS/iPadOS 27 simulator launch smoke PASS"
-
+          python3 tools/rc120_uiscene_simulator_smoke.py build/ios/iphonesimulator/Runner.app

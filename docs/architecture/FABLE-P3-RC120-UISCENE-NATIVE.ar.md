@@ -21,3 +21,6 @@ Sources:
 ## Native bridge scope
 
 Protected progresssive **audio/video byte streams**, no streaming manifest/DRM. Flutter Session already validates Backend range 206, MIME and response boundaries. Native platform code may consume only bounded byte buffers with nonsecret view ID, range generation and length. No source URLs, account IDs, HTTP headers, authentication or media tokens are passed into native. Android and iOS native implementations require device and Backend/R2 E2E. P6 stays open; this PR cannot be labelled production-ready based on CI builds alone.
+
+## RC120 iOS 27 simulator launch robustness
+The previous shell-based `simctl bootstatus -b` can wait indefinitely when CoreSimulator stalls. A standalone Python smoke test now bounds every `simctl` call, logs diagnostics, creates a missing iPhone/iPad simulator if necessary, and verifies the process remained alive long enough to terminate successfully. The job fails rather than silently skipping either device or treating a compiled UIScene plist as a runtime pass. This is simulator startup proof only, not media playback E2E.

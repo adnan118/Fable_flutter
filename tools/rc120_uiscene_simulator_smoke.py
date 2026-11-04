@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Fail-closed Xcode 27 UIScene smoke test on both iPhone + iPad simulators.
+
+Boot, install, launch, verify process survives, and clean up. Each simctl
+operation is bounded; a nonresponsive CoreSimulator is a FAILED gate, not a
+reason to claim successful launch based only on a compiled Info.plist.
+"""
+from __future__ import annotations
+
+import json
+import pathlib
+import plistlib
+import subprocess
+import sys
+import time
+
+
+def run(*arguments: str, timeout: int = 45) -> str:
+    print("+", " ".join(arguments), f"[timeout {timeout}s]", flush=True)
+    try:
+        result = subprocess.run(
+            list(arguments), check=True, text=True, capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Timed out: {arguments[0]} {arguments[1:]}") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stdout or "") + "\n" + (exc.stderr or "")
+        print(detail[-4000:], flush=True)
+        raise
+    output = (result.stdout or "").strip()
+    if output:
+        print(output[-4000:], flush=True)
+    return output
+
+
+def simctl(*arguments: str, timeout: int = 45) -> str:
+    return run("xcrun", "simctl", *arguments, timeout=timeout)
+
+
+def available_pair(runtime: str) -> list[tuple[str, str, bool]]:
+    devices = json.loads(simctl("list", "-j", "devices", "available", timeout=60))
+    entries = devices.get("devices", {}).get(runtime, [])
+    selected = {}
+    for item in entries:
+        if not item.get("isAvailable", False):
+            continue
+        name = item.get("name", "")
+        kind = "iPhone" if name.startswith("iPhone") else (
+            "iPad" if name.startswith("iPad") else None
+        )
+        if kind and kind not in selected:
+            selected[kind] = (kind, item["udid"], item.get("state") == "Booted")
+
+    if len(selected) != 2:
+        device_types = json.loads(simctl("list", "-j", "devicetypes", timeout=60))
+        types = device_types.get("devicetypes", [])
+        for kind in ("iPhone", "iPad"):
+            if kind in selected:
+                continue
+            candidate = next(
+                (x for x in types if x.get("name", "").startswith(kind)),
+                None,
+            )
+            if candidate is None:
+                raise RuntimeError(f"Xcode 27 iOS Simulator missing {kind} device type")
+            udid = simctl(
+                "create", f"Fable-RC120-{kind}",
+                candidate["identifier"], runtime, timeout=120,
+            ).strip()
+            selected[kind] = (kind, udid, False)
+    if set(selected) != {"iPhone", "iPad"}:
+        raise RuntimeError("Both iPhone and iPad must be verified")
+    return [selected["iPhone"], selected["iPad"]]
+
+
+def main(app: pathlib.Path) -> None:
+    if not app.is_dir():
+        raise RuntimeError(f"Compiled iOS app not found: {app}")
+    with (app / "Info.plist").open("rb") as handle:
+        info = plistlib.load(handle)
+    bundle = info.get("CFBundleIdentifier")
+    assert isinstance(bundle, str) and bundle, "Missing bundle identifier"
+    manifest = info.get("UIApplicationSceneManifest")
+    assert isinstance(manifest, dict), "Built app has no UIScene manifest"
+    scene = manifest["UISceneConfigurations"]["UIWindowSceneSessionRoleApplication"][0]
+    assert scene["UISceneDelegateClassName"] == "FlutterSceneDelegate"
+
+    version = run("xcodebuild", "-version").splitlines()[0]
+    if not version.startswith("Xcode 27"):
+        raise RuntimeError(f"Expected Xcode 27, found {version}")
+    sdk = run("xcrun", "--sdk", "iphonesimulator", "--show-sdk-version").strip()
+    if not sdk.startswith("27."):
+        raise RuntimeError(f"Expected iOS Simulator SDK 27, found {sdk}")
+
+    runtimes = json.loads(simctl("list", "-j", "runtimes", timeout=60))
+    compatible = [
+        x for x in runtimes.get("runtimes", [])
+        if x.get("isAvailable", False)
+        and x.get("version", "").startswith("27.")
+        and "iOS" in x.get("name", "")
+    ]
+    if not compatible:
+        raise RuntimeError("Missing bootable iOS 27 simulator runtime")
+    runtime = compatible[0]["identifier"]
+    print(f"RC120 runtime={runtime} bundle={bundle}", flush=True)
+
+    for kind, udid, is_booted in available_pair(runtime):
+        print(f"::group::RC120 {kind} iOS 27 UIScene launch", flush=True)
+        try:
+            if not is_booted:
+                simctl("boot", udid, timeout=120)
+            simctl("bootstatus", udid, "-b", timeout=360)
+            simctl("install", udid, str(app.resolve()), timeout=120)
+            launch_result = simctl("launch", udid, bundle, timeout=75)
+            if not launch_result or ":" not in launch_result:
+                raise RuntimeError(f"{kind} simctl did not return a process id")
+            time.sleep(7)
+            # terminate returns nonzero if app exited/crashed on startup.
+            simctl("terminate", udid, bundle, timeout=60)
+            print(f"PASS: {kind} iOS 27 UIScene process stayed alive", flush=True)
+        finally:
+            try:
+                simctl("shutdown", udid, timeout=90)
+            except (RuntimeError, subprocess.CalledProcessError):
+                print(f"WARNING: could not cleanly shut down {kind}", flush=True)
+            print("::endgroup::", flush=True)
+
+    print("RC120 iPhone + iPad iOS/iPadOS 27 UIScene smoke PASS", flush=True)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("Usage: rc120_uiscene_simulator_smoke.py Runner.app")
+    main(pathlib.Path(sys.argv[1]))
