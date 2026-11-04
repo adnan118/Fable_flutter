@@ -364,6 +364,8 @@ void main(){
         start:0,length:6),throwsFormatException);
       h.contentTypeHeader='video/mp4';
       final source=FableMediaByteSource(repository:h.repository,playback:view);
+      final invalidations=<MediaSessionInvalidation>[];
+      final subscription=source.invalidations.listen(invalidations.add);
       try{
         expect((await source.readChunk(
           const MediaByteRange(start:0,length:6))).totalLength,6);
@@ -373,7 +375,20 @@ void main(){
           throwsA(isA<MediaReadFailure>().having(
             (failure)=>failure.kind,'kind',
             MediaReadFailureKind.invalidResponse)));
-      }finally{await source.close();}
+        expect(invalidations,[MediaSessionInvalidation.resourceChanged]);
+        expect(source.isActive,false);
+        final getCount=h.requests.where((req)=>req.path.endsWith('/content')).length;
+        await expectLater(source.readChunk(
+          const MediaByteRange(start:0,length:6)),
+          throwsA(isA<MediaReadFailure>().having(
+            (failure)=>failure.kind,'kind',
+            MediaReadFailureKind.sessionChanged)));
+        expect(h.requests.where((req)=>req.path.endsWith('/content')).length,
+          getCount);
+      }finally{
+        await subscription.cancel();
+        await source.close();
+      }
     }finally{await h.close();}
   });
 
