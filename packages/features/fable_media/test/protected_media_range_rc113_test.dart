@@ -64,7 +64,7 @@ class Harness {
         final headers=Headers.fromMap({
           'content-range':[rangeHeader??'bytes 0-5/6'],
           'content-length':['$contentLength'],
-          'content-type':['video/mp4'],
+          'content-type':[contentTypeHeader??'video/mp4'],
           'cache-control':['private, no-store, max-age=0'],
         });
         final stream=Stream<Uint8List>.multi((controller)async{
@@ -98,6 +98,7 @@ class Harness {
   int status=206;
   int? lengthHeader;
   String? rangeHeader;
+  String? contentTypeHeader;
   Completer<void>? waitChunk;
   Future<void> close()async{
     await repository.dispose();
@@ -312,4 +313,68 @@ void main(){
       }
     }finally{await h.close();}
   });
+  test('RC118 verified range metadata is immutable, typed and usable by player port',()async{
+    final h=Harness();
+    try{
+      final view=await h.repository.open(asset,platform:'ANDROID');
+      final chunk=await h.repository.readContentRangeChunk(view,start:0,length:6);
+      expect(chunk.start,0);
+      expect(chunk.length,6);
+      expect(chunk.totalLength,6);
+      expect(chunk.mimeType,'video/mp4');
+      final mutable=chunk.bytes;
+      mutable[0]=99;
+      expect(chunk.bytes,[1,2,3,4,5,6]);
+      final source=FableMediaByteSource(repository:h.repository,playback:view);
+      try{
+        expect(source,isA<DescribedMediaByteSource>());
+        final described=await source.readChunk(
+          const MediaByteRange(start:0,length:6));
+        expect(described.totalLength,6);
+        expect(described.mimeType,'video/mp4');
+        expect(described.bytes,[1,2,3,4,5,6]);
+        expect(await source.read(const MediaByteRange(start:0,length:6)),
+          [1,2,3,4,5,6]);
+      }finally{await source.close();}
+      expect(h.requests.where((r)=>r.method=='DELETE'),isEmpty);
+    }finally{await h.close();}
+  });
+
+  test('RC118 accepts verified short tail at EOF with total size',()async{
+    final h=Harness();
+    try{
+      h.payload=Uint8List.fromList([5,6]);
+      h.rangeHeader='bytes 4-5/6';
+      final view=await h.repository.open(asset,platform:'ANDROID');
+      final chunk=await h.repository.readContentRangeChunk(view,
+        start:4,length:6);
+      expect(chunk.start,4);
+      expect(chunk.length,2);
+      expect(chunk.totalLength,6);
+      expect(chunk.bytes,[5,6]);
+    }finally{await h.close();}
+  });
+
+  test('RC118 refuses nonmedia MIME and changed metadata within one view',()async{
+    final h=Harness();
+    try{
+      final view=await h.repository.open(asset,platform:'ANDROID');
+      h.contentTypeHeader='application/json';
+      await expectLater(h.repository.readContentRangeChunk(view,
+        start:0,length:6),throwsFormatException);
+      h.contentTypeHeader='video/mp4';
+      final source=FableMediaByteSource(repository:h.repository,playback:view);
+      try{
+        expect((await source.readChunk(
+          const MediaByteRange(start:0,length:6))).totalLength,6);
+        h.rangeHeader='bytes 0-5/12';
+        await expectLater(source.readChunk(
+          const MediaByteRange(start:0,length:6)),
+          throwsA(isA<MediaReadFailure>().having(
+            (failure)=>failure.kind,'kind',
+            MediaReadFailureKind.invalidResponse)));
+      }finally{await source.close();}
+    }finally{await h.close();}
+  });
+
 }
