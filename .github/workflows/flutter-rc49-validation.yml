@@ -40,6 +40,8 @@ jobs:
           node --test test/rc113-protected-media-range-audit.test.mjs
           node --test test/rc114-media-architecture-gate.test.mjs
           node tools/enforce-media-architecture-rc114.mjs
+          node --test test/rc115-feature-architecture-gate.test.mjs
+          node tools/enforce-feature-architecture-rc115.mjs
           node --test test/web-admin-auth-client-rc97.test.mjs
           node --test test/feature-parity-master.test.mjs
           node --test test/backend-wide-decision-review.test.mjs
