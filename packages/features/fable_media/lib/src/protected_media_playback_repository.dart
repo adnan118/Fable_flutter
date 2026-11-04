@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
+import 'domain/media_byte_chunk.dart';
 
 /// RC112 is intentionally Fable Backend-only. The Backend's published media
 /// blueprint and controller are evidence of routes, NOT proof that the current
@@ -54,6 +55,7 @@ enum ProtectedPlaybackInvalidation {
   accountChanged,
   credentialsRotated,
   playbackEnded,
+  resourceChanged,
   disposed,
 }
 
@@ -86,6 +88,11 @@ class FableProtectedMediaPlaybackRepository {
   final VerifiedFablePlaybackBindings bindings;
   StreamSubscription<FableIdentityEvent>? _identities;
   _PlaybackState? _state;
+  // A playback view pins its verified media metadata across all byte sources.
+  // Otherwise disposing/recreating a source could silently mix revisions.
+  bool _resourceChanged=false;
+  int? _verifiedMediaTotal;
+  String? _verifiedMediaMime;
   int _generation=0;
   bool _disposed=false,_opening=false,_refreshing=false;
   final Set<CancelToken> _reads=<CancelToken>{};
@@ -102,7 +109,7 @@ class FableProtectedMediaPlaybackRepository {
   /// request, including token expiration and the authenticated identity epoch.
   bool isCurrentView(ProtectedMediaPlaybackView view){
     final active=_state;
-    return !_disposed && active!=null && identical(active.view,view) &&
+    return !_disposed && !_resourceChanged && active!=null && identical(active.view,view) &&
         gateway.session.identityRevision==active.epoch &&
         _future(view.expiresAt) && _future(view.idleExpiresAt) &&
         _future(view.accessTokenExpiresAt);
@@ -225,6 +232,9 @@ class FableProtectedMediaPlaybackRepository {
       final parsed=_parseOpen(_payload(response.data),assetId,platform,epoch);
       _assertCurrent(epoch,generation);
       _state=parsed;
+      _resourceChanged=false;
+      _verifiedMediaTotal=null;
+      _verifiedMediaMime=null;
       return parsed.view;
     }finally{
       if(_generation==generation)_opening=false;
@@ -246,7 +256,7 @@ class FableProtectedMediaPlaybackRepository {
 
   Future<ProtectedMediaPlaybackView> refresh(ProtectedMediaPlaybackView view)async{
     final active=_state;
-    if(_disposed||active==null||!identical(active.view,view)||_refreshing ||
+    if(_disposed||_resourceChanged||active==null||!identical(active.view,view)||_refreshing ||
        gateway.session.identityRevision!=active.epoch ||
        !_future(view.expiresAt)||!_future(view.idleExpiresAt)){
       throw StateError('Playback session is inactive or expired');
@@ -332,6 +342,13 @@ class FableProtectedMediaPlaybackRepository {
   /// or URL is handed to that player. This does NOT implement native DRM.
   Future<Uint8List> readContentRange(ProtectedMediaPlaybackView view,{
     required int start,required int length,
+  }) async =>
+      (await readContentRangeChunk(view,start:start,length:length)).bytes;
+
+  /// Single verified progressive-media chunk with server-confirmed length and
+  /// MIME. This remains Fable-only and never returns bearer/media credentials.
+  Future<MediaByteChunk> readContentRangeChunk(ProtectedMediaPlaybackView view,{
+    required int start,required int length,
   }) async {
     if(start<0 || length<=0 || length>524288 || start>0x7fffffffffffffff-length){
       throw ArgumentError('Invalid bounded protected media Range');
@@ -404,7 +421,22 @@ class FableProtectedMediaPlaybackRepository {
       if(sink.length!=expected){
         throw const FormatException('Truncated protected media Range');
       }
-      return sink.takeBytes();
+      final chunk=MediaByteChunk(start:start,totalLength:total,
+        mimeType:contentType,bytes:sink.takeBytes());
+      // Pin metadata to the repository's server-approved playback view,
+      // not only the currently constructed byte source. A new adapter must
+      // never bypass a detected revision change.
+      if(_resourceChanged ||
+         (_verifiedMediaTotal!=null && _verifiedMediaTotal!=chunk.totalLength) ||
+         (_verifiedMediaMime!=null && _verifiedMediaMime!=chunk.mimeType)){
+        _resourceChanged=true;
+        _cancelReads();
+        _notifyInvalidation(ProtectedPlaybackInvalidation.resourceChanged);
+        throw const FormatException('Protected playback resource changed');
+      }
+      _verifiedMediaTotal=chunk.totalLength;
+      _verifiedMediaMime=chunk.mimeType;
+      return chunk;
     }finally{
       _reads.remove(cancel);
       if(!cancel.isCancelled)cancel.cancel('Protected Range finished');

@@ -4,6 +4,7 @@ export 'src/media_read_repository.dart';
 export 'src/media_upload_repository.dart';
 export 'src/protected_media_playback_repository.dart';
 export 'src/domain/media_byte_range.dart';
+export 'src/domain/media_byte_chunk.dart';
 export 'src/domain/media_byte_source.dart';
 export 'src/domain/media_session_bound_source.dart';
 export 'src/domain/media_read_result.dart';

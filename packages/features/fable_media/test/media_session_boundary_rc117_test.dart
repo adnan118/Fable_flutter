@@ -79,6 +79,7 @@ void main(){
   test('RC117 credential rotation and server end each purge displayed data',()async{
     for(final reason in [
       MediaSessionInvalidation.credentialsRotated,
+      MediaSessionInvalidation.resourceChanged,
       MediaSessionInvalidation.playbackEnded,
     ]){
       final source=_FakeProtectedSource((_)async=>Uint8List.fromList([4]));

@@ -3,13 +3,14 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
 import '../domain/media_byte_range.dart';
+import '../domain/media_byte_chunk.dart';
 import '../domain/media_read_result.dart';
 import '../domain/media_session_bound_source.dart';
 import '../protected_media_playback_repository.dart';
 
 /// Fable-specific adapter. Other Backend MUST implement MediaByteSource using
 /// its own independently verified contract, auth policy and response parser.
-final class FableMediaByteSource implements SessionBoundMediaByteSource {
+final class FableMediaByteSource implements DescribedMediaByteSource {
   FableMediaByteSource({
     required this.repository,
     required this.playback,
@@ -25,6 +26,8 @@ final class FableMediaByteSource implements SessionBoundMediaByteSource {
           MediaSessionInvalidation.credentialsRotated,
         ProtectedPlaybackInvalidation.playbackEnded =>
           MediaSessionInvalidation.playbackEnded,
+        ProtectedPlaybackInvalidation.resourceChanged =>
+          MediaSessionInvalidation.resourceChanged,
         ProtectedPlaybackInvalidation.disposed =>
           MediaSessionInvalidation.sourceClosed,
       });
@@ -37,6 +40,8 @@ final class FableMediaByteSource implements SessionBoundMediaByteSource {
   StreamSubscription<ProtectedPlaybackInvalidation>? _subscription;
   bool _closed=false;
   bool _invalidated=false;
+  int? _knownTotalLength;
+  String? _knownMimeType;
 
   @override Stream<MediaSessionInvalidation> get invalidations=>_signals.stream;
   @override bool get isActive=>
@@ -59,6 +64,22 @@ final class FableMediaByteSource implements SessionBoundMediaByteSource {
 
   @override
   Future<Uint8List> read(MediaByteRange range) async {
+    final chunk=await _readGuarded(range,requireProgressive:false);
+    // The extra await introduced by the compatibility wrapper is another
+    // possible account-switch boundary. Guard it before returning bytes.
+    if(!isActive){
+      throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
+    }
+    return chunk.bytes;
+  }
+
+  @override
+  Future<MediaByteChunk> readChunk(MediaByteRange range) =>
+      _readGuarded(range,requireProgressive:true);
+
+  Future<MediaByteChunk> _readGuarded(MediaByteRange range,{
+    required bool requireProgressive,
+  }) async {
     if(!range.isValid){
       throw const MediaReadFailure(MediaReadFailureKind.invalidInput);
     }
@@ -66,12 +87,34 @@ final class FableMediaByteSource implements SessionBoundMediaByteSource {
       throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
     }
     try{
-      final bytes=await repository.readContentRange(playback,
+      final chunk=await repository.readContentRangeChunk(playback,
         start:range.start,length:range.length);
       if(!isActive){
         throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
       }
-      return bytes;
+      // Preserve legacy byte-only source reads of images/files. Native player
+      // chunk requests alone require verified progressive audio/video.
+      if(requireProgressive &&
+         !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*$')
+             .hasMatch(chunk.mimeType)){
+        throw const MediaReadFailure(MediaReadFailureKind.unsupported);
+      }
+      // Seek and native buffers must never combine bytes from revisions
+      // reporting different sizes or MIME types within the same view.
+      if((_knownTotalLength!=null &&
+          _knownTotalLength!=chunk.totalLength) ||
+         (_knownMimeType!=null && _knownMimeType!=chunk.mimeType)){
+        // Bytes from two different resource revisions must never coexist
+        // in a renderer. Revoke this view synchronously, cancel parallel
+        // fetches and force a new server-approved playback session.
+        _invalidated=true;
+        repository.cancelReadsForView(playback);
+        _signals.add(MediaSessionInvalidation.resourceChanged);
+        throw const MediaReadFailure(MediaReadFailureKind.invalidResponse);
+      }
+      _knownTotalLength=chunk.totalLength;
+      _knownMimeType=chunk.mimeType;
+      return chunk;
     } on FableApiException catch(error){
       if(error.status==401){
         throw const MediaReadFailure(MediaReadFailureKind.unauthenticated);
