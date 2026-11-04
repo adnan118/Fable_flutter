@@ -50,6 +50,39 @@ function dataFields(schema){
   }
   return fields;
 }
+/**
+ * Independently recompute flat field shapes from the signed Fable operation's
+ * response. OpenAPI's route hash metadata alone does not authenticate JSON
+ * schema bodies; they must agree with the op response covered by opHash.
+ */
+function checkSignedResponseShape(op,schema,fields){
+  const source=op.response?.data;
+  if(op.response?.kind!=='fable-success-envelope'||source?.type!=='object'||
+     !Array.isArray(source.fields)||source.fields.length!==fields.length){
+    fail('signed operation has no matching flat response DTO: '+op.operationId);
+  }
+  const mappings={
+    string:{type:'String'},text:{type:'String'},uuid:{type:'String',format:'uuid'},
+    datetime:{type:'String',format:'date-time'},
+    int:{type:'int'},decimal:{type:'double'},boolean:{type:'bool'},
+  };
+  const seen=new Set();
+  for(const field of source.fields){
+    const name=field?.name;
+    if(typeof name!=='string'||seen.has(name)||!Object.hasOwn(mappings,field.type))
+      fail('unsupported signed Backend response field: '+op.operationId);
+    seen.add(name);
+    const expected=mappings[field.type];
+    const actual=fields.find(x=>x.name===name);
+    const encoded=schema.properties[name];
+    if(!actual || actual.type!==expected.type ||
+       actual.required===(field.optional===true)||
+       (encoded.format??null)!==(expected.format??null)){
+      fail('OpenAPI data schema contradicts signed Backend response: '+op.operationId);
+    }
+  }
+}
+
 export function planTypedFeature({featureId,contract,openapi,requirements,selectedFeatures}){
   if(typeof featureId!=='string'||!FEATURE.test(featureId)||featureId.length>64)
     fail('unsafe project feature identifier');
@@ -107,6 +140,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
        !schema.required.includes('success')||!schema.required.includes('data'))
       fail('strict Fable success envelope and data schema required: '+id);
     const fields=dataFields(schema.properties?.data);
+    checkSignedResponseShape(op,schema.properties.data,fields);
     const className=typeName(id);
     if(!/^[A-Z][A-Za-z0-9]*$/.test(className)||className.length>80||
        names.has(className))fail('unsafe/colliding Dart type name: '+id);
