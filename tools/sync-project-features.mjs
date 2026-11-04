@@ -8,6 +8,7 @@ import {existsSync,readFileSync,writeFileSync,mkdirSync,readdirSync,statSync,cpS
 import {resolve,join,dirname,relative,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {importBackendDecisions} from './flutter-setup-wizard.mjs';
+import {auditFeatureArchitectures} from './enforce-feature-architecture-rc115.mjs';
 import {FEATURE_IDS,FEATURE_OWNERSHIP,REQUIRED_CORE,classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 
 const KNOWN=FEATURE_IDS;
@@ -193,8 +194,23 @@ function applyPrune(root,plan,{prune=false}={}){
 export function syncProjectFeatures(root,verified,{apply=false,prune=false}={}){
   if(prune&&!apply)throw Error('--prune requires --apply');
   const plan=planFeatureSync(root,verified,{prune});
-  if(!apply)return {applied:false,...plan};
-  return {...plan,...applyPrune(root,plan,{prune})};
+  // Every project apply checks the physical source before mutations/backups.
+  // Legacy is explicitly reported as NOT certified, and any new feature
+  // package without typed layers fails closed. The preview never mutates.
+  const architecture=auditFeatureArchitectures(root);
+  if(!apply){
+    return {applied:false,...plan,architecture:{
+      enforced:architecture.adopted,legacyNotCertified:architecture.legacy,
+      findings:architecture.findings,
+    }};
+  }
+  if(architecture.findings.length){
+    throw Error('RC115 feature architecture gate rejected project apply: '+
+      architecture.findings.join('; '));
+  }
+  return {...plan,...applyPrune(root,plan,{prune}),
+    architecture:{enforced:architecture.adopted,
+      legacyNotCertified:architecture.legacy,findings:[]}};
 }
 function parse(argv){
   const options={};
