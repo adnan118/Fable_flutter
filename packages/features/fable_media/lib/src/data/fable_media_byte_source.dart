@@ -83,6 +83,12 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
       if((_knownTotalLength!=null &&
           _knownTotalLength!=chunk.totalLength) ||
          (_knownMimeType!=null && _knownMimeType!=chunk.mimeType)){
+        // Bytes from two different resource revisions must never coexist
+        // in a renderer. Revoke this view synchronously, cancel parallel
+        // fetches and force a new server-approved playback session.
+        _invalidated=true;
+        repository.cancelReadsForView(playback);
+        _signals.add(MediaSessionInvalidation.resourceChanged);
         throw const MediaReadFailure(MediaReadFailureKind.invalidResponse);
       }
       _knownTotalLength=chunk.totalLength;
