@@ -205,7 +205,7 @@ function presentation(op){
     '    _closed=true;_revision++;',
     '    _state=const '+name+'Idle();',
     '    super.dispose();',
-    '  }','}');
+    '  }','}'];
   return line(...parts);
 }
 function failure(){
