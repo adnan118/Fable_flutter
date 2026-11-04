@@ -22,6 +22,13 @@ const response={type:'object',properties:{
 const op=(id,path)=>({
   operationId:id,method:'GET',path,feature:'orders_ci',
   public:false,permissions:['orders.read'],contractHash:opHash,
+  response:{kind:'fable-success-envelope',data:{type:'object',fields:[
+    {name:'id',type:'string',optional:false},
+    {name:'quantity',type:'int',optional:false},
+    {name:'total',type:'decimal',optional:false},
+    {name:'active',type:'boolean',optional:false},
+    {name:'note',type:'string',optional:true},
+  ]}},
 });
 export function mockTypedFeatureInput(){
   const operations=[op(idA,'/orders/:id'),op(idB,'/orders/summary')];
@@ -126,6 +133,8 @@ test('RC116 rejects unverified routes, wrong hash, public auth, unknown permissi
     x=>{x.openapi.paths['/orders/{id}'].get.parameters=[];},
     x=>{x.selectedFeatures=[];},
     x=>{x.contract.operations[0].feature='someone_else';},
+    x=>{x.openapi.paths['/orders/{id}'].get.responses['200'].content['application/json'].schema.properties.data.properties.total={type:'integer'};},
+    x=>{x.contract.operations[0].response.data.fields[2].type='json';},
   ]){
     const x=mockTypedFeatureInput();
     mutation(x);
