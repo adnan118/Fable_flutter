@@ -40,11 +40,23 @@ function withFixture(fn,opts){
 
 test('RC115 audits every newly layered feature, not a Media-only path',()=>{
   withFixture(root=>{
-    put(root,'packages/features/fable_legacy/lib/legacy.dart','// old feature');
+    put(root,'packages/features/fable_auth/lib/legacy.dart','// old feature');
     const audit=auditFeatureArchitectures(root);
     assert.deepEqual(audit.findings,[]);
     assert.deepEqual(audit.adopted,['orders']);
-    assert.deepEqual(audit.legacy,['legacy']);
+    assert.deepEqual(audit.legacy,['auth']);
+  });
+});
+
+test('RC115 brand-new feature cannot bypass enforcement by omitting all four layers',()=>{
+  withFixture(root=>{
+    put(root,'packages/features/fable_payroll/lib/fable_payroll.dart',
+      'final class NotActuallyArchitected {}');
+    const report=auditFeatureArchitectures(root);
+    assert.ok(report.findings.some(x=>x.includes(
+      'payroll: new feature lacks typed four-layer architecture and manifest')),
+      report.findings.join('\n'));
+    assert.ok(report.adopted.includes('payroll'));
   });
 });
 
@@ -130,10 +142,10 @@ test('RC115 pure Domain can use Dart standard libraries but not platform I/O',()
 
 test('RC115 explicitly reports legacy packages as not architecturally certified',()=>{
   withFixture(root=>{
-    put(root,'packages/features/fable_legacy/lib/src/legacy_widgets.dart',
+    put(root,'packages/features/fable_auth/lib/src/legacy_widgets.dart',
       "import 'package:dio/dio.dart';");
     const result=auditFeatureArchitectures(root);
-    assert.ok(result.legacy.includes('legacy'));
-    assert.equal(result.adopted.includes('legacy'),false);
+    assert.ok(result.legacy.includes('auth'));
+    assert.equal(result.adopted.includes('auth'),false);
   });
 });
