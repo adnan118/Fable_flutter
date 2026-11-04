@@ -16,7 +16,7 @@ Official platform interfaces consulted:
 
 - **Additive pure-Dart Domain contract:** `MediaByteChunk` copies the byte buffer and carries `start`, `totalLength`, `mimeType`; `DescribedMediaByteSource` extends the existing session-bound port with `readChunk(MediaByteRange)`. Existing `MediaByteSource.read()` and its consumers remain source-compatible.
 - **Fable Data adapter:** `FableProtectedMediaPlaybackRepository.readContentRangeChunk()` derives the total strictly from a validated `206 Content-Range` and the MIME from the guarded `Content-Type`. Bounded length, exact `Content-Length`, no-store, identity encoding, same session/epoch, and no redirect or leaked URL/token remain enforced. Old `readContentRange()` delegates to the new implementation.
-- **Session-bound chunk source:** `FableMediaByteSource` now implements the optional described port and **rejects differing MIME or total-length values within a single playback view**. Read still returns bytes only for current callers.
+- **Session-bound chunk source:** `FableMediaByteSource` now implements the optional described port and **rejects differing MIME or total-length values within a single playback view**, synchronously emits typed `resourceChanged`, cancels pending reads and permanently invalidates that source to stop any renderer from combining old and new bytes. Read still returns bytes only for current callers.
 - **Conservative progressive scope:** MIME must match `audio/*` or `video/*`; malformed/HTML/JSON/manifest-style headers cannot silently become playable content. This MIME check alone is NOT proof of codec support.
 - **Simulations:** verify exact metadata, immutable defensive byte copies, short final range, nonmedia MIME rejection, and metadata changes during a view.
 
