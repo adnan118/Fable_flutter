@@ -36,7 +36,9 @@ function layerOf(uri,layer,filename){
     const first=suffix.split('/')[0];
     return layers.includes(first)?first:'legacy';
   }
-  if(uri.startsWith('.')){
+  // Dart permits a bare same-directory import (e.g. 'media_byte_range.dart').
+  // Resolve it by the source file, just like '../domain/value.dart'.
+  if(uri.startsWith('.') || (!uri.includes(':') && !uri.startsWith('/'))){
     const normalized=normalize(join(dirname(filename),uri));
     const pieces=normalized.split(/[\\/]/);
     const libIndex=pieces.lastIndexOf('src');
