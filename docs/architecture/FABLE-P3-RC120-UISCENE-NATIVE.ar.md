@@ -7,9 +7,11 @@ Flutter baseline already used `UIApplicationSceneManifest` with:
 - `UISceneClassName=UIWindowScene`, `UISceneDelegateClassName=FlutterSceneDelegate`, `UISceneConfigurationName=flutter`, storyboard Main.
 - `AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate`; `GeneratedPluginRegistrant` registered inside `didInitializeImplicitFlutterEngine` rather than process launch. Workmanager background task handlers remain in application launch.
 
-**RC120 hardens and independently verifies this configuration:** Python plistlib source/built-info gate and CI iOS simulator build on pinned Flutter 3.47.8. **Do not set `enable-uiscene-migration: false`, do not prefix the scene manifest with an underscore**, and never access `window?.rootViewController` in `didFinishLaunchingWithOptions`.
+**RC120 hardens and independently verifies this configuration:** Python plistlib source/built-info gate and CI iOS simulator build on pinned Flutter 3.47.8. **CI RC120 uses the official GitHub `xcode-27` arm64 macOS 27 image (not the old `macos-26` Xcode 26.6 runner), requires iOS Simulator SDK 27, checks the compiled app plist, then installs/launches/terminates the Runner app on both iPhone 27 and iPad 27 simulators.** This proves scene-capable simulator startup only, not actual native media playback, credentials or physical hardware.
 
-Apple's Xcode 27 SDK requires UIScene or startup fails. iOS 27 launch remains unverified until actually launched on an iOS 27 runtime with the selected Xcode 27 toolchain. A compiled simulator binary and correct plist do not establish runtime launch correctness.
+**Do not set `enable-uiscene-migration: false`, do not prefix the scene manifest with an underscore**, and never access `window?.rootViewController` in `didFinishLaunchingWithOptions`.
+
+Apple's Xcode 27 SDK requires UIScene or startup fails. Full iOS 27 runtime launch is accepted only when the separate Xcode 27 simulator smoke test passes on iPhone AND iPad; `flutter build ios` alone is insufficient. Physical device startup still requires independent verification.
 
 Sources:
 - https://developer.apple.com/documentation/uikit/transitioning-to-the-uikit-scene-based-life-cycle
