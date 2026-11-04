@@ -40,5 +40,10 @@ final class MediaByteChunk {
 /// independent Other Backend adapters keep their existing interface.
 abstract interface class DescribedMediaByteSource
     implements SessionBoundMediaByteSource {
+  /// Conservative earliest deadline (playback, idle and media credential).
+  /// Player must stop/discard native buffers at this instant even if no new
+  /// byte request is made. Never extend without a new approved view.
+  DateTime get authorizationDeadline;
+
   Future<MediaByteChunk> readChunk(MediaByteRange range);
 }

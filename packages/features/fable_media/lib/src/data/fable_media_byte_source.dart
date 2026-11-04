@@ -43,6 +43,16 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
   int? _knownTotalLength;
   String? _knownMimeType;
 
+  @override
+  DateTime get authorizationDeadline {
+    final dates=<DateTime>[
+      playback.expiresAt,
+      playback.idleExpiresAt,
+      playback.accessTokenExpiresAt,
+    ]..sort();
+    return dates.first;
+  }
+
   @override Stream<MediaSessionInvalidation> get invalidations=>_signals.stream;
   @override bool get isActive=>
       !_closed && !_invalidated && repository.isCurrentView(playback);
