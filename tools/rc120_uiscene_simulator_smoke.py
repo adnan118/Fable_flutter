@@ -58,17 +58,36 @@ def available_pair(runtime: str) -> list[tuple[str, str, bool]]:
         for kind in ("iPhone", "iPad"):
             if kind in selected:
                 continue
-            candidate = next(
-                (x for x in types if x.get("name", "").startswith(kind)),
-                None,
-            )
-            if candidate is None:
+            candidates = [
+                x for x in types if x.get("name", "").startswith(kind)
+            ]
+            if not candidates:
                 raise RuntimeError(f"Xcode 27 iOS Simulator missing {kind} device type")
-            udid = simctl(
-                "create", f"Fable-RC120-{kind}",
-                candidate["identifier"], runtime, timeout=120,
-            ).strip()
-            selected[kind] = (kind, udid, False)
+            # Prefer a current hardware profile; old simulator types (e.g.
+            # iPhone 4s) may be incompatible with the iOS 27 runtime.
+            def rank(item: dict) -> int:
+                name = item.get("name", "")
+                if kind == "iPhone":
+                    return 100 if "iPhone 18" in name else (
+                        90 if "iPhone 17" in name else (
+                        80 if "iPhone 16" in name else 0))
+                return 100 if "iPad Pro" in name else (
+                    90 if "iPad Air" in name else 0)
+            candidates.sort(key=rank, reverse=True)
+            for candidate in candidates:
+                try:
+                    udid = simctl(
+                        "create", f"Fable-RC120-{kind}",
+                        candidate["identifier"], runtime, timeout=120,
+                    ).strip()
+                except subprocess.CalledProcessError:
+                    # Incompatible simulated hardware type; try next. A
+                    # timeout, however, remains fatal rather than skipped.
+                    continue
+                selected[kind] = (kind, udid, False)
+                break
+            if kind not in selected:
+                raise RuntimeError(f"No {kind} device type supports iOS 27")
     if set(selected) != {"iPhone", "iPad"}:
         raise RuntimeError("Both iPhone and iPad must be verified")
     return [selected["iPhone"], selected["iPad"]]

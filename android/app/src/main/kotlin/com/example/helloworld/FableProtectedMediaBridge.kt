@@ -169,6 +169,7 @@ internal class FableProtectedMediaSurface(
 ) : PlatformView {
     private val playerView = PlayerView(context).apply {
         useController = false
+        setKeepContentOnPlayerReset(false)
         setBackgroundColor(android.graphics.Color.BLACK)
     }
     private var player: ExoPlayer? = null
@@ -304,6 +305,12 @@ private class FableProtectedRangeDataSource(
         val copied = min(readLength, cache.size - cachePosition)
         if (copied <= 0) throw IOException("No protected media bytes")
         System.arraycopy(cache, cachePosition, buffer, bufferOffset, copied)
+        // Identity may be revoked on the UI thread *during* this copy.
+        // Fail closed before handing any stale bytes back to Media3.
+        if (closed || !owner.valid(generation, epoch)) {
+            java.util.Arrays.fill(buffer, bufferOffset, bufferOffset + copied, 0.toByte())
+            throw IOException("Protected media invalidated during copy")
+        }
         cachePosition += copied
         offset += copied
         remaining -= copied
@@ -315,6 +322,7 @@ private class FableProtectedRangeDataSource(
 
     override fun close() {
         closed = true
+        cache.fill(0)
         cache = ByteArray(0)
         cachePosition = 0
         uri = null

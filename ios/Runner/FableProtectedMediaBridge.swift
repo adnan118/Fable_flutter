@@ -199,6 +199,7 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
     asset = nativeAsset
     player = nativePlayer
     surface.playerLayer.player = nativePlayer
+    surface.playerLayer.isHidden = false
   }
 
   func play() throws {
@@ -224,6 +225,9 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
     active = false
     player?.pause()
     surface.playerLayer.player = nil
+    // Prevent rendering the last frame after an identity/session revoke.
+    surface.playerLayer.isHidden = true
+    surface.playerLayer.contents = nil
     player?.replaceCurrentItem(with: nil)
     player = nil
     loader?.invalidate()

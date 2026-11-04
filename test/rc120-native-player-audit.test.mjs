@@ -12,7 +12,9 @@ test('RC120 Android has real Media3 progressive DataSource and bounded Dart byte
   for(const required of ['ExoPlayer.Builder','ProgressiveMediaSource.Factory',
       'DataSource.Factory','FableProtectedRangeDataSource','override fun read(',
       'CountDownLatch','length > 524288','channel.invokeMethod("readRange"',
-      'player?.clearMediaItems()','player?.release()']) {
+      'player?.clearMediaItems()','player?.release()',
+      'setKeepContentOnPlayerReset(false)', 'cache.fill(0)',
+      'Protected media invalidated during copy']) {
     assert.ok(android.includes(required), required);
   }
   assert.ok(mainActivity.includes('configureFlutterEngine'));
@@ -23,7 +25,8 @@ test('RC120 iOS has UIScene-safe Flutter implicit registration and actual AVFoun
   for(const required of ['AVPlayer(','AVURLAsset(','AVAssetResourceLoaderDelegate',
      'FableProtectedAssetLoader','info.contentLength = total',
      'info.isByteRangeAccessSupported = true','finishLoading(with:',
-     'didCancel loadingRequest','UIScene.didEnterBackgroundNotification']) {
+     'didCancel loadingRequest','UIScene.didEnterBackgroundNotification',
+     'surface.playerLayer.isHidden = true']) {
     assert.ok(ios.includes(required), required);
   }
   assert.match(appDelegate, /func didInitializeImplicitFlutterEngine/);
