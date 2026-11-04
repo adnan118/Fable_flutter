@@ -64,7 +64,7 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
 
   @override
   Future<Uint8List> read(MediaByteRange range) async {
-    final chunk=await readChunk(range);
+    final chunk=await _readGuarded(range,requireProgressive:false);
     // The extra await introduced by the compatibility wrapper is another
     // possible account-switch boundary. Guard it before returning bytes.
     if(!isActive){
@@ -74,7 +74,12 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
   }
 
   @override
-  Future<MediaByteChunk> readChunk(MediaByteRange range) async {
+  Future<MediaByteChunk> readChunk(MediaByteRange range) =>
+      _readGuarded(range,requireProgressive:true);
+
+  Future<MediaByteChunk> _readGuarded(MediaByteRange range,{
+    required bool requireProgressive,
+  }) async {
     if(!range.isValid){
       throw const MediaReadFailure(MediaReadFailureKind.invalidInput);
     }
@@ -86,6 +91,13 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
         start:range.start,length:range.length);
       if(!isActive){
         throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
+      }
+      // Preserve legacy byte-only source reads of images/files. Native player
+      // chunk requests alone require verified progressive audio/video.
+      if(requireProgressive &&
+         !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*$')
+             .hasMatch(chunk.mimeType)){
+        throw const MediaReadFailure(MediaReadFailureKind.unsupported);
       }
       // Seek and native buffers must never combine bytes from revisions
       // reporting different sizes or MIME types within the same view.
