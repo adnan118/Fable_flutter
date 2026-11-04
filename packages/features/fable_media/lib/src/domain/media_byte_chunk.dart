@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'media_byte_range.dart';
 import 'media_session_bound_source.dart';
 
-/// Verified metadata for a *single* protected progressive-media range.
+/// Verified metadata for a *single* protected byte range.
 /// Values must come from a validated 206 + Content-Range response, not from
 /// an asset URL, filename, player guess, or caller-supplied headers.
 final class MediaByteChunk {
@@ -18,11 +18,10 @@ final class MediaByteChunk {
         start >= totalLength || _bytes.length > totalLength - start) {
       throw ArgumentError('Invalid verified media range metadata');
     }
-    // Explicitly limit this bridge to progressive audio/video bytes.
-    // Playlists, manifests and DRM require independently verified adapters.
-    if (!RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*$')
-        .hasMatch(mimeType)) {
-      throw const FormatException('Unsupported protected media MIME type');
+    // Keep generic protected byte-range consumers compatible with RC113.
+    // Only the optional native-player readChunk port requires audio/video.
+    if (mimeType.isEmpty || mimeType.startsWith('text/html')) {
+      throw const FormatException('Invalid protected media content type');
     }
   }
 
