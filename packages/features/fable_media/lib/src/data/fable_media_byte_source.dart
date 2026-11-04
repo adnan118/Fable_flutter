@@ -26,6 +26,8 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
           MediaSessionInvalidation.credentialsRotated,
         ProtectedPlaybackInvalidation.playbackEnded =>
           MediaSessionInvalidation.playbackEnded,
+        ProtectedPlaybackInvalidation.resourceChanged =>
+          MediaSessionInvalidation.resourceChanged,
         ProtectedPlaybackInvalidation.disposed =>
           MediaSessionInvalidation.sourceClosed,
       });
