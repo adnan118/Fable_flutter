@@ -156,6 +156,39 @@ void main(){
       await repo.end(view);
       expect(h.requests.last.method,'DELETE');
       expect(h.requests.last.path,'/media/playback-sessions/$_sessionId');
+      expect(()=>repo.currentContentHeader(view),throwsStateError);
+    }finally{await h.close();}
+  });
+
+  test('RC112 refresh rotates token and invalidates original view',()async{
+    final h=_Harness(_contract());
+    try{
+      final repo=FableProtectedMediaPlaybackRepository(gateway:h.gateway);
+      addTearDown(repo.dispose);
+      final first=await repo.open(_asset,platform:'ANDROID');
+      final second=await repo.refresh(first);
+      expect(second.sessionId,first.sessionId);
+      expect(h.requests.last.path,'/media/playback-sessions/$_sessionId/refresh');
+      expect(()=>repo.currentContentHeader(first),throwsStateError);
+      expect(repo.currentContentHeader(second),
+        {'X-Fable-Media-Token':_secret('R')});
+      await repo.end(second);
+    }finally{await h.close();}
+  });
+
+  test('RC112 session A to B while open is pending discards old response',()async{
+    final h=_Harness(_contract());
+    try{
+      h.blockOpen=Completer<void>();
+      final repo=FableProtectedMediaPlaybackRepository(gateway:h.gateway);
+      addTearDown(repo.dispose);
+      final opening=repo.open(_asset,platform:'ANDROID');
+      await h.openStarted.future;
+      h.session.replaceUser();
+      h.blockOpen!.complete();
+      await expectLater(opening,throwsA(anyOf(
+        isA<StateError>(),isA<FableApiException>())));
+      expect(h.requests.length,1);
     }finally{await h.close();}
   });
 
@@ -188,7 +221,7 @@ void main(){
         h.openResponse=payload;
         final repo=FableProtectedMediaPlaybackRepository(gateway:h.gateway);
         await expectLater(repo.open(_asset,platform:'ANDROID'),
-          throwsA(isA<Exception>()));
+          throwsA(anyOf(isA<StateError>(),isA<FormatException>())));
         await repo.dispose();
       }finally{await h.close();}
     }
@@ -218,7 +251,8 @@ void main(){
       await h.refreshStarted.future;
       await repo.end(view);
       h.blockRefresh!.complete();
-      await expectLater(refreshing,throwsA(isA<Exception>()));
+      await expectLater(refreshing,throwsA(anyOf(
+        isA<StateError>(),isA<FableApiException>())));
       expect(()=>repo.currentContentHeader(view),throwsStateError);
     }finally{await h.close();}
   });
