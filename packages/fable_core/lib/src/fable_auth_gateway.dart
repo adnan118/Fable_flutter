@@ -52,6 +52,9 @@ class FableAuthGateway implements BackendApiGateway {
     managedEntityBackendIdentityFor(_baseUri,_contract);
   late final FableApiClient _api;
   late final FableContract _contract;
+  /// Read-only project-pinned operations parsed from the Fable Backend export.
+  /// Optional feature clients must inspect these, not guess controller IDs.
+  FableContract get verifiedContract => _contract;
 
   /// لا يكفي تطابق operationId: نطابق مسار Fable وطريقته وحدّ المصادقة
   /// قبل إرسال كلمة مرور أو Refresh Token أو عرض بيانات الجلسات.
