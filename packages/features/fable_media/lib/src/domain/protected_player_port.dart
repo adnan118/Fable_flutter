@@ -28,9 +28,11 @@ final class ProtectedPlayerMetadata {
   const ProtectedPlayerMetadata({
     required this.totalLength,
     required this.mimeType,
+    required this.rangeEpoch,
   });
   final int totalLength;
   final String mimeType;
+  final int rangeEpoch;
 }
 
 final class ProtectedPlayerReadRequest {
@@ -38,10 +40,14 @@ final class ProtectedPlayerReadRequest {
     required this.requestId,
     required this.start,
     required this.length,
+    this.rangeEpoch = 0,
   });
   final int requestId;
   final int start;
   final int length;
+  /// Non-secret seek generation from prepare()/seek(). Old-generation
+  /// requests are rejected before any network I/O.
+  final int rangeEpoch;
 }
 
 sealed class ProtectedPlayerReadReply {
@@ -76,7 +82,7 @@ abstract interface class ProtectedPlayerPlatformPort {
   );
   Future<void> play();
   Future<void> pause();
-  Future<void> seek(Duration position);
+  Future<void> seek(Duration position, int rangeEpoch);
   Future<void> stop();
   Future<void> dispose();
 }

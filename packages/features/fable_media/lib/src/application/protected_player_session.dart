@@ -139,7 +139,8 @@ final class ProtectedPlayerSession {
       }
       if (!_current(operation)) return;
       _metadata = ProtectedPlayerMetadata(
-          totalLength: first.totalLength, mimeType: first.mimeType);
+          totalLength: first.totalLength, mimeType: first.mimeType,
+          rangeEpoch: _rangeEpoch);
       _armExpiry();
       if (!_current(operation)) return;
       await _platform.prepare(_metadata!, readRange);
@@ -187,6 +188,10 @@ final class ProtectedPlayerSession {
           MediaReadFailureKind.sessionChanged);
     }
     final metadata = _metadata!;
+    if (request.rangeEpoch != _rangeEpoch) {
+      return const ProtectedPlayerReadRejected(
+          MediaReadFailureKind.sessionChanged);
+    }
     if (request.requestId <= 0 || request.start < 0 ||
         request.start > metadata.totalLength || request.length <= 0 ||
         request.length > MediaByteRange.maxLength ||
@@ -322,7 +327,7 @@ final class ProtectedPlayerSession {
     _commandBusy = true;
     _cancelRanges();
     try {
-      await _platform.seek(position);
+      await _platform.seek(position, _rangeEpoch);
       if (!_current(epoch)) await _stopNative();
     } catch (_) {
       if (_current(epoch)) _fail(MediaReadFailureKind.unknown);

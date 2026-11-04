@@ -58,6 +58,7 @@ final class FakePlatform implements ProtectedPlayerPlatformPort {
   final calls = <String>[];
   ProtectedPlayerMetadata? descriptor;
   ProtectedPlayerRangeReader? reader;
+  int rangeEpoch = 0;
   Completer<void>? preparing;
   Completer<void>? playing;
   @override
@@ -65,6 +66,7 @@ final class FakePlatform implements ProtectedPlayerPlatformPort {
       ProtectedPlayerRangeReader read) async {
     calls.add('prepare');
     descriptor = metadata;
+    rangeEpoch = metadata.rangeEpoch;
     reader = read;
     if (preparing != null) await preparing!.future;
   }
@@ -76,7 +78,10 @@ final class FakePlatform implements ProtectedPlayerPlatformPort {
   @override
   Future<void> pause() async { calls.add('pause'); }
   @override
-  Future<void> seek(Duration at) async { calls.add('seek'); }
+  Future<void> seek(Duration at, int nextRangeEpoch) async {
+    calls.add('seek');
+    rangeEpoch = nextRangeEpoch;
+  }
   @override
   Future<void> stop() async { calls.add('stop'); }
   @override
@@ -196,8 +201,15 @@ void main() {
     await session.seek(const Duration(seconds: 5));
     expect(source.cancellations, greaterThan(0));
     source.produce = null;
+    final countBeforeStaleDispatch = source.reads;
+    final oldNotYetDispatched = await platform.reader!(
+        const ProtectedPlayerReadRequest(
+            requestId: 23, start: 3, length: 3, rangeEpoch: 0));
+    expect(oldNotYetDispatched, isA<ProtectedPlayerReadRejected>());
+    expect(source.reads, countBeforeStaleDispatch);
+    expect(platform.rangeEpoch, 1);
     final fresh = await platform.reader!(const ProtectedPlayerReadRequest(
-        requestId: 22, start: 3, length: 3));
+        requestId: 22, start: 3, length: 3, rangeEpoch: 1));
     expect(fresh, isA<ProtectedPlayerBytes>());
     pending.complete(chunk(const MediaByteRange(start: 0, length: 3)));
     expect(await old, isA<ProtectedPlayerReadRejected>());
