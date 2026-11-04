@@ -29,6 +29,7 @@ const plan=planTypedFeature({
     project:{id:'synthetic-ci-only'},contractHash:hash,
     operations:[{operationId,path,feature:featureId,method:'GET',
       public:false,permissions:['orders.read'],contractHash:opHash,
+      request:{params:[{name:'id',type:'string',required:true}]},
       response:{kind:'fable-success-envelope',data:{type:'object',fields:[
         {name:'id',type:'string',optional:false},
         {name:'count',type:'int',optional:false},
