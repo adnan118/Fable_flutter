@@ -28,7 +28,14 @@ const plan=planTypedFeature({
   featureId,contract:{kind:'fable.client-contract',
     project:{id:'synthetic-ci-only'},contractHash:hash,
     operations:[{operationId,path,feature:featureId,method:'GET',
-      public:false,permissions:['orders.read'],contractHash:opHash}]},
+      public:false,permissions:['orders.read'],contractHash:opHash,
+      response:{kind:'fable-success-envelope',data:{type:'object',fields:[
+        {name:'id',type:'string',optional:false},
+        {name:'count',type:'int',optional:false},
+        {name:'price',type:'decimal',optional:false},
+        {name:'published',type:'boolean',optional:false},
+        {name:'subtitle',type:'string',optional:true},
+      ]}}}]},
   openapi:{openapi:'3.1.0',paths:{'/orders/{id}':{get:{
     operationId,'x-fable-public':false,'x-fable-contract-hash':opHash,
     security:[{bearerAuth:[]}],
