@@ -13,7 +13,7 @@ const callArgs=op=>op.params.map(x=>x+': '+x).join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
   if(!plan||!Array.isArray(plan.operations)||!plan.operations.length||
-     !/^[a-z][a-z0-9_]+$/.test(plan.featureId)||
+     !/^[a-z][a-z0-9_]*$/.test(plan.featureId)||
      !/^[a-f0-9]{64}$/.test(plan.contractHash))
     throw Error('RC116 renderer requires reviewed contract-sourced plan');
 }
