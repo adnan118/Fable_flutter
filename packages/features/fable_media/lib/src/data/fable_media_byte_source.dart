@@ -63,8 +63,15 @@ final class FableMediaByteSource implements DescribedMediaByteSource {
   }
 
   @override
-  Future<Uint8List> read(MediaByteRange range) async =>
-      (await readChunk(range)).bytes;
+  Future<Uint8List> read(MediaByteRange range) async {
+    final chunk=await readChunk(range);
+    // The extra await introduced by the compatibility wrapper is another
+    // possible account-switch boundary. Guard it before returning bytes.
+    if(!isActive){
+      throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
+    }
+    return chunk.bytes;
+  }
 
   @override
   Future<MediaByteChunk> readChunk(MediaByteRange range) async {
