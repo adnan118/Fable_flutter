@@ -15,6 +15,7 @@ const KEYWORDS=new Set([
   'catch','throw','on','async','await','yield','super','this','required',
   'operator','static','get','set','import','export','library','part','typedef',
   'extension','covariant','external','continue','break','do','rethrow','assert',
+  'hashCode','runtimeType','toString','noSuchMethod',
 ]);
 const PATH=/^\/(?:[a-zA-Z0-9_-]+|:[a-zA-Z][a-zA-Z0-9_]*)(?:\/(?:[a-zA-Z0-9_-]+|:[a-zA-Z][a-zA-Z0-9_]*))*$/;
 const primitive={string:'String',integer:'int',number:'double',boolean:'bool'};
