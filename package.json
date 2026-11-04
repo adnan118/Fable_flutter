@@ -8,12 +8,13 @@
     "wizard": "node tools/flutter-setup-wizard.mjs",
     "wizard:review": "node tools/flutter-setup-wizard.mjs --mode guided",
     "wizard:verify": "node tools/verify-fable-contract.mjs --mode source",
-    "test:wizard": "node --test test/flutter-setup-wizard.test.mjs test/feature-sync.test.mjs test/backend-feature-parity-audit.test.mjs test/frontend-feature-ownership.test.mjs test/offline-sync-wizard-rc89.test.mjs test/selected-feature-integration-rc90.test.mjs test/rc106-pinned-managed-generator.test.mjs test/rc115-feature-architecture-gate.test.mjs",
+    "test:wizard": "node --test test/flutter-setup-wizard.test.mjs test/feature-sync.test.mjs test/backend-feature-parity-audit.test.mjs test/frontend-feature-ownership.test.mjs test/offline-sync-wizard-rc89.test.mjs test/selected-feature-integration-rc90.test.mjs test/rc106-pinned-managed-generator.test.mjs test/rc115-feature-architecture-gate.test.mjs test/rc116-typed-feature-codegen.test.mjs",
     "wizard:frontend": "node tools/frontend-owned-features.mjs",
     "wizard:offline": "node tools/offline-sync-wizard.mjs",
     "wizard:check": "node tools/audit-selected-feature-integration.mjs",
     "wizard:check:strict": "node tools/audit-selected-feature-integration.mjs --strict",
     "wizard:scope:generate": "node tools/generate-managed-scoped-operations.mjs",
-    "wizard:architecture:check": "node tools/enforce-feature-architecture-rc115.mjs"
+    "wizard:architecture:check": "node tools/enforce-feature-architecture-rc115.mjs",
+    "wizard:feature:generate": "node tools/generate-typed-feature-rc116.mjs"
   }
 }
