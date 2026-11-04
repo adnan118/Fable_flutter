@@ -399,8 +399,7 @@ class FableProtectedMediaPlaybackRepository {
       final contentType=(response.headers.value('content-type')??'').toLowerCase();
       final contentEncoding=(response.headers.value('content-encoding')??'identity').toLowerCase();
       if(contentLength!=expected || !cacheControl.contains('no-store') ||
-         !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*$')
-              .hasMatch(contentType) ||
+         contentType.isEmpty || contentType.startsWith('text/html') ||
          contentEncoding!='identity'){
         throw const FormatException('Untrusted protected media response headers');
       }
