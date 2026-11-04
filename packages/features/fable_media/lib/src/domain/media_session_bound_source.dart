@@ -7,6 +7,7 @@ enum MediaSessionInvalidation {
   accountChanged,
   credentialsRotated,
   playbackEnded,
+  resourceChanged,
   sourceClosed,
 }
 
