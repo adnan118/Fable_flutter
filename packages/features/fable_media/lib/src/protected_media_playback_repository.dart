@@ -122,7 +122,8 @@ class FableProtectedMediaPlaybackRepository {
   }
   static bool _future(DateTime time)=>time.isAfter(DateTime.now().toUtc());
 
-  static _PlaybackState _parseOpen(Map<String,dynamic> data,String assetId,String platform){
+  static _PlaybackState _parseOpen(
+    Map<String,dynamic> data,String assetId,String platform,int epoch){
     if(data['enabled']!=true || data['type']!='AUTHENTICATED_STREAM' ||
        data['platform']!=platform){
       // DRM is not an authenticated-clear-stream. Native DRM manifest/license
@@ -150,7 +151,7 @@ class FableProtectedMediaPlaybackRepository {
     return _PlaybackState(ProtectedMediaPlaybackView._(
       sessionId:id,assetId:assetId,expiresAt:expires,
       idleExpiresAt:idle,accessTokenExpiresAt:accessExpires,
-      streamPath:expected),access);
+      streamPath:expected),access,epoch);
   }
 
   /// No implicit permission grants. grantToken comes from an independent
@@ -176,9 +177,9 @@ class FableProtectedMediaPlaybackRepository {
       final response=await gateway.execute(bindings.open,path:{'id':assetId},
         body:{'platform':platform,if(grantToken!=null)'grantToken':grantToken});
       _assertCurrent(epoch,generation);
-      final parsed=_parseOpen(_payload(response.data),assetId,platform);
+      final parsed=_parseOpen(_payload(response.data),assetId,platform,epoch);
       _assertCurrent(epoch,generation);
-      _state=_PlaybackState(parsed.view,parsed.token,epoch);
+      _state=parsed;
       return parsed.view;
     }finally{
       if(_generation==generation)_opening=false;
