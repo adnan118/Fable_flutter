@@ -22,6 +22,7 @@ const response={type:'object',properties:{
 const op=(id,path)=>({
   operationId:id,method:'GET',path,feature:'orders_ci',
   public:false,permissions:['orders.read'],contractHash:opHash,
+  request:{params:path.includes(':id')?[{name:'id',type:'string',required:true}]:[]},
   response:{kind:'fable-success-envelope',data:{type:'object',fields:[
     {name:'id',type:'string',optional:false},
     {name:'quantity',type:'int',optional:false},
