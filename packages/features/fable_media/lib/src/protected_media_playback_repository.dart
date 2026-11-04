@@ -390,7 +390,8 @@ class FableProtectedMediaPlaybackRepository {
       final contentType=(response.headers.value('content-type')??'').toLowerCase();
       final contentEncoding=(response.headers.value('content-encoding')??'identity').toLowerCase();
       if(contentLength!=expected || !cacheControl.contains('no-store') ||
-         !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*
+         !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*$')
+              .hasMatch(contentType) ||
          contentEncoding!='identity'){
         throw const FormatException('Untrusted protected media response headers');
       }
@@ -414,50 +415,6 @@ class FableProtectedMediaPlaybackRepository {
       }
       return MediaByteChunk(start:start,totalLength:total,
         mimeType:contentType,bytes:sink.takeBytes());
-    }finally{
-      _reads.remove(cancel);
-      if(!cancel.isCancelled)cancel.cancel('Protected Range finished');
-    }
-  }
-
-  Future<void> dispose()async{
-    if(_disposed)return;
-    _disposed=true;
-    _cancelReads();
-    _notifyInvalidation(ProtectedPlaybackInvalidation.disposed);
-    _generation++;
-    _state=null;
-    _opening=false;
-    _refreshing=false;
-    await _identities?.cancel();
-    _identities=null;
-    await _invalidations.close();
-  }
-}
-)
-              .hasMatch(contentType) ||
-         contentEncoding!='identity'){
-        throw const FormatException('Untrusted protected media response headers');
-      }
-      final body=response.data;
-      if(body is! ResponseBody){
-        throw const FormatException('Expected streamed protected media response');
-      }
-      final sink=BytesBuilder(copy:false);
-      await for(final part in body.stream){
-        ensureActive();
-        if(part.isEmpty)continue;
-        if(sink.length+part.length>expected){
-          cancel.cancel('Protected server exceeded declared Range');
-          throw const FormatException('Protected stream exceeded byte Range');
-        }
-        sink.add(part);
-      }
-      ensureActive();
-      if(sink.length!=expected){
-        throw const FormatException('Truncated protected media Range');
-      }
-      return sink.takeBytes();
     }finally{
       _reads.remove(cancel);
       if(!cancel.isCancelled)cancel.cancel('Protected Range finished');
