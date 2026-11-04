@@ -55,6 +55,7 @@ enum ProtectedPlaybackInvalidation {
   accountChanged,
   credentialsRotated,
   playbackEnded,
+  resourceChanged,
   disposed,
 }
 
@@ -87,6 +88,11 @@ class FableProtectedMediaPlaybackRepository {
   final VerifiedFablePlaybackBindings bindings;
   StreamSubscription<FableIdentityEvent>? _identities;
   _PlaybackState? _state;
+  // A playback view pins its verified media metadata across all byte sources.
+  // Otherwise disposing/recreating a source could silently mix revisions.
+  bool _resourceChanged=false;
+  int? _verifiedMediaTotal;
+  String? _verifiedMediaMime;
   int _generation=0;
   bool _disposed=false,_opening=false,_refreshing=false;
   final Set<CancelToken> _reads=<CancelToken>{};
@@ -103,7 +109,7 @@ class FableProtectedMediaPlaybackRepository {
   /// request, including token expiration and the authenticated identity epoch.
   bool isCurrentView(ProtectedMediaPlaybackView view){
     final active=_state;
-    return !_disposed && active!=null && identical(active.view,view) &&
+    return !_disposed && !_resourceChanged && active!=null && identical(active.view,view) &&
         gateway.session.identityRevision==active.epoch &&
         _future(view.expiresAt) && _future(view.idleExpiresAt) &&
         _future(view.accessTokenExpiresAt);
@@ -226,6 +232,9 @@ class FableProtectedMediaPlaybackRepository {
       final parsed=_parseOpen(_payload(response.data),assetId,platform,epoch);
       _assertCurrent(epoch,generation);
       _state=parsed;
+      _resourceChanged=false;
+      _verifiedMediaTotal=null;
+      _verifiedMediaMime=null;
       return parsed.view;
     }finally{
       if(_generation==generation)_opening=false;
@@ -247,7 +256,7 @@ class FableProtectedMediaPlaybackRepository {
 
   Future<ProtectedMediaPlaybackView> refresh(ProtectedMediaPlaybackView view)async{
     final active=_state;
-    if(_disposed||active==null||!identical(active.view,view)||_refreshing ||
+    if(_disposed||_resourceChanged||active==null||!identical(active.view,view)||_refreshing ||
        gateway.session.identityRevision!=active.epoch ||
        !_future(view.expiresAt)||!_future(view.idleExpiresAt)){
       throw StateError('Playback session is inactive or expired');
@@ -413,8 +422,22 @@ class FableProtectedMediaPlaybackRepository {
       if(sink.length!=expected){
         throw const FormatException('Truncated protected media Range');
       }
-      return MediaByteChunk(start:start,totalLength:total,
+      final chunk=MediaByteChunk(start:start,totalLength:total,
         mimeType:contentType,bytes:sink.takeBytes());
+      // Pin metadata to the repository's server-approved playback view,
+      // not only the currently constructed byte source. A new adapter must
+      // never bypass a detected revision change.
+      if(_resourceChanged ||
+         (_verifiedMediaTotal!=null && _verifiedMediaTotal!=chunk.totalLength) ||
+         (_verifiedMediaMime!=null && _verifiedMediaMime!=chunk.mimeType)){
+        _resourceChanged=true;
+        _cancelReads();
+        _notifyInvalidation(ProtectedPlaybackInvalidation.resourceChanged);
+        throw const FormatException('Protected playback resource changed');
+      }
+      _verifiedMediaTotal=chunk.totalLength;
+      _verifiedMediaMime=chunk.mimeType;
+      return chunk;
     }finally{
       _reads.remove(cancel);
       if(!cancel.isCancelled)cancel.cancel('Protected Range finished');
