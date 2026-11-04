@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../application/read_media_range_use_case.dart';
 import '../domain/media_byte_range.dart';
 import '../domain/media_read_result.dart';
+import '../domain/media_session_bound_source.dart';
 
 /// Presentation-only states. No transport, JSON, credentials or server strings.
 sealed class MediaRangeUiState {
@@ -28,8 +30,19 @@ final class MediaRangeFailureState extends MediaRangeUiState {
 /// May be wrapped by Riverpod/Bloc at a generated project's composition root.
 /// Only invokes a typed use case. The UI localizes MediaReadFailureKind.
 final class MediaRangeController extends ChangeNotifier {
-  MediaRangeController(this._read);
+  MediaRangeController(this._read){
+    _subscription=_read.invalidations.listen((_){
+      if(_disposed)return;
+      // Purge previously displayed bytes synchronously on A->B account change,
+      // credential rotation, server end, or source close.
+      _generation++;
+      _last=null;
+      _read.cancelPendingReads();
+      _publish(const MediaRangeIdle());
+    });
+  }
   final ReadMediaRangeUseCase _read;
+  late final StreamSubscription<MediaSessionInvalidation> _subscription;
   MediaRangeUiState _state=const MediaRangeIdle();
   MediaRangeUiState get state=>_state;
   MediaByteRange? _last;
@@ -63,6 +76,7 @@ final class MediaRangeController extends ChangeNotifier {
     if(_disposed)return;
     _generation++;
     _last=null;
+    _read.cancelPendingReads();
     _publish(const MediaRangeIdle());
   }
 
@@ -76,6 +90,8 @@ final class MediaRangeController extends ChangeNotifier {
     _disposed=true;
     _generation++;
     _last=null;
+    _read.cancelPendingReads();
+    unawaited(_subscription.cancel());
     _state=const MediaRangeIdle();
     super.dispose();
   }
