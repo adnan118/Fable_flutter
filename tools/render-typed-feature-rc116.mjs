@@ -9,8 +9,7 @@ const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const params=op=>op.params.map(x=>'required String '+x).join(', ');
 const named=op=>op.params.length?'{'+params(op)+'}':'';
-const forwards=op=>op.params.length?'{'+op.params.map(x=>x+': '+x).join(', ')+'}':'';
-const invocation=op=>op.params.length?'('+forwards(op)+')':'()';
+const callArgs=op=>op.params.map(x=>x+': '+x).join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
   if(!plan||!Array.isArray(plan.operations)||!plan.operations.length||
@@ -54,7 +53,7 @@ function dto(op){
   }
   parts.push('    return '+name+'Dto(');
   for(const f of op.fields){
-    const conv=f.type==='double'?f.name+(f.required?'.toDouble()':'?.toDouble()'):
+    const conv=f.type==='double'?(f.required?'('+f.name+' as num).toDouble()':'('+f.name+' as num?)?.toDouble()'):
       f.name+' as '+fieldType(f);
     parts.push('      '+f.name+': '+conv+',');
   }
@@ -145,8 +144,7 @@ function application(op){
       '      }');
   }
   parts.push('      return TypedReadSuccess<'+name+'Entity>(',
-    '        await repository.load('+invocation(op).slice(1,-1)+(op.params.length?'':'')+'));');
-  // The above call's parentheses are generated explicitly; no statement fallback.
+    '        await repository.load('+callArgs(op)+'));');
   parts.push('    } on TypedReadFailure catch(failure){',
     '      return TypedReadFailed<'+name+'Entity>(failure);',
     '    } catch(_){',
@@ -185,7 +183,7 @@ function presentation(op){
     '    if(_closed || _state is '+name+'Loading)return;',
     '    final revision=++_revision;',
     '    _change(const '+name+'Loading());',
-    '    final result=await _read.call('+invocation(op).slice(1,-1)+');',
+    '    final result=await _read.call('+callArgs(op)+');',
     '    if(_closed || _revision!=revision)return;',
     '    switch(result){',
     '      case TypedReadSuccess<'+name+'Entity> ok:',
