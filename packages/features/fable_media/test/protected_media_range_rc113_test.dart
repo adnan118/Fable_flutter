@@ -377,6 +377,18 @@ void main(){
             MediaReadFailureKind.invalidResponse)));
         expect(invalidations,[MediaSessionInvalidation.resourceChanged]);
         expect(source.isActive,false);
+        expect(h.repository.isCurrentView(view),false);
+        final replacement=FableMediaByteSource(
+          repository:h.repository,playback:view);
+        try{
+          expect(replacement.isActive,false);
+          await expectLater(replacement.readChunk(
+            const MediaByteRange(start:0,length:6)),
+            throwsA(isA<MediaReadFailure>().having(
+              (failure)=>failure.kind,'kind',
+              MediaReadFailureKind.sessionChanged)));
+        }finally{await replacement.close();}
+        await expectLater(h.repository.refresh(view),throwsStateError);
         final getCount=h.requests.where((req)=>req.path.endsWith('/content')).length;
         await expectLater(source.readChunk(
           const MediaByteRange(start:0,length:6)),
