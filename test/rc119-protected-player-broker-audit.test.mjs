@@ -24,7 +24,7 @@ test('RC119 native player port excludes HTTP/Fable/Flutter credentials', () => {
 test('RC119 broker has bounded reads, cancels and native stop on revocation', () => {
   for (const witness of [
     'maxConcurrentReads', 'MediaByteRange.maxLength',
-    '_source.cancelPendingReads()', '_source.invalidations.listen',
+    '_source.cancelPendingReads()', 'source.invalidations.listen',
     'ProtectedPlayerPhase.revoked', '_platform.stop()', '_rangeEpoch',
     '_source.authorizationDeadline', 'ProtectedPlayerEndOfFile',
     'ProtectedPlayerReadRejected', 'await _platform.seek'
