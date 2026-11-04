@@ -3,28 +3,75 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fable_core/fable_core.dart';
 import '../domain/media_byte_range.dart';
-import '../domain/media_byte_source.dart';
 import '../domain/media_read_result.dart';
+import '../domain/media_session_bound_source.dart';
 import '../protected_media_playback_repository.dart';
 
 /// Fable-specific adapter. Other Backend MUST implement MediaByteSource using
 /// its own independently verified contract, auth policy and response parser.
-final class FableMediaByteSource implements MediaByteSource {
-  const FableMediaByteSource({
+final class FableMediaByteSource implements SessionBoundMediaByteSource {
+  FableMediaByteSource({
     required this.repository,
     required this.playback,
-  });
+  }) {
+    _invalidated=!repository.isCurrentView(playback);
+    _subscription=repository.invalidations.listen((change){
+      if(_closed||_invalidated)return;
+      _invalidated=true;
+      _signals.add(switch(change){
+        ProtectedPlaybackInvalidation.accountChanged =>
+          MediaSessionInvalidation.accountChanged,
+        ProtectedPlaybackInvalidation.credentialsRotated =>
+          MediaSessionInvalidation.credentialsRotated,
+        ProtectedPlaybackInvalidation.playbackEnded =>
+          MediaSessionInvalidation.playbackEnded,
+        ProtectedPlaybackInvalidation.disposed =>
+          MediaSessionInvalidation.sourceClosed,
+      });
+    });
+  }
   final FableProtectedMediaPlaybackRepository repository;
   final ProtectedMediaPlaybackView playback;
+  final StreamController<MediaSessionInvalidation> _signals=
+      StreamController<MediaSessionInvalidation>.broadcast(sync:true);
+  StreamSubscription<ProtectedPlaybackInvalidation>? _subscription;
+  bool _closed=false;
+  bool _invalidated=false;
+
+  @override Stream<MediaSessionInvalidation> get invalidations=>_signals.stream;
+  @override bool get isActive=>
+      !_closed && !_invalidated && repository.isCurrentView(playback);
+
+  @override void cancelPendingReads(){
+    if(!_closed)repository.cancelReadsForView(playback);
+  }
+
+  @override Future<void> close() async {
+    if(_closed)return;
+    _closed=true;
+    _invalidated=true;
+    repository.cancelReadsForView(playback);
+    _signals.add(MediaSessionInvalidation.sourceClosed);
+    await _subscription?.cancel();
+    _subscription=null;
+    await _signals.close();
+  }
 
   @override
   Future<Uint8List> read(MediaByteRange range) async {
     if(!range.isValid){
       throw const MediaReadFailure(MediaReadFailureKind.invalidInput);
     }
+    if(!isActive){
+      throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
+    }
     try{
-      return await repository.readContentRange(playback,
+      final bytes=await repository.readContentRange(playback,
         start:range.start,length:range.length);
+      if(!isActive){
+        throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
+      }
+      return bytes;
     } on FableApiException catch(error){
       if(error.status==401){
         throw const MediaReadFailure(MediaReadFailureKind.unauthenticated);
@@ -58,8 +105,11 @@ final class FableMediaByteSource implements MediaByteSource {
     } on FormatException {
       throw const MediaReadFailure(MediaReadFailureKind.invalidResponse);
     } on StateError {
-      // Do not publish StateError.toString(): can contain server details.
-      throw const MediaReadFailure(MediaReadFailureKind.expired);
+      // A superseded playback view is different from an expired active token.
+      // Do not publish StateError.toString(): it may carry server details.
+      throw MediaReadFailure(isActive
+        ? MediaReadFailureKind.expired
+        : MediaReadFailureKind.sessionChanged);
     } on ArgumentError {
       throw const MediaReadFailure(MediaReadFailureKind.invalidInput);
     }

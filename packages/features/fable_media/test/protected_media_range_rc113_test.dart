@@ -216,4 +216,100 @@ void main(){
       expect(h.requests,isEmpty);
     }finally{await h.close();}
   });
+  test('RC117 Fable identity event invalidates bound source before any new GET',()async{
+    final h=Harness();
+    try{
+      final view=await h.repository.open(asset,platform:'ANDROID');
+      final source=FableMediaByteSource(repository:h.repository,playback:view);
+      final events=<MediaSessionInvalidation>[];
+      final subscription=source.invalidations.listen(events.add);
+      try{
+        expect(source.isActive,true);
+        h.session.change();
+        expect(events,[MediaSessionInvalidation.accountChanged]);
+        expect(source.isActive,false);
+        await expectLater(source.read(
+          const MediaByteRange(start:0,length:6)),
+          throwsA(isA<MediaReadFailure>().having(
+            (f)=>f.kind,'kind',MediaReadFailureKind.sessionChanged)));
+        expect(h.requests.where((r)=>r.path.endsWith('/content')),isEmpty);
+      }finally{
+        await subscription.cancel();
+        await source.close();
+      }
+    }finally{await h.close();}
+  });
+
+  test('RC117 refresh invalidates old source while new view can fetch bytes',()async{
+    final h=Harness();
+    try{
+      final old=await h.repository.open(asset,platform:'ANDROID');
+      final source=FableMediaByteSource(repository:h.repository,playback:old);
+      final events=<MediaSessionInvalidation>[];
+      final subscription=source.invalidations.listen(events.add);
+      try{
+        final fresh=await h.repository.refresh(old);
+        expect(events,[MediaSessionInvalidation.credentialsRotated]);
+        expect(source.isActive,false);
+        await expectLater(source.read(const MediaByteRange(start:0,length:6)),
+          throwsA(isA<MediaReadFailure>().having(
+            (f)=>f.kind,'kind',MediaReadFailureKind.sessionChanged)));
+        final rotated=FableMediaByteSource(repository:h.repository,playback:fresh);
+        try{
+          expect(rotated.isActive,true);
+          expect(await rotated.read(const MediaByteRange(start:0,length:6)),
+            [1,2,3,4,5,6]);
+        }finally{await rotated.close();}
+      }finally{
+        await subscription.cancel();
+        await source.close();
+      }
+    }finally{await h.close();}
+  });
+
+  test('RC117 end invalidation is synchronous and source close never revokes backend',()async{
+    final h=Harness();
+    try{
+      final view=await h.repository.open(asset,platform:'ANDROID');
+      final source=FableMediaByteSource(repository:h.repository,playback:view);
+      final events=<MediaSessionInvalidation>[];
+      final sub=source.invalidations.listen(events.add);
+      try{
+        await source.close();
+        expect(events,[MediaSessionInvalidation.sourceClosed]);
+        expect(h.requests.where((r)=>r.method=='DELETE'),isEmpty);
+        expect(h.repository.isCurrentView(view),true);
+      }finally{await sub.cancel();}
+      final another=FableMediaByteSource(repository:h.repository,playback:view);
+      final anotherEvents=<MediaSessionInvalidation>[];
+      final activeSub=another.invalidations.listen(anotherEvents.add);
+      try{
+        final ending=h.repository.end(view);
+        expect(anotherEvents,[MediaSessionInvalidation.playbackEnded]);
+        expect(another.isActive,false);
+        await ending;
+      }finally{
+        await activeSub.cancel();
+        await another.close();
+      }
+    }finally{await h.close();}
+  });
+
+  test('RC117 repository disposal emits no-secret source invalidation',()async{
+    final h=Harness();
+    try{
+      final view=await h.repository.open(asset,platform:'ANDROID');
+      final source=FableMediaByteSource(repository:h.repository,playback:view);
+      final events=<MediaSessionInvalidation>[];
+      final sub=source.invalidations.listen(events.add);
+      try{
+        await h.repository.dispose();
+        expect(events,[MediaSessionInvalidation.sourceClosed]);
+        expect(source.isActive,false);
+      }finally{
+        await sub.cancel();
+        await source.close();
+      }
+    }finally{await h.close();}
+  });
 }
