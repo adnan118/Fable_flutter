@@ -130,7 +130,8 @@ class FableProtectedMediaPlaybackRepository {
       throw StateError('Protected authenticated stream is unavailable or needs native DRM');
     }
     final session=_map(data['playbackSession']);
-    final id=_id(session['id'] is String?session['id'] as String:'');
+    final rawId=session['id'];
+    final id=_id(rawId is String ? rawId : '');
     final expires=_expiry(session['expiresAt']);
     final idle=_expiry(session['idleExpiresAt']);
     final accessExpires=_expiry(data['accessTokenExpiresAt']);
