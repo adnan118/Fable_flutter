@@ -47,9 +47,10 @@ class ProtectedMediaPlaybackView {
 }
 
 class _PlaybackState {
-  const _PlaybackState(this.view,this.token);
+  const _PlaybackState(this.view,this.token,this.epoch);
   final ProtectedMediaPlaybackView view;
   final String token;
+  final int epoch;
 }
 
 /// Short-lived authenticated-stream session. No DRM-native integration is
@@ -176,7 +177,7 @@ class FableProtectedMediaPlaybackRepository {
       _assertCurrent(epoch,generation);
       final parsed=_parseOpen(_payload(response.data),assetId,platform);
       _assertCurrent(epoch,generation);
-      _state=parsed;
+      _state=_PlaybackState(parsed.view,parsed.token,epoch);
       return parsed.view;
     }finally{
       if(_generation==generation)_opening=false;
@@ -189,6 +190,7 @@ class FableProtectedMediaPlaybackRepository {
   Map<String,String> currentContentHeader(ProtectedMediaPlaybackView view){
     final active=_state;
     if(_disposed||active==null||!identical(active.view,view)||
+       gateway.session.identityRevision!=active.epoch ||
        !_future(view.expiresAt)||!_future(view.idleExpiresAt)||
        !_future(view.accessTokenExpiresAt)){
       throw StateError('Protected playback credentials are stale; refresh or reopen');
@@ -201,6 +203,7 @@ class FableProtectedMediaPlaybackRepository {
   Future<ProtectedMediaPlaybackView> refresh(ProtectedMediaPlaybackView view)async{
     final active=_state;
     if(_disposed||active==null||!identical(active.view,view)||_refreshing ||
+       gateway.session.identityRevision!=active.epoch ||
        !_future(view.expiresAt)||!_future(view.idleExpiresAt)){
       throw StateError('Playback session is inactive or expired');
     }
@@ -230,7 +233,7 @@ class FableProtectedMediaPlaybackRepository {
         accessTokenExpiresAt:accessExpires,streamPath:view.streamPath);
       _assertCurrent(epoch,generation);
       if(!identical(_state,active))throw StateError('Playback ended during refresh');
-      _state=_PlaybackState(next,token);
+      _state=_PlaybackState(next,token,epoch);
       return next;
     }finally{
       if(_generation==generation)_refreshing=false;
@@ -242,7 +245,8 @@ class FableProtectedMediaPlaybackRepository {
   /// session/TTL and Auth revocation control final access.
   Future<void> end(ProtectedMediaPlaybackView view)async{
     final active=_state;
-    if(_disposed||active==null||!identical(active.view,view)){
+    if(_disposed||active==null||!identical(active.view,view)||
+       gateway.session.identityRevision!=active.epoch){
       throw StateError('Playback already ended or belongs to another session');
     }
     final epoch=gateway.session.identityRevision;
