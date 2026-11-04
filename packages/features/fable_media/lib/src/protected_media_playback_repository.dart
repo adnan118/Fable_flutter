@@ -48,6 +48,15 @@ class ProtectedMediaPlaybackView {
       'ProtectedMediaPlaybackView(sessionId: [redacted], token: [redacted])';
 }
 
+/// Non-sensitive invalidation signal for the player-side byte-source port.
+/// Does not carry tokens, account IDs, paths, or playback identifiers.
+enum ProtectedPlaybackInvalidation {
+  accountChanged,
+  credentialsRotated,
+  playbackEnded,
+  disposed,
+}
+
 class _PlaybackState {
   const _PlaybackState(this.view,this.token,this.epoch);
   final ProtectedMediaPlaybackView view;
@@ -68,6 +77,7 @@ class FableProtectedMediaPlaybackRepository {
       _generation++;
       _state=null;
       _cancelReads();
+      _notifyInvalidation(ProtectedPlaybackInvalidation.accountChanged);
       _opening=false;
       _refreshing=false;
     });
@@ -79,6 +89,30 @@ class FableProtectedMediaPlaybackRepository {
   int _generation=0;
   bool _disposed=false,_opening=false,_refreshing=false;
   final Set<CancelToken> _reads=<CancelToken>{};
+  final StreamController<ProtectedPlaybackInvalidation> _invalidations=
+      StreamController<ProtectedPlaybackInvalidation>.broadcast(sync:true);
+
+  Stream<ProtectedPlaybackInvalidation> get invalidations=>_invalidations.stream;
+
+  void _notifyInvalidation(ProtectedPlaybackInvalidation reason){
+    if(!_invalidations.isClosed)_invalidations.add(reason);
+  }
+
+  /// Does not expose credentials. Validity is checked again at every byte
+  /// request, including token expiration and the authenticated identity epoch.
+  bool isCurrentView(ProtectedMediaPlaybackView view){
+    final active=_state;
+    return !_disposed && active!=null && identical(active.view,view) &&
+        gateway.session.identityRevision==active.epoch &&
+        _future(view.expiresAt) && _future(view.idleExpiresAt) &&
+        _future(view.accessTokenExpiresAt);
+  }
+
+  /// Cancellation belongs to this active view and never ends/revokes server
+  /// playback. Refresh/end/logout still enforce the authoritative boundary.
+  void cancelReadsForView(ProtectedMediaPlaybackView view){
+    if(isCurrentView(view))_cancelReads();
+  }
 
   void _cancelReads(){
     for(final token in _reads.toList()){
@@ -202,10 +236,7 @@ class FableProtectedMediaPlaybackRepository {
   /// player/transport must supply BOTH; no URL query token is allowed.
   Map<String,String> currentContentHeader(ProtectedMediaPlaybackView view){
     final active=_state;
-    if(_disposed||active==null||!identical(active.view,view)||
-       gateway.session.identityRevision!=active.epoch ||
-       !_future(view.expiresAt)||!_future(view.idleExpiresAt)||
-       !_future(view.accessTokenExpiresAt)){
+    if(!isCurrentView(view)||active==null){
       throw StateError('Protected playback credentials are stale; refresh or reopen');
     }
     return Map<String,String>.unmodifiable({
@@ -248,6 +279,7 @@ class FableProtectedMediaPlaybackRepository {
       if(!identical(_state,active))throw StateError('Playback ended during refresh');
       _cancelReads();
       _state=_PlaybackState(next,token,epoch);
+      _notifyInvalidation(ProtectedPlaybackInvalidation.credentialsRotated);
       return next;
     }finally{
       if(_generation==generation)_refreshing=false;
@@ -267,6 +299,7 @@ class FableProtectedMediaPlaybackRepository {
     final generation=++_generation;
     _state=null;
     _cancelReads();
+    _notifyInvalidation(ProtectedPlaybackInvalidation.playbackEnded);
     _refreshing=false;
     _opening=false;
     _assertCurrent(epoch,generation);
@@ -379,13 +412,16 @@ class FableProtectedMediaPlaybackRepository {
   }
 
   Future<void> dispose()async{
+    if(_disposed)return;
     _disposed=true;
     _cancelReads();
+    _notifyInvalidation(ProtectedPlaybackInvalidation.disposed);
     _generation++;
     _state=null;
     _opening=false;
     _refreshing=false;
     await _identities?.cancel();
     _identities=null;
+    await _invalidations.close();
   }
 }
