@@ -170,11 +170,14 @@ void main(){
       h.waitChunk=Completer<void>();
       final v=await h.repository.open(asset,platform:'ANDROID');
       final pending=h.repository.readContentRange(v,start:0,length:6);
+      // Attach the rejection expectation BEFORE revocation: the guarded
+      // read may fail synchronously after its next await, before teardown.
+      final asserted=expectLater(pending,throwsA(anyOf(
+        isA<StateError>(),isA<FableApiException>())));
       await h.started.future;
       h.session.change();
       h.waitChunk!.complete();
-      await expectLater(pending,throwsA(anyOf(
-        isA<StateError>(),isA<FableApiException>())));
+      await asserted;
     }finally{await h.close();}
   });
   test('RC113 end invalidates pending read even if network stream completes',()async{
@@ -183,11 +186,12 @@ void main(){
       h.waitChunk=Completer<void>();
       final v=await h.repository.open(asset,platform:'ANDROID');
       final pending=h.repository.readContentRange(v,start:0,length:6);
+      final asserted=expectLater(pending,throwsA(anyOf(
+        isA<StateError>(),isA<FableApiException>())));
       await h.started.future;
       await h.repository.end(v);
       h.waitChunk!.complete();
-      await expectLater(pending,throwsA(anyOf(
-        isA<StateError>(),isA<FableApiException>())));
+      await asserted;
     }finally{await h.close();}
   });
   test('RC113 refresh blocks old view and requires new rotated token',()async{
