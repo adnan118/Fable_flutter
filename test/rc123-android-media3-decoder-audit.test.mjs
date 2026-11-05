@@ -40,6 +40,10 @@ test('RC123 never confuses build or method-channel ack with decoded playback', (
   assert.ok(android.includes('if (surface == null) {'));
   assert.ok(android.includes('if (cleanup) {'));
   assert.ok(android.includes('if (cleanup && (requestedLease <= 0 || surface.leaseId != requestedLease))'));
+  const ios = readFileSync('ios/Runner/FableProtectedMediaBridge.swift', 'utf8');
+  assert.ok(ios.includes('let cleanup = call.method == "stop" || call.method == "dispose"'));
+  assert.ok(ios.includes('if cleanup { result(nil); return }'));
+  assert.ok(ios.includes('if cleanup && (requestedLease <= 0 || requestedLease != surface.leaseId)'));
   assert.ok(testSource.includes('expect(source.closeCount, 1'));
   assert.ok(testSource.includes('session.state.phase, ProtectedPlayerPhase.disposed'));
   assert.ok(!ci.includes('continue-on-error'));
