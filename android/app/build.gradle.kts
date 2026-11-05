@@ -40,6 +40,14 @@ kotlin {
     }
 }
 
+dependencies {
+    // RC120: first real progressive native decoder path; never uses HTTP
+    // credentials, arbitrary URLs or DRM manifest/license fallbacks.
+    val media3Version = "1.11.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+}
+
 flutter {
     source = "../.."
 }

@@ -45,6 +45,9 @@ jobs:
           node --test test/rc116-typed-feature-codegen.test.mjs
           node --test test/rc117-player-session-boundary-audit.test.mjs
           node --test test/rc119-protected-player-broker-audit.test.mjs
+          python3 tools/verify-uiscene-rc120.py
+          node --test test/rc120-native-player-audit.test.mjs
+          node --test test/rc120-uiscene-launch-gate-audit.test.mjs
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
@@ -127,8 +130,8 @@ jobs:
           if-no-files-found: error
 
   ios-unsigned:
-    name: iOS simulator build (no signing)
-    runs-on: macos-26
+    name: iOS 27/iPadOS 27 scene launch and native simulator build
+    runs-on: xcode-27
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +141,30 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
-      - name: Verify modern Xcode toolchain
-        run: xcodebuild -version
+      - name: Require Xcode 27 and iOS/iPadOS 27 Simulator SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          [[ "$(xcodebuild -version | head -1)" == "Xcode 27"* ]]
+          sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          [[ "$sdk" == 27.* ]]
+          echo "iOS SDK verified: $sdk"
       - name: Build iOS simulator (does not require signing)
         run: flutter build ios --simulator --debug --no-codesign
+      - name: Verify compiled Runner UIScene manifest (iOS 27 prerequisite)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify-uiscene-rc120.py
+          plist="build/ios/iphonesimulator/Runner.app/Info.plist"
+          test -f "$plist"
+          python3 tools/verify-uiscene-rc120.py "$plist"
+          /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneDelegateClassName" "$plist"
+          # A compiled plist alone does not prove UIScene launches successfully.
+      - name: Launch iOS 27 Runner on iPhone and iPad simulators (UIScene smoke)
+        shell: bash
+        timeout-minutes: 55
+        run: |
+          set -euo pipefail
+          python3 tools/rc120_uiscene_simulator_smoke.py build/ios/iphonesimulator/Runner.app

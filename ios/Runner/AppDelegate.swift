@@ -18,5 +18,14 @@ import workmanager_apple
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // UIScene: register native UI/platform channels with the implicit engine,
+    // NOT during application didFinishLaunchingWithOptions.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FableProtectedMedia") {
+      let bridge = FableProtectedMediaBridge(messenger: registrar.messenger())
+      registrar.register(
+        FableProtectedMediaViewFactory(bridge: bridge),
+        withId: "fable/protected_media_surface"
+      )
+    }
   }
 }

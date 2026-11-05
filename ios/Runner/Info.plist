@@ -33,6 +33,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- RC120: iOS/iPadOS 27 launch requires UIScene. Keep FlutterSceneDelegate
+	     and its Main storyboard; register native views in implicit engine callback. -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
