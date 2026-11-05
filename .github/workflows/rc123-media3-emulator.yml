@@ -33,14 +33,18 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - name: Verify preinstalled Android SDK without obsolete legacy tools package
+      - name: Install modern Android SDK command-line tools (no obsolete tools package)
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools emulator'
+      - name: Verify Android SDK command tools
         shell: bash
         run: |
           set -euo pipefail
-          test -d "${ANDROID_HOME:?Android SDK missing from hosted Ubuntu runner}"
           command -v sdkmanager
           sdkmanager --version
           command -v adb
+          test -d "${ANDROID_SDK_ROOT:?Android SDK root missing}"
       - name: Verify immutable audited source fixture
         shell: bash
         run: |

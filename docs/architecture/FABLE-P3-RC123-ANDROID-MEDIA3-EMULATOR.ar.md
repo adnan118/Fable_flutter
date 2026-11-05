@@ -14,3 +14,6 @@ The test mounts `FableNativeProtectedPlayerSurface` on a real Android platform v
 
 ## RC123 first-run toolchain correction (2026-11-05)
 Workflow [#42031665860](https://github.com/adnan118/Fable_flutter/actions/runs/42031665860) failed **before emulator boot**, in `android-actions/setup-android@v3` because it executed `sdkmanager tools`, which returned `Warning: Failed to find package 'tools'`. This is a hosted SDK setup incompatibility, **not a Media3 decoder failure**. On Ubuntu 24.04 use existing `ANDROID_HOME`/sdkmanager and allow `reactivecircus/android-emulator-runner@v2` to install actual API35 emulator image. Keep fixture/hardware KVM/native decoder assertion and fail-closed status mandatory.
+
+## Second toolchain correction
+CI [#42032030335](https://github.com/adnan118/Fable_flutter/actions/runs/42032030335) proved that the new Ubuntu 24.04 hosted image lacks a pre-exported `ANDROID_HOME`, so relying on a preinstalled SDK fails before emulator setup. Confirmed from current upstream `android-actions/setup-android` documentation: **v4** no longer requests obsolete SDK `tools` package, initializes modern cmdline-tools and supports `packages: 'platform-tools emulator'`. Switch from v3/preinstalled assumption to v4. Retain emulator and actual decoder assertions; no skip.
