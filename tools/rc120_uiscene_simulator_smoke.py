@@ -42,7 +42,21 @@ def available_pair(runtime: str) -> list[tuple[str, str, bool]]:
     devices = json.loads(simctl("list", "-j", "devices", "available", timeout=60))
     entries = devices.get("devices", {}).get(runtime, [])
     selected = {}
-    for item in entries:
+    # Preinstalled light profiles avoid cold-booting a heavy iPad Pro or
+    # iPhone 18 Pro when a compatible iOS 27 iPad mini/iPhone 17e exists.
+    def existing_rank(item: dict) -> int:
+        name = item.get("name", "")
+        preferred = (
+            100 if name.startswith("iPhone 17e") else
+            95 if name.startswith("iPad mini") else
+            80 if name.startswith("iPhone 17") else
+            75 if name.startswith("iPad (") else
+            60 if name.startswith("iPhone") else
+            50 if name.startswith("iPad") else 0
+        )
+        return preferred + (5 if item.get("state") == "Booted" else 0)
+
+    for item in sorted(entries, key=existing_rank, reverse=True):
         if not item.get("isAvailable", False):
             continue
         name = item.get("name", "")
@@ -112,6 +126,10 @@ def main(app: pathlib.Path) -> None:
     if not sdk.startswith("27."):
         raise RuntimeError(f"Expected iOS Simulator SDK 27, found {sdk}")
 
+    # Xcode 27 runner images may lazily mount simulator cryptex runtimes.
+    # Enumerate runtime registration before booting devices; never ignore
+    # failures or incorrectly treat a compiled plist as launch success.
+    simctl("runtime", "list", timeout=120)
     runtimes = json.loads(simctl("list", "-j", "runtimes", timeout=60))
     compatible = [
         x for x in runtimes.get("runtimes", [])
@@ -129,9 +147,12 @@ def main(app: pathlib.Path) -> None:
         try:
             if not is_booted:
                 simctl("boot", udid, timeout=120)
-            simctl("bootstatus", udid, "-b", timeout=360)
-            simctl("install", udid, str(app.resolve()), timeout=120)
-            launch_result = simctl("launch", udid, bundle, timeout=75)
+            simctl("bootstatus", udid, "-b", timeout=480)
+            # GitHub's virtualized Xcode 27 CoreSimulator can take several
+            # minutes for first install; the previous 120s limit was too low.
+            # This remains fail-closed and bounded to 10 minutes per device.
+            simctl("install", udid, str(app.resolve()), timeout=600)
+            launch_result = simctl("launch", udid, bundle, timeout=180)
             if not launch_result or ":" not in launch_result:
                 raise RuntimeError(f"{kind} simctl did not return a process id")
             time.sleep(7)

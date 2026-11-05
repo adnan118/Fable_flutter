@@ -164,7 +164,7 @@ jobs:
           # A compiled plist alone does not prove UIScene launches successfully.
       - name: Launch iOS 27 Runner on iPhone and iPad simulators (UIScene smoke)
         shell: bash
-        timeout-minutes: 35
+        timeout-minutes: 55
         run: |
           set -euo pipefail
           python3 tools/rc120_uiscene_simulator_smoke.py build/ios/iphonesimulator/Runner.app
