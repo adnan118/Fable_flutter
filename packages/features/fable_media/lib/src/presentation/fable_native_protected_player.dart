@@ -221,10 +221,14 @@ final class FableNativeProtectedPlayerSurface extends StatefulWidget {
     super.key,
     required this.source,
     required this.onSessionReady,
+    this.onNativeEvent,
   });
 
   final DescribedMediaByteSource source;
   final ValueChanged<ProtectedPlayerSession> onSessionReady;
+  /// Optional native decoder event hook for device/simulator verification.
+  /// A MethodChannel prepare/play acknowledgement is not decoded playback.
+  final ValueChanged<FableNativePlayerEvent>? onNativeEvent;
 
   @override
   State<FableNativeProtectedPlayerSurface> createState() =>
@@ -270,6 +274,7 @@ final class _FableNativeProtectedPlayerSurfaceState
     _nativeEvents = port.events.listen((event) {
       if (!mounted || revision != _bindingRevision ||
           !identical(_session, session)) return;
+      widget.onNativeEvent?.call(event);
       switch (event.kind) {
         case FableNativePlayerEventKind.failed:
           session.reportRendererFailure();
