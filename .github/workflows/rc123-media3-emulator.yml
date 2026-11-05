@@ -33,7 +33,14 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android SDK without obsolete legacy tools package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${ANDROID_HOME:?Android SDK missing from hosted Ubuntu runner}"
+          command -v sdkmanager
+          sdkmanager --version
+          command -v adb
       - name: Verify immutable audited source fixture
         shell: bash
         run: |

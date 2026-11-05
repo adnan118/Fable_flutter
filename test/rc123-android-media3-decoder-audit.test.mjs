@@ -14,6 +14,9 @@ test('RC123 emulator gate uses hardware-accelerated Android and real Media3 deco
       'e477b0298e79f42fc73c3270c36a5b032579b713']) {
     assert.ok(ci.includes(marker),marker);
   }
+  assert.ok(!ci.includes('android-actions/setup-android@v3'),
+    'Do not install obsolete sdkmanager tools package on Ubuntu 24.04');
+  assert.ok(ci.includes('sdkmanager --version'));
   assert.equal(statSync('assets/videos/rc122_blue_h264.mp4').size, 1569);
 });
 
