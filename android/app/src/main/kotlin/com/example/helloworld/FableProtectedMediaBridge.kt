@@ -63,10 +63,26 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
                 val viewId = (args["viewId"] as? Number)?.toInt()
                     ?: throw IllegalArgumentException("Missing platform view")
                 val surface = surfaces[viewId]
-                    ?: throw IllegalStateException("Unknown native player view")
-                // A queued old-session pause/stop must never mutate a new
-                // decoder that reused the same PlatformView ID.
                 val requestedLease = (args["leaseId"] as? Number)?.toLong() ?: -1L
+                val cleanup = call.method == "stop" || call.method == "dispose"
+
+                // Flutter may destroy/unregister a PlatformView before the
+                // asynchronous Dart State.dispose() MethodChannel cleanup
+                // reaches this handler. Cleanup is therefore idempotent:
+                // absent or stale surfaces are a successful no-op.
+                // This never lets an old lease mutate a newly reused view ID.
+                if (surface == null) {
+                    if (cleanup) {
+                        result.success(null)
+                        return@setMethodCallHandler
+                    }
+                    throw IllegalStateException("Unknown native player view")
+                }
+                if (cleanup && (requestedLease <= 0 || surface.leaseId != requestedLease)) {
+                    result.success(null)
+                    return@setMethodCallHandler
+                }
+                // All state-changing playback commands remain lease strict.
                 if (call.method != "prepare" &&
                     (requestedLease <= 0 || surface.leaseId != requestedLease)) {
                     throw IllegalStateException("Old native player lease")

@@ -36,5 +36,11 @@ test('RC123 never confuses build or method-channel ack with decoded playback', (
   assert.ok(android.includes('Player.STATE_READY'));
   assert.ok(android.includes('Player.STATE_ENDED'));
   assert.ok(android.includes('FableProtectedRangeDataSource'));
+  assert.ok(android.includes('val cleanup = call.method == "stop" || call.method == "dispose"'));
+  assert.ok(android.includes('if (surface == null) {'));
+  assert.ok(android.includes('if (cleanup) {'));
+  assert.ok(android.includes('if (cleanup && (requestedLease <= 0 || surface.leaseId != requestedLease))'));
+  assert.ok(testSource.includes('expect(source.closeCount, 1'));
+  assert.ok(testSource.includes('session.state.phase, ProtectedPlayerPhase.disposed'));
   assert.ok(!ci.includes('continue-on-error'));
 });

@@ -145,6 +145,18 @@ void main() {
     // was never used or simulated in this deterministic media decoder test.
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+    // PlatformView disposal and Dart State.dispose() cross the platform
+    // channel asynchronously. Wait for the source's final close so teardown
+    // exceptions cannot arrive after this test has already been reported green.
+    await tester.runAsync(() async {
+      final deadline = DateTime.now().add(const Duration(seconds: 8));
+      while (source.closeCount == 0 && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
     expect(source.cancellationCount, greaterThan(0));
+    expect(source.closeCount, 1,
+        reason: 'Unmount must finish closing the protected source');
+    expect(session.state.phase, ProtectedPlayerPhase.disposed);
   });
 }
