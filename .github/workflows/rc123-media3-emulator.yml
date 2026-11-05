@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/rc123-media3-emulator.yml'
       - 'test/rc123-android-media3-decoder-audit.test.mjs'
+      - 'tools/rc123_media3_emulator_test.sh'
       - 'integration_test/rc122_protected_video_test.dart'
       - 'packages/features/fable_media/**'
       - 'android/**'
@@ -70,9 +71,4 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            set -euo pipefail
-            adb wait-for-device
-            [[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 35 ]]
-            flutter devices
-            flutter test integration_test/rc122_protected_video_test.dart -d emulator-5554 --reporter=expanded
+          script: bash tools/rc123_media3_emulator_test.sh

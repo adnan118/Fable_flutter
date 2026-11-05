@@ -17,3 +17,6 @@ Workflow [#42031665860](https://github.com/adnan118/Fable_flutter/actions/runs/4
 
 ## Second toolchain correction
 CI [#42032030335](https://github.com/adnan118/Fable_flutter/actions/runs/42032030335) proved that the new Ubuntu 24.04 hosted image lacks a pre-exported `ANDROID_HOME`, so relying on a preinstalled SDK fails before emulator setup. Confirmed from current upstream `android-actions/setup-android` documentation: **v4** no longer requests obsolete SDK `tools` package, initializes modern cmdline-tools and supports `packages: 'platform-tools emulator'`. Switch from v3/preinstalled assumption to v4. Retain emulator and actual decoder assertions; no skip.
+
+## Third CI correction — actual emulator script shell
+Run [#42032360352](https://github.com/adnan118/Fable_flutter/actions/runs/42032360352) confirmed SDK v4 installation and Android API35 emulator boot SUCCESS. It then failed before Flutter test started because `reactivecircus/android-emulator-runner@v2` uses `/usr/bin/sh` for its script, and POSIX dash rejects `set -euo pipefail`. Fixed by moving test command to `tools/rc123_media3_emulator_test.sh` with a Bash shebang and invoking explicitly as `bash tools/rc123_media3_emulator_test.sh`. This fixes the command interpreter only; real H264 decoder remains mandatory and unverified until subsequent run.
