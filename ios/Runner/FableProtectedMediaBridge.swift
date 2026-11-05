@@ -53,6 +53,24 @@ final class FableProtectedMediaBridge: NSObject {
 
   func detach(_ id: Int64) { views.removeValue(forKey: id) }
 
+  func notifyRenderer(viewId: Int64, leaseId: Int64, rangeEpoch: Int,
+                      event: String) {
+    guard leaseId > 0, ["ready", "ended", "failed"].contains(event) else {
+      return
+    }
+    // Delivery must occur on Flutter's platform thread. Only categorical
+    // renderer state crosses the bridge; never raw AVFoundation errors.
+    let send: () -> Void = { [weak self] in
+      guard let self else { return }
+      self.channel.invokeMethod("playerEvent", arguments: [
+        "viewId": viewId, "leaseId": leaseId,
+        "rangeEpoch": rangeEpoch, "event": event
+      ])
+    }
+    if Thread.isMainThread { send() }
+    else { DispatchQueue.main.async(execute: send) }
+  }
+
   private func stopAll() {
     for entry in views.values { entry.view?.stop() }
   }
@@ -66,6 +84,13 @@ final class FableProtectedMediaBridge: NSObject {
       return
     }
     do {
+      let requestedLease = (args["leaseId"] as? NSNumber)?.int64Value ?? -1
+      // An old queued stop/seek/play must not mutate a new source bound to
+      // the same iOS PlatformView ID.
+      guard requestedLease > 0,
+        (call.method == "prepare" || requestedLease == surface.leaseId) else {
+        throw ProtectedMediaError.unavailable
+      }
       switch call.method {
       case "prepare":
         guard let size = args["totalLength"] as? NSNumber,
@@ -74,7 +99,7 @@ final class FableProtectedMediaBridge: NSObject {
           throw ProtectedMediaError.unavailable
         }
         try surface.prepare(total: size.int64Value, mime: mime,
-                            epoch: epoch.intValue)
+                            epoch: epoch.intValue, newLease: requestedLease)
       case "play": try surface.play()
       case "pause": try surface.pause()
       case "seek":
@@ -96,18 +121,19 @@ final class FableProtectedMediaBridge: NSObject {
   }
 
   func read(
-    id: Int64, offset: Int64, count: Int, epoch: Int,
+    id: Int64, leaseId: Int64, offset: Int64, count: Int, epoch: Int,
     expectedTotal: Int64, expectedType: String,
     completion: @escaping (Data?) -> Void
   ) {
-    guard count > 0 && count <= 524288 && offset >= 0 else {
+    guard leaseId > 0, count > 0 && count <= 524288 && offset >= 0 else {
       completion(nil)
       return
     }
     sequence += 1
     let requestId = sequence
     channel.invokeMethod("readRange", arguments: [
-      "viewId": id, "requestId": requestId, "start": offset,
+      "viewId": id, "leaseId": leaseId,
+      "requestId": requestId, "start": offset,
       "length": count, "rangeEpoch": epoch
     ]) { answer in
       guard let payload = answer as? [String: Any],
@@ -162,6 +188,9 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
   private var player: AVPlayer?
   private var asset: AVURLAsset?
   private var loader: FableProtectedAssetLoader?
+  private var statusObservation: NSKeyValueObservation?
+  private var finishedObserver: NSObjectProtocol?
+  private(set) var leaseId: Int64 = 0
   private var active = false
   private var rangeEpoch = 0
 
@@ -176,18 +205,20 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
 
   func view() -> UIView { surface }
 
-  func prepare(total: Int64, mime: String, epoch: Int) throws {
+  func prepare(total: Int64, mime: String, epoch: Int,
+               newLease: Int64) throws {
     // AVFoundation receives a verified UTI, never a raw HTML/content URL.
-    guard total > 0 && epoch >= 0,
+    guard total > 0 && epoch >= 0 && newLease > 0,
       ["video/mp4", "audio/mp4", "audio/mpeg"].contains(mime),
       let uti = UTType(mimeType: mime)?.identifier else {
       throw ProtectedMediaError.unavailable
     }
     stop()
+    leaseId = newLease
     rangeEpoch = epoch
     let queue = DispatchQueue(label: "fable.secure.media.loader.\(identifier)")
     let delegate = FableProtectedAssetLoader(
-      bridge: bridge, viewId: identifier, total: total,
+      bridge: bridge, viewId: identifier, leaseId: newLease, total: total,
       uniformType: uti, mimeType: mime, epoch: epoch, queue: queue)
     let url = URL(string: "fable-media://session/content")!
     let nativeAsset = AVURLAsset(url: url)
@@ -200,6 +231,32 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
     player = nativePlayer
     surface.playerLayer.player = nativePlayer
     surface.playerLayer.isHidden = false
+
+    statusObservation = item.observe(\.status, options: [.new]) {
+      [weak self] observed, _ in
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.active, self.leaseId == newLease,
+          self.player?.currentItem === observed else { return }
+        switch observed.status {
+        case .readyToPlay:
+          self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
+                                     rangeEpoch: self.rangeEpoch, event: "ready")
+        case .failed:
+          self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
+                                     rangeEpoch: self.rangeEpoch, event: "failed")
+        default:
+          break
+        }
+      }
+    }
+    finishedObserver = NotificationCenter.default.addObserver(
+      forName: AVPlayerItem.didPlayToEndTimeNotification, object: item,
+      queue: .main
+    ) { [weak self] _ in
+      guard let self, self.active, self.leaseId == newLease else { return }
+      self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
+                                 rangeEpoch: self.rangeEpoch, event: "ended")
+    }
   }
 
   func play() throws {
@@ -223,6 +280,12 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
 
   func stop() {
     active = false
+    statusObservation?.invalidate()
+    statusObservation = nil
+    if let finishedObserver {
+      NotificationCenter.default.removeObserver(finishedObserver)
+    }
+    finishedObserver = nil
     player?.pause()
     surface.playerLayer.player = nil
     // Prevent rendering the last frame after an identity/session revoke.
@@ -254,6 +317,7 @@ private final class FableProtectedAssetLoader: NSObject, AVAssetResourceLoaderDe
 
   private let bridge: FableProtectedMediaBridge
   private let viewId: Int64
+  private let leaseId: Int64
   private let total: Int64
   private let uniformType: String
   private let mediaType: String
@@ -263,12 +327,13 @@ private final class FableProtectedAssetLoader: NSObject, AVAssetResourceLoaderDe
   private var pending = [ObjectIdentifier: (AVAssetResourceLoadingRequest, Progress)]()
 
   init(
-    bridge: FableProtectedMediaBridge, viewId: Int64,
+    bridge: FableProtectedMediaBridge, viewId: Int64, leaseId: Int64,
     total: Int64, uniformType: String, mimeType: String,
     epoch: Int, queue: DispatchQueue
   ) {
     self.bridge = bridge
     self.viewId = viewId
+    self.leaseId = leaseId
     self.total = total
     self.uniformType = uniformType
     self.mediaType = mimeType
@@ -358,7 +423,7 @@ private final class FableProtectedAssetLoader: NSObject, AVAssetResourceLoaderDe
     let tokenEpoch = epoch
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      self.bridge.read(id: self.viewId, offset: start,
+      self.bridge.read(id: self.viewId, leaseId: self.leaseId, offset: start,
                        count: count, epoch: tokenEpoch,
                        expectedTotal: self.total,
                        expectedType: self.mediaType) { [weak self] data in

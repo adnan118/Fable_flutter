@@ -37,8 +37,9 @@ void main() {
         chunk(request.start, request.length)),
     );
     final rawRead = await FableNativeProtectedPlayerPort.handleNativeCallForTesting(
-      const MethodCall('readRange', <String, Object>{
-        'viewId': 24, 'requestId': 1, 'start': 5, 'length': 4,
+      MethodCall('readRange', <String, Object>{
+        'viewId': 24, 'leaseId': port.leaseIdForTesting,
+        'requestId': 1, 'start': 5, 'length': 4,
         'rangeEpoch': 0,
       }),
     );
@@ -68,16 +69,18 @@ void main() {
     await port.seek(const Duration(milliseconds: 30), 1);
     final oldRead =
       await FableNativeProtectedPlayerPort.handleNativeCallForTesting(
-        const MethodCall('readRange', <String, Object>{
-          'viewId': 25, 'requestId': 2, 'start': 10,
+        MethodCall('readRange', <String, Object>{
+          'viewId': 25, 'leaseId': port.leaseIdForTesting,
+          'requestId': 2, 'start': 10,
           'length': 2, 'rangeEpoch': 0,
         }));
     expect((oldRead as Map)['status'], 'rejected');
     await port.stop();
     final newer =
       await FableNativeProtectedPlayerPort.handleNativeCallForTesting(
-        const MethodCall('readRange', <String, Object>{
-          'viewId': 25, 'requestId': 3, 'start': 10,
+        MethodCall('readRange', <String, Object>{
+          'viewId': 25, 'leaseId': port.leaseIdForTesting,
+          'requestId': 3, 'start': 10,
           'length': 2, 'rangeEpoch': 1,
         }));
     expect((newer as Map)['status'], 'rejected');
@@ -94,8 +97,9 @@ void main() {
     await port.dispose();
     final result =
       await FableNativeProtectedPlayerPort.handleNativeCallForTesting(
-        const MethodCall('readRange', <String, Object>{
-          'viewId': 26, 'requestId': 4,
+        MethodCall('readRange', <String, Object>{
+          'viewId': 26, 'leaseId': port.leaseIdForTesting,
+          'requestId': 4,
           'start': 10, 'length': 2, 'rangeEpoch': 0,
         }));
     expect((result as Map)['status'], 'rejected');

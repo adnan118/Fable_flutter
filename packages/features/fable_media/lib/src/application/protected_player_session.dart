@@ -262,6 +262,16 @@ final class ProtectedPlayerSession {
     }
   }
 
+  /// Decoder failures arrive asynchronously after native prepare/play().
+  /// A successful method-channel acknowledgement is NOT decoded playback.
+  /// The renderer must be stopped and pending byte ranges rejected.
+  void reportRendererFailure() {
+    if (_disposed || _state.phase == ProtectedPlayerPhase.revoked ||
+        _state.phase == ProtectedPlayerPhase.stopped ||
+        _state.phase == ProtectedPlayerPhase.failed) return;
+    _fail(MediaReadFailureKind.unsupported);
+  }
+
   Future<void> play() async {
     if (!_authorized) {
       _revoke(MediaSessionInvalidation.sourceClosed);

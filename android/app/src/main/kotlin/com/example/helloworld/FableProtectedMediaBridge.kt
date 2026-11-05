@@ -7,6 +7,8 @@ import android.os.Looper
 import android.view.View
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -62,12 +64,20 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
                     ?: throw IllegalArgumentException("Missing platform view")
                 val surface = surfaces[viewId]
                     ?: throw IllegalStateException("Unknown native player view")
+                // A queued old-session pause/stop must never mutate a new
+                // decoder that reused the same PlatformView ID.
+                val requestedLease = (args["leaseId"] as? Number)?.toLong() ?: -1L
+                if (call.method != "prepare" &&
+                    (requestedLease <= 0 || surface.leaseId != requestedLease)) {
+                    throw IllegalStateException("Old native player lease")
+                }
                 when (call.method) {
                     "prepare" -> {
                         val total = (args["totalLength"] as? Number)?.toLong() ?: -1L
                         val mime = args["mimeType"] as? String ?: ""
                         val epoch = (args["rangeEpoch"] as? Number)?.toInt() ?: -1
-                        surface.prepare(total, mime, epoch)
+                        val leaseId = (args["leaseId"] as? Number)?.toLong() ?: -1L
+                        surface.prepare(total, mime, epoch, leaseId)
                         result.success(null)
                     }
                     "play" -> { surface.play(); result.success(null) }
@@ -89,6 +99,16 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
         }
     }
 
+    fun notifyRenderer(viewId: Int, leaseId: Long, rangeEpoch: Int, event: String) {
+        if (leaseId <= 0 || event !in setOf("ready", "ended", "failed")) return
+        channel.invokeMethod("playerEvent", mapOf(
+            "viewId" to viewId,
+            "leaseId" to leaseId,
+            "rangeEpoch" to rangeEpoch,
+            "event" to event
+        ))
+    }
+
     fun unregister(viewId: Int) {
         surfaces.remove(viewId)
     }
@@ -106,7 +126,7 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
     /** Called from Media3's loader thread; Dart callbacks run on the main thread. */
     @Throws(IOException::class)
     fun read(
-        surface: FableProtectedMediaSurface, generation: Long,
+        surface: FableProtectedMediaSurface, generation: Long, leaseId: Long,
         offset: Long, length: Int, epoch: Int, abandoned: () -> Boolean
     ): ByteArray {
         if (length <= 0 || length > 524288 || offset < 0) {
@@ -119,12 +139,13 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
         val output = AtomicReference<ByteArray?>(null)
         val id = requestSequence.incrementAndGet()
         main.post {
-            if (abandoned() || !surface.valid(generation, epoch)) {
+            if (abandoned() || !surface.valid(generation, epoch, leaseId)) {
                 latch.countDown()
                 return@post
             }
             channel.invokeMethod("readRange", mapOf(
                 "viewId" to surface.viewId,
+                "leaseId" to leaseId,
                 "requestId" to id,
                 "start" to offset,
                 "length" to length,
@@ -141,7 +162,7 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
                         if (start != offset || total != surface.totalLength ||
                             mime != surface.mimeType || bytes.isEmpty() ||
                             bytes.size > length || bytes.size > 524288) return
-                        if (!abandoned() && surface.valid(generation, epoch)) {
+                        if (!abandoned() && surface.valid(generation, epoch, leaseId)) {
                             output.set(bytes)
                         }
                     } finally {
@@ -155,7 +176,7 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
             })
         }
         if (!latch.await(15, TimeUnit.SECONDS) || abandoned() ||
-            !surface.valid(generation, epoch)) {
+            !surface.valid(generation, epoch, leaseId)) {
             throw IOException("Protected media range cancelled or timed out")
         }
         return output.get() ?: throw IOException("Protected media range refused")
@@ -174,6 +195,8 @@ internal class FableProtectedMediaSurface(
     }
     private var player: ExoPlayer? = null
     @Volatile private var generation: Long = 0L
+    @Volatile var leaseId: Long = 0L
+        private set
     @Volatile var rangeEpoch: Int = 0
         private set
     @Volatile var totalLength: Long = 0L
@@ -184,21 +207,24 @@ internal class FableProtectedMediaSurface(
 
     override fun getView(): View = playerView
 
-    fun valid(requestGeneration: Long, epoch: Int): Boolean =
-        active && requestGeneration == generation && epoch == rangeEpoch
+    fun valid(requestGeneration: Long, epoch: Int, requestedLease: Long): Boolean =
+        active && requestGeneration == generation &&
+        requestedLease > 0 && requestedLease == leaseId &&
+        epoch == rangeEpoch
 
-    fun prepare(total: Long, mime: String, epoch: Int) {
-        if (total <= 0 || epoch < 0 ||
+    fun prepare(total: Long, mime: String, epoch: Int, newLease: Long) {
+        if (total <= 0 || epoch < 0 || newLease <= 0 ||
             !Regex("^(audio|video)/[a-z0-9][a-z0-9.+_-]*$").matches(mime)) {
             throw IllegalArgumentException("Unsupported protected player metadata")
         }
         stop()
+        leaseId = newLease
         totalLength = total
         mimeType = mime
         rangeEpoch = epoch
         active = true
         val factory = DataSource.Factory {
-            FableProtectedRangeDataSource(this, bridge, generation, rangeEpoch)
+            FableProtectedRangeDataSource(this, bridge, generation, rangeEpoch, leaseId)
         }
         val mediaSource = ProgressiveMediaSource.Factory(factory)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(0))
@@ -209,6 +235,25 @@ internal class FableProtectedMediaSurface(
                     .build()
             )
         val created = ExoPlayer.Builder(playerView.context).build()
+        val boundGeneration = generation
+        val boundLease = leaseId
+        created.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (valid(boundGeneration, rangeEpoch, boundLease)) {
+                    // Do not send decoder exception messages, URIs or headers.
+                    bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "failed")
+                }
+            }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (!valid(boundGeneration, rangeEpoch, boundLease)) return
+                when (playbackState) {
+                    Player.STATE_READY ->
+                        bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "ready")
+                    Player.STATE_ENDED ->
+                        bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "ended")
+                }
+            }
+        })
         player = created
         playerView.player = created
         created.setMediaSource(mediaSource)
@@ -258,7 +303,8 @@ private class FableProtectedRangeDataSource(
     private val owner: FableProtectedMediaSurface,
     private val bridge: FableProtectedMediaBridge,
     private val generation: Long,
-    private val epoch: Int
+    private val epoch: Int,
+    private val leaseId: Long
 ) : DataSource {
     @Volatile private var closed = false
     private var uri: Uri? = null
@@ -272,7 +318,7 @@ private class FableProtectedRangeDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        if (closed || !owner.valid(generation, epoch) ||
+        if (closed || !owner.valid(generation, epoch, leaseId) ||
             dataSpec.uri.scheme != "fable-media" || dataSpec.position < 0 ||
             dataSpec.position > owner.totalLength) {
             throw IOException("Protected DataSource denied")
@@ -289,7 +335,7 @@ private class FableProtectedRangeDataSource(
 
     override fun read(buffer: ByteArray, bufferOffset: Int, readLength: Int): Int {
         if (readLength == 0) return 0
-        if (closed || !owner.valid(generation, epoch) ||
+        if (closed || !owner.valid(generation, epoch, leaseId) ||
             bufferOffset < 0 || readLength < 0 ||
             bufferOffset > buffer.size - readLength) {
             throw IOException("Protected DataSource invalidated")
@@ -297,8 +343,8 @@ private class FableProtectedRangeDataSource(
         if (remaining == 0L) return C.RESULT_END_OF_INPUT
         if (cachePosition == cache.size) {
             val count = min(65536L, remaining).toInt()
-            cache = bridge.read(owner, generation, offset, count, epoch) {
-                closed || !owner.valid(generation, epoch)
+            cache = bridge.read(owner, generation, leaseId, offset, count, epoch) {
+                closed || !owner.valid(generation, epoch, leaseId)
             }
             cachePosition = 0
         }
@@ -307,7 +353,7 @@ private class FableProtectedRangeDataSource(
         System.arraycopy(cache, cachePosition, buffer, bufferOffset, copied)
         // Identity may be revoked on the UI thread *during* this copy.
         // Fail closed before handing any stale bytes back to Media3.
-        if (closed || !owner.valid(generation, epoch)) {
+        if (closed || !owner.valid(generation, epoch, leaseId)) {
             java.util.Arrays.fill(buffer, bufferOffset, bufferOffset + copied, 0.toByte())
             throw IOException("Protected media invalidated during copy")
         }
