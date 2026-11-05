@@ -60,8 +60,9 @@ final class FableProtectedMediaBridge: NSObject {
     }
     // Delivery must occur on Flutter's platform thread. Only categorical
     // renderer state crosses the bridge; never raw AVFoundation errors.
-    let send = { [weak self] in
-      self?.channel.invokeMethod("playerEvent", arguments: [
+    let send: () -> Void = { [weak self] in
+      guard let self else { return }
+      self.channel.invokeMethod("playerEvent", arguments: [
         "viewId": viewId, "leaseId": leaseId,
         "rangeEpoch": rangeEpoch, "event": event
       ])

@@ -260,6 +260,28 @@ void main() {
     await session.dispose();
   });
 
+  test('RC121 renderer decode failure invalidates ready session and purges native', () async {
+    final source = FakeSource();
+    final platform = FakePlatform();
+    final session = ProtectedPlayerSession(source: source, platform: platform);
+    await session.prepare();
+    expect(session.state.phase, ProtectedPlayerPhase.ready);
+    final before = source.reads;
+    session.reportRendererFailure();
+    expect(session.state.phase, ProtectedPlayerPhase.failed);
+    expect(session.state.failure, MediaReadFailureKind.unsupported);
+    expect(platform.calls, contains('stop'));
+    final reply = await platform.reader!(
+      const ProtectedPlayerReadRequest(requestId: 88, start: 0, length: 1));
+    expect(reply, isA<ProtectedPlayerReadRejected>());
+    expect(source.reads, before);
+    // Late error notification must not resurrect or double-transition a
+    // failed session.
+    session.reportRendererFailure();
+    expect(session.state.phase, ProtectedPlayerPhase.failed);
+    await session.dispose();
+  });
+
   test('RC119 close source does not revoke server; no URL or secret on port',
       () async {
     final source = FakeSource();
