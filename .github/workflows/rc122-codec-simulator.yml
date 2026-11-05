@@ -1,0 +1,41 @@
+name: RC122 protected MP4 native codec integration
+
+on:
+  pull_request:
+    paths:
+      - 'integration_test/rc122_protected_video_test.dart'
+      - 'assets/videos/rc122_blue_h264.mp4'
+      - 'packages/features/fable_media/**'
+      - 'tools/rc122_codec_simulator_smoke.py'
+      - '.github/workflows/rc122-codec-simulator.yml'
+      - 'pubspec.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.47.8'
+
+jobs:
+  protected-mp4-decoder-ios27:
+    name: iOS 27 actual protected H264 codec (not live Backend E2E)
+    runs-on: xcode-27
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - name: Require original 1569-byte audited H264 fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git hash-object assets/videos/rc122_blue_h264.mp4)" == "e477b0298e79f42fc73c3270c36a5b032579b713" ]]
+          [[ "$(wc -c < assets/videos/rc122_blue_h264.mp4)" -eq 1569 ]]
+      - name: Test actual AVPlayer decoding from protected byte source on iOS 27
+        timeout-minutes: 55
+        run: python3 tools/rc122_codec_simulator_smoke.py
