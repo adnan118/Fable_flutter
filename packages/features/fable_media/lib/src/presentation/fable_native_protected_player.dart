@@ -7,6 +7,16 @@ import '../application/protected_player_session.dart';
 import '../domain/media_byte_chunk.dart';
 import '../domain/protected_player_port.dart';
 
+enum FableNativePlayerEventKind { ready, ended, failed }
+
+final class FableNativePlayerEvent {
+  const FableNativePlayerEvent(this.kind, this.rangeEpoch);
+  final FableNativePlayerEventKind kind;
+  final int rangeEpoch;
+}
+
+/// RC121: a nonsecret lease fences requests even when a platform view ID is
+/// reused for a different source/account. Decoder errors propagate upstream.
 /// RC120: concrete Flutter -> Android Media3 / iOS AVFoundation transport.
 /// Native receives only opaque platform-view identity, verified content length,
 /// MIME and bounded source byte buffers. No bearer, media token or backend URL.
@@ -22,6 +32,7 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
   static const String viewType = 'fable/protected_media_surface';
   static const MethodChannel channel = MethodChannel('fable/protected_player_v1');
   static final Map<int, FableNativeProtectedPlayerPort> _ports = {};
+  static int _nextLeaseId = 0;
   static bool _listening = false;
 
   static void _registerOnce() {
@@ -35,17 +46,40 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
       _handleNativeCall(call);
 
   static Future<Object?> _handleNativeCall(MethodCall call) async {
-    if (call.method != 'readRange') {
+    if (call.method != 'readRange' && call.method != 'playerEvent') {
       throw MissingPluginException('Unsupported protected media call');
     }
     final args = call.arguments;
     if (args is! Map) return const <String, Object>{'status': 'rejected'};
     final viewId = args['viewId'];
+    final leaseId = args['leaseId'];
+    if (viewId is! int || leaseId is! int || leaseId <= 0) {
+      return const <String, Object>{'status': 'rejected'};
+    }
+    final current = _ports[viewId];
+    if (current == null || current._closed || current._leaseId != leaseId) {
+      return const <String, Object>{'status': 'rejected'};
+    }
+    if (call.method == 'playerEvent') {
+      final kind = switch (args['event']) {
+        'ready' => FableNativePlayerEventKind.ready,
+        'ended' => FableNativePlayerEventKind.ended,
+        'failed' => FableNativePlayerEventKind.failed,
+        _ => null,
+      };
+      final rangeEpoch = args['rangeEpoch'];
+      if (kind == null || rangeEpoch is! int ||
+          current._reader == null || current._rangeEpoch != rangeEpoch) {
+        return const <String, Object>{'status': 'rejected'};
+      }
+      current._events.add(FableNativePlayerEvent(kind, rangeEpoch));
+      return const <String, Object>{'status': 'accepted'};
+    }
     final requestId = args['requestId'];
     final start = args['start'];
     final length = args['length'];
     final epoch = args['rangeEpoch'];
-    if (viewId is! int || requestId is! int || start is! int ||
+    if (requestId is! int || start is! int ||
         length is! int || epoch is! int || requestId <= 0 ||
         start < 0 || length <= 0 || length > 512 * 1024) {
       return const <String, Object>{'status': 'rejected'};
@@ -53,7 +87,7 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
     final port = _ports[viewId];
     final reader = port?._reader;
     if (port == null || port._closed || reader == null ||
-        port._rangeEpoch != epoch) {
+        port._leaseId != leaseId || port._rangeEpoch != epoch) {
       return const <String, Object>{'status': 'rejected'};
     }
     final generation = port._generation;
@@ -86,6 +120,13 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
   }
 
   final int _viewId;
+  late final int _leaseId = ++_nextLeaseId;
+  final StreamController<FableNativePlayerEvent> _events =
+      StreamController<FableNativePlayerEvent>.broadcast(sync: true);
+  Stream<FableNativePlayerEvent> get events => _events.stream;
+  @visibleForTesting
+  int get leaseIdForTesting => _leaseId;
+
   ProtectedPlayerRangeReader? _reader;
   int _generation = 0;
   int _rangeEpoch = 0;
@@ -95,6 +136,7 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
     if (_closed) throw StateError('Native protected player was disposed');
     await channel.invokeMethod<void>(action, <String, Object>{
       'viewId': _viewId,
+      'leaseId': _leaseId,
       if (extra != null) ...extra,
     });
   }
@@ -166,6 +208,7 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
     } finally {
       _closed = true;
       if (identical(_ports[_viewId], this)) _ports.remove(_viewId);
+      await _events.close();
     }
   }
 }
@@ -194,6 +237,7 @@ final class _FableNativeProtectedPlayerSurfaceState
   int? _viewId;
   int _bindingRevision = 0;
   ProtectedPlayerSession? _session;
+  StreamSubscription<FableNativePlayerEvent>? _nativeEvents;
 
   @override
   void initState() {
@@ -213,6 +257,8 @@ final class _FableNativeProtectedPlayerSurfaceState
     final revision = ++_bindingRevision;
     final prior = _session;
     _session = null;
+    await _nativeEvents?.cancel();
+    _nativeEvents = null;
     if (prior != null) await prior.dispose();
     if (!mounted || revision != _bindingRevision) return;
 
@@ -221,6 +267,18 @@ final class _FableNativeProtectedPlayerSurfaceState
       source: widget.source, platform: port,
     );
     _session = session;
+    _nativeEvents = port.events.listen((event) {
+      if (!mounted || revision != _bindingRevision ||
+          !identical(_session, session)) return;
+      switch (event.kind) {
+        case FableNativePlayerEventKind.failed:
+          session.reportRendererFailure();
+        case FableNativePlayerEventKind.ended:
+          unawaited(session.stop()); // Local only; server end is owner-controlled.
+        case FableNativePlayerEventKind.ready:
+          break; // Renderer readiness is distinct from broker authorization.
+      }
+    });
     try {
       await session.prepare();
       if (!mounted || revision != _bindingRevision) {
@@ -273,6 +331,9 @@ final class _FableNativeProtectedPlayerSurfaceState
     WidgetsBinding.instance.removeObserver(this);
     final session = _session;
     _session = null;
+    final subscription = _nativeEvents;
+    _nativeEvents = null;
+    if (subscription != null) unawaited(subscription.cancel());
     if (session != null) unawaited(session.dispose());
     super.dispose();
   }
