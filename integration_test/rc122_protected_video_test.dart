@@ -106,11 +106,14 @@ void main() {
       ),
     ));
 
-    final session = await tester.runAsync(() async {
+    final pendingSession = await tester.runAsync(() async {
       return onReady.future.timeout(const Duration(seconds: 50));
     });
-    expect(session, isNotNull);
-    expect(session!.state.phase, ProtectedPlayerPhase.ready);
+    if (pendingSession == null) {
+      fail('Protected media session was never prepared');
+    }
+    final session = pendingSession;
+    expect(session.state.phase, ProtectedPlayerPhase.ready);
     expect(source.rangeReadCount, greaterThanOrEqualTo(1),
         reason: 'Source probe must read local fixture bytes');
 
