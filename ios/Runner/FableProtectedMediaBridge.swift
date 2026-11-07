@@ -326,6 +326,7 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
   func stop() {
     active = false
     playbackRequested = false
+    hasObservedNativePlaying = false
     timeControlObservation?.invalidate()
     timeControlObservation = nil
     statusObservation?.invalidate()
