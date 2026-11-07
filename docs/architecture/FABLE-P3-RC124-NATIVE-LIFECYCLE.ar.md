@@ -19,7 +19,7 @@ working tree overwrite.
   the decoder still owns the lease/epoch. UIScene/Xcode27 is preserved.
 - An original deterministic **8-second 64×64 5fps H.264 Baseline, silent MP4**
   is generated locally by ffmpeg for stable real-time pause and 5s seek
-  testing (no third-party media). Fixture binary is audited for size/blob.
+  testing (no third-party media). Fixture binary is audited for size, Git blob `027ed85648fe724dcc77a89aea493e6ef67daeb9` and SHA256 `b53078768a0c1c322805863ecb522da359b0f3fce86f258d62d02218fd81c1ff`.
 - Cross-platform `integration_test/rc124_native_player_lifecycle_test.dart`
   uses the actual protected Dart→Native decoder bridge, requiring native
   readiness, native playing, native paused, seek completion, native resumption,
