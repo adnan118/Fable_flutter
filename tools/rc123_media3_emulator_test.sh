@@ -15,3 +15,6 @@ flutter devices
 # this integration test. Never treat an APK build or native ACK as success.
 flutter test integration_test/rc122_protected_video_test.dart \
   -d emulator-5554 --reporter=expanded
+# RC124: native paused/playing/seek completion and in-flight auth revoke.
+flutter test integration_test/rc124_native_player_lifecycle_test.dart \
+  -d emulator-5554 --reporter=expanded
