@@ -55,7 +55,7 @@ final class FableProtectedMediaBridge: NSObject {
 
   func notifyRenderer(viewId: Int64, leaseId: Int64, rangeEpoch: Int,
                       event: String) {
-    guard leaseId > 0, ["ready", "ended", "failed"].contains(event) else {
+    guard leaseId > 0, ["ready", "ended", "failed", "playing", "paused", "seeked"].contains(event) else {
       return
     }
     // Delivery must occur on Flutter's platform thread. Only categorical
@@ -202,6 +202,9 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
   private var asset: AVURLAsset?
   private var loader: FableProtectedAssetLoader?
   private var statusObservation: NSKeyValueObservation?
+  private var timeControlObservation: NSKeyValueObservation?
+  private var playbackRequested = false
+  private var hasObservedNativePlaying = false
   private var finishedObserver: NSObjectProtocol?
   private(set) var leaseId: Int64 = 0
   private var active = false
@@ -262,6 +265,26 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
         }
       }
     }
+    timeControlObservation = nativePlayer.observe(\.timeControlStatus, options: [.new]) {
+      [weak self] observed, _ in
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.active, self.playbackRequested,
+          self.leaseId == newLease, self.player === observed else { return }
+        switch observed.timeControlStatus {
+        case .playing:
+          self.hasObservedNativePlaying = true
+          self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
+                                     rangeEpoch: self.rangeEpoch, event: "playing")
+        case .paused:
+          if self.hasObservedNativePlaying {
+            self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
+                                       rangeEpoch: self.rangeEpoch, event: "paused")
+          }
+        default:
+          break
+        }
+      }
+    }
     finishedObserver = NotificationCenter.default.addObserver(
       forName: AVPlayerItem.didPlayToEndTimeNotification, object: item,
       queue: .main
@@ -274,6 +297,7 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
 
   func play() throws {
     guard active, let player else { throw ProtectedMediaError.unavailable }
+    playbackRequested = true
     player.play()
   }
 
@@ -287,12 +311,24 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
       let player, let loader else { throw ProtectedMediaError.unavailable }
     rangeEpoch = epoch
     loader.advanceEpoch(epoch)
+    let expectedLease = leaseId
     player.seek(to: CMTime(value: milliseconds, timescale: 1000),
-                toleranceBefore: .zero, toleranceAfter: .zero)
+                toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+      DispatchQueue.main.async { [weak self] in
+        guard finished, let self, self.active,
+          self.leaseId == expectedLease, self.rangeEpoch == epoch else { return }
+        self.bridge.notifyRenderer(viewId: self.identifier, leaseId: expectedLease,
+                                   rangeEpoch: epoch, event: "seeked")
+      }
+    }
   }
 
   func stop() {
     active = false
+    playbackRequested = false
+    hasObservedNativePlaying = false
+    timeControlObservation?.invalidate()
+    timeControlObservation = nil
     statusObservation?.invalidate()
     statusObservation = nil
     if let finishedObserver {

@@ -7,9 +7,11 @@ on:
       - 'test/rc123-android-media3-decoder-audit.test.mjs'
       - 'tools/rc123_media3_emulator_test.sh'
       - 'integration_test/rc122_protected_video_test.dart'
+      - 'integration_test/rc124_native_player_lifecycle_test.dart'
       - 'packages/features/fable_media/**'
       - 'android/**'
       - 'assets/videos/rc122_blue_h264.mp4'
+      - 'assets/videos/rc124_blue_h264_8s.mp4'
   workflow_dispatch:
 
 permissions:
@@ -52,6 +54,9 @@ jobs:
           set -euo pipefail
           [[ "$(git hash-object assets/videos/rc122_blue_h264.mp4)" == "e477b0298e79f42fc73c3270c36a5b032579b713" ]]
           [[ "$(wc -c < assets/videos/rc122_blue_h264.mp4)" -eq 1569 ]]
+          [[ "$(wc -c < assets/videos/rc124_blue_h264_8s.mp4)" -eq 2279 ]]
+          [[ "$(git hash-object assets/videos/rc124_blue_h264_8s.mp4)" == "027ed85648fe724dcc77a89aea493e6ef67daeb9" ]]
+          [[ "$(shasum -a 256 assets/videos/rc124_blue_h264_8s.mp4 | awk '{print $1}')" == "b53078768a0c1c322805863ecb522da359b0f3fce86f258d62d02218fd81c1ff" ]]
           flutter pub get
       - name: Enable KVM for actual Android emulator
         shell: bash

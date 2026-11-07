@@ -116,7 +116,7 @@ internal class FableProtectedMediaBridge(messenger: BinaryMessenger) {
     }
 
     fun notifyRenderer(viewId: Int, leaseId: Long, rangeEpoch: Int, event: String) {
-        if (leaseId <= 0 || event !in setOf("ready", "ended", "failed")) return
+        if (leaseId <= 0 || event !in setOf("ready", "ended", "failed", "playing", "paused", "seeked")) return
         channel.invokeMethod("playerEvent", mapOf(
             "viewId" to viewId,
             "leaseId" to leaseId,
@@ -214,6 +214,8 @@ internal class FableProtectedMediaSurface(
     @Volatile var leaseId: Long = 0L
         private set
     @Volatile var rangeEpoch: Int = 0
+    private var playbackRequested = false
+    private var hasObservedNativePlaying = false
         private set
     @Volatile var totalLength: Long = 0L
         private set
@@ -269,6 +271,25 @@ internal class FableProtectedMediaSurface(
                         bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "ended")
                 }
             }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!valid(boundGeneration, rangeEpoch, boundLease) ||
+                    !playbackRequested) return
+                if (isPlaying) {
+                    hasObservedNativePlaying = true
+                    bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "playing")
+                } else if (hasObservedNativePlaying) {
+                    bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "paused")
+                }
+            }
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK &&
+                    valid(boundGeneration, rangeEpoch, boundLease)) {
+                    bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "seeked")
+                }
+            }
         })
         player = created
         playerView.player = created
@@ -278,7 +299,9 @@ internal class FableProtectedMediaSurface(
 
     fun play() {
         if (!active) throw IllegalStateException("Stopped")
-        player?.play() ?: throw IllegalStateException("Not prepared")
+        val current = player ?: throw IllegalStateException("Not prepared")
+        playbackRequested = true
+        current.play()
     }
 
     fun pause() {
@@ -298,6 +321,8 @@ internal class FableProtectedMediaSurface(
         // Revoke before releasing decoders, so background loader replies are
         // never allowed into a new account's player surface.
         active = false
+        playbackRequested = false
+        hasObservedNativePlaying = false
         generation++
         player?.stop()
         player?.clearMediaItems()

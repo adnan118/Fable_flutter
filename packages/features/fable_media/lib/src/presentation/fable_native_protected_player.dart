@@ -7,7 +7,7 @@ import '../application/protected_player_session.dart';
 import '../domain/media_byte_chunk.dart';
 import '../domain/protected_player_port.dart';
 
-enum FableNativePlayerEventKind { ready, ended, failed }
+enum FableNativePlayerEventKind { ready, ended, failed, playing, paused, seeked }
 
 final class FableNativePlayerEvent {
   const FableNativePlayerEvent(this.kind, this.rangeEpoch);
@@ -65,6 +65,9 @@ final class FableNativeProtectedPlayerPort implements ProtectedPlayerPlatformPor
         'ready' => FableNativePlayerEventKind.ready,
         'ended' => FableNativePlayerEventKind.ended,
         'failed' => FableNativePlayerEventKind.failed,
+        'playing' => FableNativePlayerEventKind.playing,
+        'paused' => FableNativePlayerEventKind.paused,
+        'seeked' => FableNativePlayerEventKind.seeked,
         _ => null,
       };
       final rangeEpoch = args['rangeEpoch'];
@@ -281,7 +284,10 @@ final class _FableNativeProtectedPlayerSurfaceState
         case FableNativePlayerEventKind.ended:
           unawaited(session.stop()); // Local only; server end is owner-controlled.
         case FableNativePlayerEventKind.ready:
-          break; // Renderer readiness is distinct from broker authorization.
+        case FableNativePlayerEventKind.playing:
+        case FableNativePlayerEventKind.paused:
+        case FableNativePlayerEventKind.seeked:
+          break; // Native observations are not themselves authorization.
       }
     });
     try {
