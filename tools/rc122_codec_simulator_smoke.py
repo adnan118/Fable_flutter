@@ -8,6 +8,7 @@ import subprocess
 from rc120_uiscene_simulator_smoke import available_pair, run, simctl
 
 TARGET = "integration_test/rc122_protected_video_test.dart"
+TARGET_RC124 = "integration_test/rc124_native_player_lifecycle_test.dart"
 
 def main() -> None:
     toolchain = run("xcodebuild", "-version", timeout=30)
@@ -16,8 +17,9 @@ def main() -> None:
     sdk = run("xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", timeout=30)
     if not sdk.startswith("27."):
         raise RuntimeError("RC122 requires iOS 27 Simulator SDK")
-    if not pathlib.Path(TARGET).is_file():
-        raise RuntimeError("Missing protected video integration target")
+    for target in (TARGET, TARGET_RC124):
+        if not pathlib.Path(target).is_file():
+            raise RuntimeError(f"Missing protected video integration target: {target}")
     runtimes = json.loads(simctl("list", "-j", "runtimes", timeout=90))
     supported = [x for x in runtimes.get("runtimes", [])
                  if x.get("isAvailable", False)
@@ -36,6 +38,10 @@ def main() -> None:
         # Actual Flutter integration test waits for native decoder events,
         # not a successful MethodChannel prepare or standalone scene launch.
         run("flutter", "test", TARGET, "-d", udid,
+            "--reporter=expanded", timeout=1800)
+        # RC124 is NOT a fake-channel test: native playback state changes,
+        # native seek completion and a deliberately late source read must pass.
+        run("flutter", "test", TARGET_RC124, "-d", udid,
             "--reporter=expanded", timeout=1800)
         print("RC122 decoded MP4 over protected native bridge PASS", flush=True)
     finally:
