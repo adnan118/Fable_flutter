@@ -322,6 +322,7 @@ internal class FableProtectedMediaSurface(
         // never allowed into a new account's player surface.
         active = false
         playbackRequested = false
+        hasObservedNativePlaying = false
         generation++
         player?.stop()
         player?.clearMediaItems()
