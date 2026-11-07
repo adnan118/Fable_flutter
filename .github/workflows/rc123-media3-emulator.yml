@@ -55,7 +55,8 @@ jobs:
           [[ "$(git hash-object assets/videos/rc122_blue_h264.mp4)" == "e477b0298e79f42fc73c3270c36a5b032579b713" ]]
           [[ "$(wc -c < assets/videos/rc122_blue_h264.mp4)" -eq 1569 ]]
           [[ "$(wc -c < assets/videos/rc124_blue_h264_8s.mp4)" -eq 2279 ]]
-          [[ "$(git hash-object assets/videos/rc124_blue_h264_8s.mp4)" == "eca100393002fa8aa1adfca7ed4edfb3c7e2f763" ]]
+          [[ "$(git hash-object assets/videos/rc124_blue_h264_8s.mp4)" == "027ed85648fe724dcc77a89aea493e6ef67daeb9" ]]
+          [[ "$(shasum -a 256 assets/videos/rc124_blue_h264_8s.mp4 | awk '{print $1}')" == "b53078768a0c1c322805863ecb522da359b0f3fce86f258d62d02218fd81c1ff" ]]
           flutter pub get
       - name: Enable KVM for actual Android emulator
         shell: bash
