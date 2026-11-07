@@ -204,6 +204,7 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
   private var statusObservation: NSKeyValueObservation?
   private var timeControlObservation: NSKeyValueObservation?
   private var playbackRequested = false
+  private var hasObservedNativePlaying = false
   private var finishedObserver: NSObjectProtocol?
   private(set) var leaseId: Int64 = 0
   private var active = false
