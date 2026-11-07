@@ -91,8 +91,8 @@ Future<T> within<T>(WidgetTester tester, Future<T> future,
     {int seconds = 50}) async {
   final result = await tester.runAsync(
     () => future.timeout(Duration(seconds: seconds)));
-  if (result == null) throw StateError('Native integration wait returned null');
-  return result;
+  // Future<void> correctly resolves to null; non-null sessions retain type.
+  return result as T;
 }
 
 void main() {
