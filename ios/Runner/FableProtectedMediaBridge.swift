@@ -77,16 +77,29 @@ final class FableProtectedMediaBridge: NSObject {
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
-      let numericId = args["viewId"] as? NSNumber,
-      let surface = views[numericId.int64Value]?.view else {
+      let numericId = args["viewId"] as? NSNumber else {
       result(FlutterError(code: "unknown_view",
                           message: "Protected player surface is unavailable", details: nil))
       return
     }
+    let requestedLease = (args["leaseId"] as? NSNumber)?.int64Value ?? -1
+    let cleanup = call.method == "stop" || call.method == "dispose"
+    guard let surface = views[numericId.int64Value]?.view else {
+      // Flutter may unregister the UIKit PlatformView before asynchronous
+      // Dart State.dispose() cleanup reaches the MethodChannel. A missing
+      // view is therefore a successful no-op for stop/dispose only.
+      if cleanup { result(nil); return }
+      result(FlutterError(code: "unknown_view",
+                          message: "Protected player surface is unavailable", details: nil))
+      return
+    }
+    // A stale cleanup from an old lease must never stop a newly reused view.
+    if cleanup && (requestedLease <= 0 || requestedLease != surface.leaseId) {
+      result(nil)
+      return
+    }
     do {
-      let requestedLease = (args["leaseId"] as? NSNumber)?.int64Value ?? -1
-      // An old queued stop/seek/play must not mutate a new source bound to
-      // the same iOS PlatformView ID.
+      // All playback-changing commands remain strict on the active lease.
       guard requestedLease > 0,
         (call.method == "prepare" || requestedLease == surface.leaseId) else {
         throw ProtectedMediaError.unavailable
