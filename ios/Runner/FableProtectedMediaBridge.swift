@@ -272,11 +272,14 @@ final class FableProtectedMediaPlatformView: NSObject, FlutterPlatformView {
           self.leaseId == newLease, self.player === observed else { return }
         switch observed.timeControlStatus {
         case .playing:
+          self.hasObservedNativePlaying = true
           self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
                                      rangeEpoch: self.rangeEpoch, event: "playing")
         case .paused:
-          self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
-                                     rangeEpoch: self.rangeEpoch, event: "paused")
+          if self.hasObservedNativePlaying {
+            self.bridge.notifyRenderer(viewId: self.identifier, leaseId: newLease,
+                                       rangeEpoch: self.rangeEpoch, event: "paused")
+          }
         default:
           break
         }
