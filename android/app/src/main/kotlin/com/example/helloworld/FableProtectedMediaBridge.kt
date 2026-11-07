@@ -274,8 +274,12 @@ internal class FableProtectedMediaSurface(
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!valid(boundGeneration, rangeEpoch, boundLease) ||
                     !playbackRequested) return
-                bridge.notifyRenderer(viewId, boundLease, rangeEpoch,
-                    if (isPlaying) "playing" else "paused")
+                if (isPlaying) {
+                    hasObservedNativePlaying = true
+                    bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "playing")
+                } else if (hasObservedNativePlaying) {
+                    bridge.notifyRenderer(viewId, boundLease, rangeEpoch, "paused")
+                }
             }
             override fun onPositionDiscontinuity(
                 oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo,
