@@ -215,6 +215,7 @@ internal class FableProtectedMediaSurface(
         private set
     @Volatile var rangeEpoch: Int = 0
     private var playbackRequested = false
+    private var hasObservedNativePlaying = false
         private set
     @Volatile var totalLength: Long = 0L
         private set
