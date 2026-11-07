@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - 'integration_test/rc122_protected_video_test.dart'
+      - 'integration_test/rc124_native_player_lifecycle_test.dart'
       - 'assets/videos/rc122_blue_h264.mp4'
+      - 'assets/videos/rc124_blue_h264_8s.mp4'
+      - 'ios/**'
       - 'packages/features/fable_media/**'
       - 'tools/rc122_codec_simulator_smoke.py'
       - '.github/workflows/rc122-codec-simulator.yml'
@@ -36,6 +39,12 @@ jobs:
           set -euo pipefail
           [[ "$(git hash-object assets/videos/rc122_blue_h264.mp4)" == "e477b0298e79f42fc73c3270c36a5b032579b713" ]]
           [[ "$(wc -c < assets/videos/rc122_blue_h264.mp4)" -eq 1569 ]]
+      - name: Verify RC124 8s seek/pause fixture bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(wc -c < assets/videos/rc124_blue_h264_8s.mp4)" -eq 2279 ]]
+          [[ "$(git hash-object assets/videos/rc124_blue_h264_8s.mp4)" == "eca100393002fa8aa1adfca7ed4edfb3c7e2f763" ]]
       - name: Test actual AVPlayer decoding from protected byte source on iOS 27
         timeout-minutes: 55
         run: python3 tools/rc122_codec_simulator_smoke.py
