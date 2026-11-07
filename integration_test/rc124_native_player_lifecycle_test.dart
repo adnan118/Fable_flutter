@@ -95,6 +95,16 @@ Future<T> within<T>(WidgetTester tester, Future<T> future,
   return result as T;
 }
 
+Future<void> waitForClose(Rc124FixtureSource source) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (source.closes == 0) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw TimeoutException('Native surface did not close protected source');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -170,11 +180,7 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-    await within(tester, () async {
-      while (source.closes == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 25));
-      }
-    }().timeout(const Duration(seconds: 10)), seconds: 12);
+    await within(tester, waitForClose(source), seconds: 12);
     expect(source.closes, 1);
     expect(session.state.phase, ProtectedPlayerPhase.disposed);
   });
@@ -213,11 +219,7 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-    await within(tester, () async {
-      while (source.closes == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 25));
-      }
-    }().timeout(const Duration(seconds: 10)), seconds: 12);
+    await within(tester, waitForClose(source), seconds: 12);
     expect(source.closes, 1);
     expect(session.state.phase, ProtectedPlayerPhase.disposed);
   });
