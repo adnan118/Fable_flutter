@@ -23,7 +23,12 @@ test('RC125 upload moves UI async orchestration into typed clean layers',()=>{
     ['data',adapter,root+'data/media_upload_workflow_adapter.dart']]){
     assert.deepEqual(checkLayerSource({featureId:'media',layer,source,file:path}),[]);
   }
-  for(const source of [port,app]){
+  // Comments may legitimately describe the types that are prohibited by
+  // this gate; reject real imports/signatures rather than explanatory text.
+  const active=(source)=>source.replace(/\/\*[\s\S]*?\*\//g,'')
+    .replace(/^\s*\/\/.*$/gm,'');
+  for(const original of [port,app]){
+    const source=active(original);
     for(const forbidden of ['package:dio','package:fable_core','package:flutter',
       'dart:io','dynamic','CancelToken','BuildContext','BackendApiGateway']){
       assert.ok(!source.includes(forbidden),forbidden);
@@ -50,7 +55,8 @@ test('RC125 cancellation is persisted before remote DELETE and rejects stale wri
   assert.ok(app.includes('_generation++'));
   assert.ok(app.includes('_cancellation?.cancel()'));
   assert.ok(app.includes('if (!canApply()) return;'));
-  assert.ok(app.includes('if (!_port.isSameIdentity(_identityRevision!))')===false);
+  assert.ok(app.includes('if (!_port.isSameIdentity(_identityRevision!))'),
+    'Initial identity must be independently checked when binding events');
   assert.ok(app.includes('_port.isSameIdentity(_identityRevision!)'));
   assert.ok(app.includes('_identitySubscription = events.listen('));
   assert.ok(app.includes('UploadFlowProblem.missingIdentityEvents'));
