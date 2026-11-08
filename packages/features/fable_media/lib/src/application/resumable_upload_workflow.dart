@@ -97,7 +97,9 @@ final class ResumableUploadWorkflow {
     if (_busy || _cancelled || _completed || _blocked || _disposed) return;
     final checkpoint = _checkpoint;
     if (resume && checkpoint == null) return;
-    final generation = _generation;
+    // New user action wins over any async checkpoint restore still pending.
+    // A delayed restore is never allowed to overwrite an active upload.
+    final generation = ++_generation;
     if (!_active(generation)) return;
     final cancellation = _port.newCancellation();
     _cancellation = cancellation;
