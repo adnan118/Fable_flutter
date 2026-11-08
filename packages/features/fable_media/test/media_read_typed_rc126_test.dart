@@ -227,8 +227,8 @@ void main() {
       () async {
     final gateway = _Gateway();
     final legacy = FableMediaReadRepository(gateway);
-    await expectLater(legacy.metadata(_id), throwsStateError);
-    await expectLater(legacy.runtimeContract(), throwsStateError);
+    expect(() => legacy.metadata(_id), throwsStateError);
+    expect(() => legacy.runtimeContract(), throwsStateError);
     expect(gateway.calls, isEmpty);
     final trusted = FableMediaReadRepository(gateway,
       catalog: _catalog(), identityRevision: () => 1,
