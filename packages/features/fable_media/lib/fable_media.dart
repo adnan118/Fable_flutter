@@ -14,5 +14,8 @@ export 'src/domain/media_read_result.dart';
 export 'src/application/read_media_range_use_case.dart';
 export 'src/data/fable_media_byte_source.dart';
 export 'src/presentation/media_range_controller.dart';
+export 'src/domain/upload_workflow_port.dart';
+export 'src/application/resumable_upload_workflow.dart';
+export 'src/data/media_upload_workflow_adapter.dart';
 export 'src/resumable_upload_card.dart';
 const FableFeature mediaFeature=FableFeature(id:'media',title:'Media',icon:Icons.image_outlined,backendKeywords:['media','upload']);

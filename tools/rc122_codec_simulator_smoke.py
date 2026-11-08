@@ -10,6 +10,26 @@ from rc120_uiscene_simulator_smoke import available_pair, run, simctl
 TARGET = "integration_test/rc122_protected_video_test.dart"
 TARGET_RC124 = "integration_test/rc124_native_player_lifecycle_test.dart"
 
+def ensure_booted(udid: str) -> None:
+    """Flutter integration_test may shut down its simulator after each run.
+
+    Re-check the device state *before each independent decoder test*; never
+    silently treat a failed install, boot or launch as successful. Simulator
+    provisioning may change the state between consecutive flutter commands.
+    """
+    devices = json.loads(simctl("list", "-j", "devices", timeout=90))
+    matches = [device for entries in devices.get("devices", {}).values()
+               for device in entries if device.get("udid") == udid]
+    if len(matches) != 1:
+        raise RuntimeError("Selected iOS 27 simulator is unavailable")
+    state = matches[0].get("state")
+    if state == "Shutdown":
+        simctl("boot", udid, timeout=150)
+    elif state != "Booted":
+        raise RuntimeError(f"Simulator not ready to boot: {state}")
+    simctl("bootstatus", udid, "-b", timeout=480)
+
+
 def main() -> None:
     toolchain = run("xcodebuild", "-version", timeout=30)
     if not toolchain.startswith("Xcode 27"):
@@ -32,13 +52,15 @@ def main() -> None:
         raise RuntimeError("Missing iPhone simulator")
     print(f"RC122 selected iOS27 {kind} {udid}", flush=True)
     try:
-        if not is_booted:
-            simctl("boot", udid, timeout=150)
-        simctl("bootstatus", udid, "-b", timeout=480)
+        # First flutter test may terminate the simulator at test shutdown.
+        # Reboot and wait for bootstatus before the second installation.
+        # Both decoder tests remain required and fail-closed.
+        ensure_booted(udid)
         # Actual Flutter integration test waits for native decoder events,
         # not a successful MethodChannel prepare or standalone scene launch.
         run("flutter", "test", TARGET, "-d", udid,
             "--reporter=expanded", timeout=1800)
+        ensure_booted(udid)
         # RC124 is NOT a fake-channel test: native playback state changes,
         # native seek completion and a deliberately late source read must pass.
         run("flutter", "test", TARGET_RC124, "-d", udid,

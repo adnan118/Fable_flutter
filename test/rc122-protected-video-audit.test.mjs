@@ -24,4 +24,14 @@ test('RC122 Xcode 27 integration smoke is mandatory and cannot fake ready', () =
   assert.ok(runner.includes('"flutter", "test", TARGET, "-d", udid'));
   assert.ok(runner.includes('timeout=1800'));
   assert.ok(!ci.includes('continue-on-error'));
+  // Flutter may shutdown CoreSimulator between successive flutter test calls.
+  // Both real integration targets must have a fresh bounded boot-status gate.
+  const first=runner.indexOf('run("flutter", "test", TARGET,');
+  const between=runner.indexOf('ensure_booted(udid)', first);
+  const second=runner.indexOf('run("flutter", "test", TARGET_RC124,');
+  assert.ok(first>=0 && between>first && second>between,
+    'RC124 test must reboot/verify iOS simulator after the original decoder test');
+  assert.ok(runner.includes('simctl("bootstatus", udid, "-b", timeout=480)'));
+  assert.ok(runner.includes('simctl("boot", udid, timeout=150)'));
+  assert.ok(!runner.includes('except Exception: pass'));
 });
