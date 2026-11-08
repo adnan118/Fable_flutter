@@ -1,21 +1,46 @@
 import 'package:fable_core/fable_core.dart';
-/// Metadata and runtime strategy reading only. Resumable uploads live in
-/// media_upload_repository.dart; protected playback remains a separate gate.
-class FableMediaReadRepository {
- const FableMediaReadRepository(this.gateway);
- final BackendApiGateway gateway;
- Future<Map<String,dynamic>> runtimeContract() async {
-  final response=await gateway.execute('media.clientContract');
-  final value=response.data;
-  if(value is! Map)throw const FormatException('Invalid media runtime contract');
-  return Map<String,dynamic>.unmodifiable(Map<String,dynamic>.from(value));
- }
- Future<Map<String,dynamic>> metadata(String id) async {
-  if(!RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(id)){
-   throw ArgumentError('Invalid media id');
+import 'data/fable_media_read_source.dart';
+import 'domain/media_read_models.dart';
+
+/// Source-compatible constructor boundary for older generated clients.
+/// A bare gateway is intentionally INERT: it no longer guesses operation IDs
+/// or publishes raw backend response maps. Supply the selected project's
+/// verified OperationCatalog to enable authenticated typed reads.
+///
+/// New generated features should inject ReadMediaMetadataUseCase with a
+/// MediaMetadataReadPort at their application composition root instead.
+@Deprecated('Use ReadMediaMetadataUseCase / FableMediaReadSource with catalog')
+final class FableMediaReadRepository implements MediaMetadataReadPort {
+  FableMediaReadRepository(this.gateway, {
+    OperationCatalog? catalog,
+    FableMediaReadBindings bindings = const FableMediaReadBindings.verified(),
+    int Function()? identityRevision,
+    bool Function()? isSessionCurrent,
+  }) : _verified = catalog == null ? null : FableMediaReadSource(
+    gateway: gateway,
+    catalog: catalog,
+    bindings: bindings,
+    identityRevision: identityRevision,
+    isSessionCurrent: isSessionCurrent,
+  );
+
+  final BackendApiGateway gateway;
+  final FableMediaReadSource? _verified;
+
+  FableMediaReadSource _source() {
+    final source = _verified;
+    if (source == null) {
+      throw StateError(
+        'Media read disabled: import the exact verified project OperationCatalog');
+    }
+    return source;
   }
-  final response=await gateway.execute('media.metadata',path:{'id':id});
-  if(response.data is! Map)throw const FormatException('Invalid media metadata');
-  return Map<String,dynamic>.unmodifiable(Map<String,dynamic>.from(response.data as Map));
- }
+
+  @override
+  Future<MediaRuntimeCapabilities> runtimeContract() =>
+      _source().runtimeContract();
+
+  @override
+  Future<MediaAssetMetadata> metadata(String id) =>
+      _source().metadata(id);
 }
