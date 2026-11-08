@@ -38,6 +38,14 @@ Map<String, Object?> get _runtime => {
   'schemaVersion': 12,
   'driver': 'r2',
   'storagePolicy': 'OPTIMIZED_PRIMARY',
+  'protection': {
+    'enabled': true,
+    'forcePrivate': true,
+    'directPublicUrls': false,
+    'directDownload': false,
+    'requireAuthorizationGrant': true,
+    'drm': {'queryTokensAllowed': false},
+  },
   'limits': {'maxUploadBytes': 60000000, 'maxParallelParts': 4},
   'features': {
     'resumableLargeUpload': true,
@@ -48,7 +56,7 @@ Map<String, Object?> get _runtime => {
 };
 
 Map<String, Object?> _asset(String id, {
-  String type = 'signed',
+  String type = 'protected',
   String? parent,
   List<Object?> variants = const [],
 }) => {
@@ -152,7 +160,7 @@ void main() {
     expect(value.id, _id);
     expect(value.kind, MediaAssetKind.video);
     expect(value.visibility, MediaAssetVisibility.private);
-    expect(value.accessMode, MediaAssetAccessMode.signed);
+    expect(value.accessMode, MediaAssetAccessMode.protected);
     expect(value.mimeType, 'video/mp4');
     expect(value.sizeBytes, 4040);
     expect(value.variants.single.parentAssetId, _id);
@@ -199,6 +207,56 @@ void main() {
     expect(
       () => decodeFableMediaAsset('secret', requestedId: _id),
       throwsFormatException);
+  });
+
+  test('RC127 all media reject PUBLIC API direct links and signed GETs',
+      () {
+    for (final kind in ['IMAGE','VIDEO','AUDIO','DOCUMENT']) {
+      for (final visibility in ['PUBLIC','PRIVATE']) {
+        final safe = {
+          ..._asset(_id), 'kind': kind, 'visibility': visibility,
+        };
+        expect(
+          () => decodeFableMediaAsset(safe, requestedId: _id),
+          returnsNormally,
+          reason: '$kind $visibility has protected metadata only');
+        for (final type in ['public','signed','authenticated']) {
+          expect(
+            () => decodeFableMediaAsset({
+              ...safe, 'access': {
+                'type': type, 'url': 'https://copied.example/media',
+                'playbackEndpoint': null,
+              },
+            }, requestedId: _id),
+            throwsFormatException,
+            reason: '$kind $visibility must reject direct access $type');
+        }
+      }
+    }
+  });
+
+  test('RC127 public API contract cannot downgrade secure media policy',
+      () {
+    for (final patch in <Map<String, Object?>>[
+      {'enabled': false},
+      {'forcePrivate': false},
+      {'directPublicUrls': true},
+      {'directDownload': true},
+      {'requireAuthorizationGrant': false},
+      {'drm': {'queryTokensAllowed': true}},
+    ]) {
+      final insecure = {
+        ..._runtime,
+        'protection': {
+          ...(_runtime['protection'] as Map<String,Object?>), ...patch,
+        },
+      };
+      expect(() => decodeFableRuntimeCapabilities(insecure),
+        throwsFormatException);
+    }
+    expect(() => decodeFableRuntimeCapabilities({
+      ..._runtime, 'protection': null,
+    }), throwsFormatException);
   });
 
   test('RC126 rejects identity switch while GET response is outstanding', () async {
@@ -251,7 +309,7 @@ final class _OtherBackendPort implements MediaMetadataReadPort {
         id: assetId, kind: MediaAssetKind.image,
         visibility: MediaAssetVisibility.public,
         originalName: 'photo.jpg', mimeType: 'image/jpeg',
-        sizeBytes: 123, accessMode: MediaAssetAccessMode.public,
+        sizeBytes: 123, accessMode: MediaAssetAccessMode.protected,
         variants: const []);
   @override Future<MediaRuntimeCapabilities> runtimeContract() async =>
       MediaRuntimeCapabilities(
