@@ -53,6 +53,7 @@ jobs:
           node --test test/rc123-android-media3-decoder-audit.test.mjs
           node --test test/rc124-native-player-lifecycle-audit.test.mjs
           node --test test/rc125-upload-workflow-architecture-audit.test.mjs
+          node --test test/rc126-typed-media-read-audit.test.mjs
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
