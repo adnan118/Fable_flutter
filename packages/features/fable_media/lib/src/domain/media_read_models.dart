@@ -3,7 +3,8 @@
 enum MediaStorageDriver { local, s3, r2, hybrid }
 enum MediaAssetKind { image, video, audio, document }
 enum MediaAssetVisibility { public, private }
-enum MediaAssetAccessMode { protected, public, signed, authenticated }
+// RC127 policy: public APIs may expose metadata, never direct media bytes.
+enum MediaAssetAccessMode { protected }
 
 /// Audited source fields from Backend media.service.clientContract() (RC66).
 /// Additional Backend fields are deliberately not guessed/exposed.
