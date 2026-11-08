@@ -44,6 +44,7 @@ class _Store extends MediaUploadCheckpointStore {
   _Store(String scope):super(scope);
   MediaUploadCheckpoint? value;
   Completer<MediaUploadCheckpoint?>? readWait;
+  Completer<void>? saveWait;
   int clears=0,saves=0,reads=0;
   @override Future<MediaUploadCheckpoint?> read()async{
     reads++;
@@ -52,6 +53,7 @@ class _Store extends MediaUploadCheckpointStore {
   }
   @override Future<void> save(MediaUploadCheckpoint checkpoint)async{
     saves++;
+    if(saveWait!=null)await saveWait!.future;
     value=checkpoint;
   }
   @override Future<void> clear()async{
@@ -68,6 +70,7 @@ class _DelayedRepository extends MediaUploadRepository {
     required super.isSessionCurrent,super.identityEvents});
   final result=Completer<Map<String,dynamic>>();
   int starts=0,resumes=0,cancels=0;
+  MediaUploadCheckpoint? checkpointToSave;
   void complete()=>result.complete({'id':_id,'status':'COMPLETED'});
   @override Future<Map<String,dynamic>> start(File file,{
     required String kind,required String mimeType,
@@ -78,6 +81,7 @@ class _DelayedRepository extends MediaUploadRepository {
   })async{
     starts++;
     onProgress?.call(const MediaUploadProgress(0,8,0));
+    if(checkpointToSave!=null)await saveCheckpoint(checkpointToSave!);
     return result.future;
   }
   @override Future<Map<String,dynamic>> resume(File file,
@@ -247,8 +251,34 @@ void main(){
       sizeBytes:8);
     await adapter.cancel(sessionId:_id,identityRevision:ctx.epoch);
     expect(ctx.store.value,isNull);
-    expect(ctx.store.clears,greaterThanOrEqualTo(2));
+    expect(ctx.store.clears,1);
     expect(ctx.repo.cancels,1);
+  });
+
+  test('RC125 late checkpoint save cannot resurrect durable cancel intent',
+    () async {
+    final ctx=_Context(_scopeA);
+    addTearDown(ctx.close);
+    ctx.store.saveWait=Completer<void>();
+    ctx.repo.checkpointToSave=const MediaUploadCheckpoint(
+      sessionId:_id,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sizeBytes:8);
+    final flow=ResumableUploadWorkflow(MediaUploadWorkflowAdapter(
+      file:File('unused.jpg'),repository:ctx.repo,checkpoints:ctx.store,
+      kind:'IMAGE',mimeType:'image/jpeg',visibility:'PRIVATE'));
+    await Future<void>.delayed(Duration.zero);
+    final uploading=flow.start(resume:false);
+    await Future<void>.delayed(Duration.zero);
+    expect(ctx.store.saves,1); // Unfinished save of session A.
+    final cancelling=flow.cancel(); // Must wait for the stale save.
+    expect(ctx.store.clears,0);
+    ctx.store.saveWait!.complete();
+    await uploading;
+    await cancelling;
+    expect(ctx.store.value,isNull);
+    expect(ctx.store.clears,greaterThanOrEqualTo(2));
+    expect(flow.snapshot.cancelled,isTrue);
+    flow.dispose();
   });
 
   test('RC125 Data adapter must not DELETE old user session after switch',
