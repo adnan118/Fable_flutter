@@ -57,6 +57,16 @@ test('RC126 typed Domain does not publish credential URLs or raw payloads',()=>{
     'Response<dynamic>', 'BackendApiGateway', 'FableAuthGateway']) {
     assert.ok(!active.includes(forbidden),'unsafe Domain field '+forbidden);
   }
+  assert.ok(domain.includes('enum MediaAssetAccessMode { protected }'));
+  for(const safeguard of [
+    "protection['enabled'] != true",
+    "protection['forcePrivate'] != true",
+    "protection['directPublicUrls'] != false",
+    "protection['directDownload'] != false",
+    "protection['requireAuthorizationGrant'] != true",
+    "drm['queryTokensAllowed'] != false",
+    "access['playbackEndpoint'] != '/media/$id/playback'",
+  ]) assert.ok(data.includes(safeguard),safeguard);
   assert.ok(data.includes('MediaAssetAccessMode.protected'));
   assert.ok(data.includes("access['url'] != null"));
   assert.ok(data.includes('Media response asset identifier mismatch'));
