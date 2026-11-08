@@ -151,6 +151,19 @@ MediaRuntimeCapabilities decodeFableRuntimeCapabilities(Object? input) {
       data['storagePolicy'] != 'OPTIMIZED_PRIMARY') {
     throw const FormatException('Unsupported media runtime contract version');
   }
+  // Reject insecure/legacy deployments even when the API is advertised as
+  // public. Binary media must have a separate live session/grant, no public
+  // object URL, no presigned GET link and no query-string playback token.
+  final protection = _record(data['protection']);
+  final drm = _record(protection['drm']);
+  if (protection['enabled'] != true ||
+      protection['forcePrivate'] != true ||
+      protection['directPublicUrls'] != false ||
+      protection['directDownload'] != false ||
+      protection['requireAuthorizationGrant'] != true ||
+      drm['queryTokensAllowed'] != false) {
+    throw const FormatException('Unprotected media runtime contract refused');
+  }
   final limits = _record(data['limits']);
   final features = _record(data['features']);
   final types = data['acceptedMimeTypes'];
@@ -198,9 +211,10 @@ MediaAssetMetadata _asset(Map<String, Object?> data, String expectedId,
   }
   final access = _record(data['access']);
   final accessMode = _enum(MediaAssetAccessMode.values, access['type']);
-  if (accessMode == MediaAssetAccessMode.protected &&
-      access['url'] != null) {
-    throw const FormatException('Protected asset cannot expose a direct URL');
+  if (accessMode != MediaAssetAccessMode.protected ||
+      access['url'] != null ||
+      access['playbackEndpoint'] != '/media/$id/playback') {
+    throw const FormatException('Direct or unsigned media access forbidden');
   }
 
   final variantId = data['variant'];
