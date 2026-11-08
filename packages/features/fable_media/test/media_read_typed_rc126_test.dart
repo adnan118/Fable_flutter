@@ -65,7 +65,8 @@ Map<String, Object?> _asset(String id, {
     'expiresAt': '2026-11-08T20:00:00Z',
     'playbackEndpoint': type == 'protected' ? '/media/$id/playback' : null,
   },
-  'variants': variants,
+  // Backend assetView lists variants only on the root, not each child.
+  if (parent == null) 'variants': variants,
 };
 
 class _Gateway implements BackendApiGateway {
