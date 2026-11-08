@@ -30,7 +30,7 @@ final class FableMediaReadBindings {
     }
     if (metadata != 'media.get' ||
         asset.method.toUpperCase() != 'GET' ||
-        asset.path != '/media/:id' ||
+        !const {'/media/:id', '/media/{id}'}.contains(asset.path) ||
         !asset.requiresAuth || !asset.enforceAuth) {
       throw StateError('Unverified protected media metadata operation');
     }
