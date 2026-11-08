@@ -20,7 +20,10 @@ test('RC130 guest bytes are served only via verified HTTPS private route with tw
     "followRedirects: false",
     "response.headers.value('set-cookie')",
   ])assert.ok(src.includes(expected),expected);
-  assert.ok(src.includes("Set-Cookie")===false);
+  // Reading the server Set-Cookie for the mobile in-memory cookie is allowed.
+  // Minting or injecting a browser cookie from untrusted app data is not.
+  assert.ok(!src.includes("setHeader('Set-Cookie'"));
+  assert.ok(!src.includes("Set-Cookie':"));
   assert.ok(!src.includes("package:flutter/"));
   assert.ok(!src.includes("Preferences"));
   assert.ok(!src.includes("SharedPreferences"));
