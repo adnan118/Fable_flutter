@@ -103,6 +103,9 @@ void main() {
   test('RC126 verifies exact protected Backend GET routes; no guessed IDs', () {
     expect(() => const FableMediaReadBindings.verified().verify(_catalog()),
       returnsNormally);
+    // OpenAPI exports {id}; some validated contracts retain :id.
+    expect(() => const FableMediaReadBindings.verified().verify(
+      _catalog(metadataPath: '/media/{id}')), returnsNormally);
     for (final bad in <FableContract>[
       _catalog(runtimeId: 'media.clientContract'),
       _catalog(metadataId: 'media.metadata'),
