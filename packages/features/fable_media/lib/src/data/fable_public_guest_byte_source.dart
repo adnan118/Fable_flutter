@@ -130,8 +130,14 @@ final class FablePublicGuestByteSource implements DescribedMediaByteSource {
   }
 
   @override
-  Future<Uint8List> read(MediaByteRange range) async =>
-      (await readChunk(range)).bytes;
+  Future<Uint8List> read(MediaByteRange range) async {
+    final chunk = await readChunk(range);
+    // The compatibility await creates another revoke/expiry boundary.
+    if (!isActive) {
+      throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
+    }
+    return chunk.bytes;
+  }
 
   @override
   Future<MediaByteChunk> readChunk(MediaByteRange range) async {
