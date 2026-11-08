@@ -235,4 +235,34 @@ void main(){
     expect(find.text('Upload'),findsNothing);
     expect(ctx.gateway.calls,isEmpty);
   });
+  test('RC125 Data adapter makes local cancellation durable before DELETE',
+    () async {
+    final ctx=_Context(_scopeA);
+    addTearDown(ctx.close);
+    final adapter=MediaUploadWorkflowAdapter(
+      file:File('unused.jpg'),repository:ctx.repo,checkpoints:ctx.store,
+      kind:'IMAGE',mimeType:'image/jpeg',visibility:'PRIVATE');
+    ctx.store.value=const MediaUploadCheckpoint(
+      sessionId:_id,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sizeBytes:8);
+    await adapter.cancel(sessionId:_id,identityRevision:ctx.epoch);
+    expect(ctx.store.value,isNull);
+    expect(ctx.store.clears,greaterThanOrEqualTo(2));
+    expect(ctx.repo.cancels,1);
+  });
+
+  test('RC125 Data adapter must not DELETE old user session after switch',
+    () async {
+    final ctx=_Context(_scopeA);
+    addTearDown(ctx.close);
+    final adapter=MediaUploadWorkflowAdapter(
+      file:File('unused.jpg'),repository:ctx.repo,checkpoints:ctx.store,
+      kind:'IMAGE',mimeType:'image/jpeg',visibility:'PRIVATE');
+    final oldRevision=ctx.epoch;
+    ctx.changeIdentity();
+    await adapter.cancel(sessionId:_id,identityRevision:oldRevision);
+    expect(ctx.store.clears,1);
+    expect(ctx.repo.cancels,0);
+  });
+
 }
