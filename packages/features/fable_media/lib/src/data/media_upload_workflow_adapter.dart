@@ -4,6 +4,24 @@ import 'package:dio/dio.dart';
 import '../domain/upload_workflow_port.dart';
 import '../media_upload_repository.dart';
 
+/// Serializes operations on the SAME account-scoped store, even when a
+/// widget rebuild creates a second adapter around the original store.
+final class _CheckpointSerial {
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> run<T>(Future<T> Function() action) async {
+    final previous = _tail;
+    final released = Completer<void>();
+    _tail = released.future;
+    await previous;
+    try {
+      return await action();
+    } finally {
+      released.complete();
+    }
+  }
+}
+
 final class _DioUploadCancellation implements UploadFlowCancellation {
   final token = CancelToken();
   @override bool get isCancelled => token.isCancelled;
@@ -23,6 +41,17 @@ final class MediaUploadWorkflowAdapter implements UploadWorkflowPort {
     required this.visibility,
     this.purpose,
   });
+
+  static final _storeQueues =
+      Expando<_CheckpointSerial>('fable-scoped-upload-checkpoint');
+  _CheckpointSerial get _checkpointSerial {
+    var serial = _storeQueues[checkpoints];
+    if (serial == null) {
+      serial = _CheckpointSerial();
+      _storeQueues[checkpoints] = serial;
+    }
+    return serial;
+  }
 
   final File file;
   final MediaUploadRepository repository;
@@ -85,8 +114,18 @@ final class MediaUploadWorkflowAdapter implements UploadWorkflowPort {
         onProgress: progress,
         saveCheckpoint: (next) async {
           // Never persist a checkpoint from an old account/cancelled operation.
-          if (!mayPersist()) throw StateError('Old upload context discarded');
-          await checkpoints.save(next);
+          await _checkpointSerial.run(() async {
+            if (!mayPersist()) throw StateError('Old upload context discarded');
+            await checkpoints.save(next);
+            if (!mayPersist()) {
+              // A cancel/identity switch could have happened during the slow
+              // storage write: purge that newly-written stale resume intent.
+              // The serial queue prevents this cleanup from deleting a newer
+              // checkpoint written through another adapter for this store.
+              await checkpoints.clear();
+              throw StateError('Old upload context discarded');
+            }
+          });
           if (!mayPersist()) throw StateError('Old upload context discarded');
           onCheckpoint(_checkpoint(next));
         });
@@ -97,7 +136,9 @@ final class MediaUploadWorkflowAdapter implements UploadWorkflowPort {
     return UploadFlowReceipt(Map<String, Object?>.from(result));
   }
 
-  @override Future<void> clearCheckpoint() => checkpoints.clear();
+  @override
+  Future<void> clearCheckpoint() =>
+      _checkpointSerial.run(() => checkpoints.clear());
 
   @override
   Future<void> cancel({
@@ -106,10 +147,12 @@ final class MediaUploadWorkflowAdapter implements UploadWorkflowPort {
   }) async {
     // Ordering is security-critical: disable durable resume FIRST, even if
     // the server DELETE later fails or the authenticated account changes.
-    await checkpoints.clear();
+    await _checkpointSerial.run(() => checkpoints.clear());
     if (sessionId != null && repository.isSameIdentity(identityRevision)) {
       await repository.cancel(sessionId,
-        persistCancelIntent: (_) => checkpoints.clear());
+        // It was durably cleared above. A second clear here could destroy a
+        // NEW upload which began after this cancellation was requested.
+        persistCancelIntent: (_) async {});
     }
   }
 }
