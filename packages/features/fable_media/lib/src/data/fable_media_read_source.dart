@@ -166,6 +166,9 @@ MediaRuntimeCapabilities decodeFableRuntimeCapabilities(Object? input) {
   }
   final limits = _record(data['limits']);
   final features = _record(data['features']);
+  if (features['signedS3Downloads'] != false) {
+    throw const FormatException('Direct signed media download is forbidden');
+  }
   final types = data['acceptedMimeTypes'];
   if (types is! List || types.isEmpty || types.length > 256 ||
       types.any((e) => e is! String ||
