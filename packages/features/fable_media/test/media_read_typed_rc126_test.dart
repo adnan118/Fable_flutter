@@ -51,6 +51,7 @@ Map<String, Object?> get _runtime => {
     'resumableLargeUpload': true,
     'directPresignedMultipart': true,
     'serverAuthoritativeProgress': true,
+    'signedS3Downloads': false,
   },
   'acceptedMimeTypes': ['image/jpeg', 'video/mp4'],
 };
@@ -256,6 +257,13 @@ void main() {
     }
     expect(() => decodeFableRuntimeCapabilities({
       ..._runtime, 'protection': null,
+    }), throwsFormatException);
+    expect(() => decodeFableRuntimeCapabilities({
+      ..._runtime,
+      'features': {
+        ...(_runtime['features'] as Map<String,Object?>),
+        'signedS3Downloads': true,
+      },
     }), throwsFormatException);
   });
 
