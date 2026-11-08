@@ -65,6 +65,7 @@ test('RC126 typed Domain does not publish credential URLs or raw payloads',()=>{
     "protection['directDownload'] != false",
     "protection['requireAuthorizationGrant'] != true",
     "drm['queryTokensAllowed'] != false",
+    "features['signedS3Downloads'] != false",
     "access['playbackEndpoint'] != '/media/$id/playback'",
   ]) assert.ok(data.includes(safeguard),safeguard);
   assert.ok(data.includes('MediaAssetAccessMode.protected'));
