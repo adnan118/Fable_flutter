@@ -52,6 +52,9 @@ test('RC125 cancellation is persisted before remote DELETE and rejects stale wri
   assert.ok(adapter.includes('repository.isSameIdentity(identityRevision)'));
   assert.ok(adapter.includes('if (!mayPersist()) throw StateError'));
   assert.ok(adapter.includes('await checkpoints.save(next);'));
+  assert.ok(adapter.includes('await _checkpointSerial.run(() async {'));
+  assert.ok(adapter.includes('_checkpointSerial.run(() => checkpoints.clear())'));
+  assert.ok(adapter.includes('A second clear here could destroy a'));
   assert.ok(app.includes('_generation++'));
   assert.ok(app.includes('_cancellation?.cancel()'));
   assert.ok(app.includes('if (!canApply()) return;'));
