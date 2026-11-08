@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import '../domain/media_byte_range.dart';
 import '../domain/media_byte_chunk.dart';
 import '../domain/media_read_result.dart';
@@ -17,11 +16,8 @@ final class FablePublicGuestByteSource implements DescribedMediaByteSource {
     required Uri origin,
     required String assetId,
   }) : _dio = client, _origin = origin, _assetId = assetId {
-    if (kIsWeb) {
-      throw UnsupportedError(
-        'Flutter Web must use the BFF/browser guest viewer: '
-        'HttpOnly cookies are not readable from JavaScript');
-    }
+    // Flutter Web cannot read HttpOnly Set-Cookie and will fail closed
+    // during open(). Browser viewers must use same-origin fetch/BFF.
     if (origin.scheme != 'https' || origin.host.isEmpty ||
         origin.userInfo.isNotEmpty ||
         (origin.path.isNotEmpty && origin.path != '/') ||
