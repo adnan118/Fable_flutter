@@ -152,7 +152,22 @@ def main(app: pathlib.Path) -> None:
             # minutes for first install; the previous 120s limit was too low.
             # This remains fail-closed and bounded to 10 minutes per device.
             simctl("install", udid, str(app.resolve()), timeout=600)
-            launch_result = simctl("launch", udid, bundle, timeout=180)
+            # Xcode 27 hosted iPad first launch can hang after installing
+            # on a fresh simulator. Retry a timed-out launch ONCE, but never
+            # treat a timeout or an already-installed app as a passing launch.
+            launch_result = ""
+            for attempt in range(2):
+                try:
+                    launch_result = simctl("launch", udid, bundle, timeout=180)
+                    break
+                except RuntimeError as error:
+                    if attempt != 0 or "Timed out: xcrun" not in str(error):
+                        raise
+                    print(
+                        f"RC156 {kind}: simctl launch timed out; retrying once",
+                        flush=True,
+                    )
+                    time.sleep(5)
             if not launch_result or ":" not in launch_result:
                 raise RuntimeError(f"{kind} simctl did not return a process id")
             time.sleep(7)
