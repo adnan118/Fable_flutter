@@ -44,7 +44,7 @@ void main() {
     expect(second,startsWith('fable.'));
     expect(first,isNot(second));
     final oldNameOnly='fable.${sha256.convert(utf8.encode('${origin.origin}|Shared Name')).toString().substring(0,32)}';
-    expect(first,isNot(oldNameOnly),'legacy name-only token key must not be reused');
+    expect(first,isNot(oldNameOnly),reason:'legacy name-only token key must not be reused');
     expect(second,isNot(oldNameOnly));
     final firstSession=FableSecureSession(namespace:first);
     final secondSession=FableSecureSession(namespace:second);
