@@ -16,6 +16,18 @@ class FableContentFeature extends FableFeature {
    id:'content',title:'Published content',icon:Icons.article_outlined,
    backendKeywords:const ['content','public','page']);
 
+ @override bool canLaunchFable(FableContract contract) {
+  final read=contract.operations['content.page.read'],
+    index=contract.operations['content.publicChanges'],
+    accept=contract.operations['content.page.accept'];
+  return contract.isFeatureAvailable(id) &&
+     read?.method=='GET' && read?.path=='/content/pages/{slug}' &&
+     read?.requiresAuth==false &&
+     index?.method=='GET' && index?.path=='/content/pages/changes' &&
+     index?.requiresAuth==false &&
+     accept?.method=='POST' && accept?.path=='/content/pages/{pageId}/accept' &&
+     accept?.requiresAuth==true;
+ }
  @override Widget screen(FableContract contract){
   final read=contract.operations['content.page.read'],
     index=contract.operations['content.publicChanges'],

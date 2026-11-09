@@ -84,8 +84,10 @@ class FableContract implements OperationCatalog {
       (id)=>requiredCore.contains(id)||featureIds.contains(id)));
 
   }
+  // Missing project policy is UNKNOWN, not an enable decision. Native code
+  // still remains installed; this guards Backend-driven UI only.
   bool isFeatureAvailable(String featureId) =>
-    backendVisibleFeatureIds?.contains(featureId) ?? true;
+    backendVisibleFeatureIds?.contains(featureId) ?? false;
 
 
   static FableContract fromMaps(Map<String, dynamic> handoff,

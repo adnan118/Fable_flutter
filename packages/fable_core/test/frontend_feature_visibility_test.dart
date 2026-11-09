@@ -51,6 +51,6 @@ void main(){
   test('Legacy contract does not fabricate a feature inventory',(){
     final c=build(legacy:true);
     expect(c.backendVisibleFeatureIds,isNull);
-    expect(c.isFeatureAvailable('notifications'),true);
+    expect(c.isFeatureAvailable('notifications'),false);
   });
 }

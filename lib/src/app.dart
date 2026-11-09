@@ -88,7 +88,8 @@ class _AppState extends State<FableStarterApp> {
     final nav=FableNotificationNavigation.instance.navigatorKey.currentState;
     if(nav==null)return false;
     for(final feature in installedFeatures){
-      if(snapshot.fableContract!=null && !snapshot.fableContract!.isFeatureAvailable(feature.id))continue;
+      if(snapshot.fableContract!=null &&
+         !feature.canLaunchFable(snapshot.fableContract!))continue;
       if(feature.id!=target)continue;
       Widget? page;
       if(snapshot.fableContract!=null){page=feature.screen(snapshot.fableContract!);}
@@ -257,18 +258,17 @@ class _AppState extends State<FableStarterApp> {
         final ready=connection.fableContract!=null || connection.externalContract!=null;
         final availableFeatures=installedFeatures.where((feature){
           final fable=connection.fableContract;
-          if(fable!=null)return fable.isFeatureAvailable(feature.id);
+          if(fable!=null){
+            const fableApiBase=String.fromEnvironment('FABLE_API_BASE_URL');
+            return fableApiBase.isNotEmpty && feature.canLaunchFable(fable);
+          }
           final external=connection.externalContract;
           if(external==null)return false; // No verified contract: no invented UI.
           if(feature.id=='auth')return connection.externalAuthBinding!=null;
           final bindings=connection.externalBindings??ExternalFeatureBindings.empty();
-          if(feature.externalScreen(external,bindings)!=null)return true;
-          // Only an explicit, parameter-free GET mapping is a debug preview.
-          if(!kDebugMode)return false;
-          final readOperation=bindings.operation(feature.id,'read');
-          if(readOperation==null||!external.supports(readOperation))return false;
-          final op=external.require(readOperation);
-          return op.method=='GET'&&!op.path.contains('{');
+          // A read operation alone is not a consumer workflow. The selected
+          // Other Backend must supply a verified, explicit screen adapter.
+          return feature.externalScreen(external,bindings)!=null;
         }).toList(growable:false);
         return LayoutBuilder(builder:(context,constraints){
           final columns=constraints.maxWidth>900?4:constraints.maxWidth>580?3:2;

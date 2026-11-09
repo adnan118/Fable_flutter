@@ -13,6 +13,11 @@ class FableProfileFeature extends FableFeature {
     id: 'profile', title: 'Profile', icon: Icons.person_outline,
     backendKeywords: const ['profile', 'account']);
 
+  @override bool canLaunchFable(FableContract contract) {
+    final account=contract.operations['account.me'];
+    return contract.isFeatureAvailable(id) &&
+      account?.method=='GET' && account?.requiresAuth==true;
+  }
   @override Widget screen(FableContract contract)=>FableAccountPage(contract:contract);
 
   @override

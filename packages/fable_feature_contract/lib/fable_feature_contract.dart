@@ -5,6 +5,10 @@ import 'package:fable_core/fable_core.dart';
 class FableFeature {
   const FableFeature({required this.id,required this.title,required this.icon,this.backendKeywords=const []});
   final String id,title;final IconData icon;final List<String> backendKeywords;
+  /// Only verified consumer screens are exposed on the app home. A package
+  /// can be installed without a working Backend workflow; never infer one
+  /// from the presence of a matching operation keyword.
+  bool canLaunchFable(FableContract contract) => false;
   /// Override only for features that have real, explicitly bound external operations.
   Widget? externalScreen(ExternalOperationCatalog catalog, ExternalFeatureBindings bindings) => null;
   Widget screen(FableContract contract)=>FableCapabilityScreen(feature:this,contract:contract);
@@ -45,7 +49,7 @@ class FableCapabilityScreen extends StatelessWidget {
       Text(candidates.isEmpty?'No matching backend operations in imported contract. This module is not yet connected to a live service.':'Available backend operations (${candidates.length})',textAlign:TextAlign.center),
       for(final op in candidates)ListTile(title:Text(op.id),subtitle:Text('${op.method} ${op.path}')),
       const SizedBox(height:12),
-      const Text('This is a capability integration screen, not a completed consumer workflow.',textAlign:TextAlign.center),
+      const Text('Developer integration preview only. This is not a usable consumer feature.',textAlign:TextAlign.center),
     ])));
   }
 }

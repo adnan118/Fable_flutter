@@ -12,6 +12,11 @@ export 'src/otp_login_page.dart';
 class FableAuthFeature extends FableFeature {
   const FableAuthFeature():super(id:'auth',title:'Authentication',icon:Icons.lock_outline,
       backendKeywords:const ['auth','session']);
+  @override bool canLaunchFable(FableContract contract) {
+    final login=contract.operations['auth.login'];
+    return contract.isFeatureAvailable(id) &&
+      login?.method=='POST' && login?.requiresAuth==false;
+  }
   @override Widget screen(FableContract contract)=>FableLoginPage(contract:contract);
   @override Widget? externalScreen(ExternalOperationCatalog catalog, ExternalFeatureBindings bindings) =>
       ExternalLoginPage(catalog:catalog);
