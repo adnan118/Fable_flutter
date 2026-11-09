@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:http_parser/http_parser.dart';
 import 'package:fable_core/fable_core.dart';
 import '../domain/media_read_models.dart';
 
@@ -73,7 +72,7 @@ final class FableLocalEncryptedBufferedUploader {
     if(name.isEmpty||name.length>255)
       throw ArgumentError('Invalid media file name');
     final upload=await MultipartFile.fromFile(file.path,
-      filename:name,contentType:MediaType.parse(mimeType));
+      filename:name,contentType:DioMediaType.parse(mimeType));
     fence();
     final body=FormData.fromMap({
       'kind':kind,'visibility':visibility,

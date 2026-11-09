@@ -53,3 +53,11 @@ test('RC139 generic external range reader can never impersonate licensed DRM/CDM
     "catalog is! FableContract",
   ])assert.ok(uploader.includes(token),token);
 });
+
+test('RC140 preserve architecture: Data MIME comes only from allowed Dio import',()=>{
+  const uploader=read(root+'lib/src/data/fable_local_encrypted_buffered_uploader.dart');
+  const manifest=read(root+'pubspec.yaml');
+  assert.ok(uploader.includes('DioMediaType.parse(mimeType)'));
+  assert.equal(uploader.includes('package:http_parser/http_parser.dart'),false);
+  assert.equal(manifest.includes('  http_parser:'),false);
+});
