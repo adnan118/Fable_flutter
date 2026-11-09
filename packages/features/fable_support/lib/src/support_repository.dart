@@ -10,7 +10,9 @@ class FableSupportOperations {
     final list = catalog.require(listOperationId);
     final create = catalog.require(createOperationId);
     for (final op in [list, create]) {
-      if (!op.requiresAuth || op.credentialHeader != null ||
+      if (!op.requiresAuth || !op.enforceAuth || op.credentialHeader != null ||
+          op.path.toLowerCase().contains('/webhooks/') ||
+          op.id.toLowerCase().contains('webhook') ||
           op.path.contains('{') || op.path.contains(':') || op.path.contains('?')) {
         throw const FormatException('Support requires authenticated fixed-path operations');
       }
@@ -44,7 +46,14 @@ abstract interface class FableSupportRequestEncoder {
   Map<String, dynamic> encode({required String subject, required String description});
 }
 
-class FableSupportRepository {
+/// UI consumes this contract, not a guessed Fable or Other Backend URL.
+/// Host supplies a repository whose operations and DTOs were verified.
+abstract interface class FableSupportWorkflowPort {
+  Future<List<FableSupportTicket>> list();
+  Future<void> create({required String subject, required String description});
+}
+
+class FableSupportRepository implements FableSupportWorkflowPort {
   const FableSupportRepository({required this.gateway, required this.operations,
       required this.decodeList, required this.encoder});
   final BackendApiGateway gateway;

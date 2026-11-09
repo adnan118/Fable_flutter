@@ -61,6 +61,8 @@ jobs:
           node --test test/rc142-verified-feature-activation-audit.test.mjs
           # RC143: separate Other Backend bindings must reject unsafe writes and provider/webhook aliases.
           node --test test/rc143-external-feature-policy-audit.test.mjs
+          # RC144: Support UI must be injected through verified ticket API/DTOs and account scope.
+          node --test test/rc144-support-workflow-audit.test.mjs
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
