@@ -41,9 +41,28 @@ class MediaUploadBindings {
       partAck:'POST', complete:'POST', abort:'DELETE',
     };
     if (required.length != 7) throw StateError('Upload roles must be unique');
+    // RC157: for a selected Fable Backend, a trusted operationId must ALSO
+    // resolve to the exact media route. Verbs and auth flags alone cannot
+    // prevent a misbound export from sending private chunks to another API.
+    // Other Backend uses its own independent, explicitly reviewed catalog.
+    final fablePaths = catalog is FableContract ? <String, String>{
+      prepare: '/media/uploads/prepare',
+      status: '/media/uploads/:id',
+      chunk: '/media/uploads/:id/chunk',
+      partUrl: '/media/uploads/:id/parts/:partNumber/url',
+      partAck: '/media/uploads/:id/parts/:partNumber/complete',
+      complete: '/media/uploads/:id/complete',
+      abort: '/media/uploads/:id',
+    } : null;
     for (final role in required.entries) {
       final op = catalog.require(role.key);
-      if (op.method.toUpperCase() != role.value || !op.requiresAuth || !op.enforceAuth) {
+      final canonicalPath = op.path.replaceAllMapped(
+        RegExp(r'\\{([a-zA-Z_][a-zA-Z0-9_]*)\\}'),
+        (match) => ':${match.group(1)}',
+      );
+      if (op.method.toUpperCase() != role.value || !op.requiresAuth ||
+          !op.enforceAuth ||
+          (fablePaths != null && canonicalPath != fablePaths[role.key])) {
         throw StateError('Unverified protected media upload operation: ${role.key}');
       }
     }
