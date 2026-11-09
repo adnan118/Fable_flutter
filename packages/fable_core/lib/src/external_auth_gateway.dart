@@ -127,9 +127,14 @@ class ExternalAuthGateway implements BackendApiGateway {
   final FableSecureSession session;
   late final ExternalApiGateway _gateway;
 
-  /// Tokens for distinct URLs/contracts never share keys (even inside one app).
+  /// RC156: Other Backend credentials are scoped to an independently imported
+  /// API source AND operation catalog. Same-origin projects using the same
+  /// adapter may still have unrelated tenants or token authorities. Any
+  /// imported contract change fails closed rather than reusing old tokens.
   static FableSecureSession secureSessionFor(ExternalOperationCatalog catalog) {
-    final scope = sha256.convert(utf8.encode('${catalog.baseUri.origin}|${catalog.adapter}')).toString().substring(0, 32);
+    final scope = sha256.convert(utf8.encode(
+      '${catalog.baseUri.origin}|${catalog.adapter}|${catalog.sourceHash}|${catalog.operationsHash}',
+    )).toString().substring(0, 32);
     return FableSecureSession(namespace: 'external.$scope');
   }
 
