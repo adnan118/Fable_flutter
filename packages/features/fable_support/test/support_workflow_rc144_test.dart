@@ -67,6 +67,31 @@ void main(){
       expect(repo.reads,1);
       await changes.close();
     });
+  testWidgets('RC144 a silent identity or authorization change hides old tickets',
+    (tester)async{
+      final repo=_Support(), changes=StreamController<void>.broadcast(sync:true);
+      final stream=changes.stream;
+      var epoch=1,authorized=true;
+      int revision()=>epoch;
+      bool authenticated()=>authorized;
+      repo.load=()=>Future.value([_ticket('Private support record')]);
+      await _mount(tester,repo,stream,revision,authenticated);
+      await tester.tap(find.byKey(const Key('support-load')));
+      await tester.pumpAndSettle();
+      expect(find.text('Private support record'),findsOneWidget);
+      // No explicit identity invalidation event; build itself must fence data.
+      epoch=2;
+      await _mount(tester,repo,stream,revision,authenticated);
+      await tester.pumpAndSettle();
+      expect(find.text('Private support record'),findsNothing);
+      authorized=false;
+      await _mount(tester,repo,stream,revision,authenticated);
+      await tester.pumpAndSettle();
+      expect(find.text('Private support record'),findsNothing);
+      expect(tester.widget<OutlinedButton>(
+        find.byKey(const Key('support-load'))).onPressed,isNull);
+      await changes.close();
+    });
   testWidgets('RC144 user-submitted support request never auto-retries',
     (tester)async{
       final repo=_Support(), changes=StreamController<void>.broadcast(sync:true);

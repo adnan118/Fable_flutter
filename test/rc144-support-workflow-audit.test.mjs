@@ -24,6 +24,7 @@ test('RC144 no stale account ticket response or repeated unsafe mutation',()=>{
   for(const x of ['_generation++','widget.identityRevision() == identity',
     'widget.isAuthenticated()','if (_current(generation, identity))',
     'unawaited(_identitySub?.cancel())',
+    'visibleTickets = enabled && _ticketsIdentity == widget.identityRevision()',
     'Submission is unconfirmed. Review tickets before trying again.']){
     assert.ok(source.includes(x),x);
   }

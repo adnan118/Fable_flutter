@@ -30,6 +30,7 @@ class _FableSupportWorkflowPageState extends State<FableSupportWorkflowPage> {
   StreamSubscription<void>? _identitySub;
   int _generation = 0;
   List<FableSupportTicket>? _tickets;
+  int? _ticketsIdentity;
   bool _busy = false;
   String? _message;
   String? _error;
@@ -53,6 +54,7 @@ class _FableSupportWorkflowPageState extends State<FableSupportWorkflowPage> {
     _description.clear();
     setState(() {
       _tickets = null;
+      _ticketsIdentity = null;
       _busy = false;
       _message = null;
       _error = null;
@@ -85,7 +87,10 @@ class _FableSupportWorkflowPageState extends State<FableSupportWorkflowPage> {
     try {
       final result = await widget.repository.list();
       if (_current(generation, identity)) {
-        setState(() => _tickets = List<FableSupportTicket>.unmodifiable(result));
+        setState(() {
+          _tickets = List<FableSupportTicket>.unmodifiable(result);
+          _ticketsIdentity = identity;
+        });
       }
     } catch (_) {
       if (_current(generation, identity)) {
@@ -118,6 +123,7 @@ class _FableSupportWorkflowPageState extends State<FableSupportWorkflowPage> {
         _description.clear();
         setState(() {
           _tickets = null; // Force authoritative reload instead of stale list.
+          _ticketsIdentity = null;
           _message = 'Ticket request accepted. Reload your tickets to verify.';
         });
       }
@@ -143,6 +149,10 @@ class _FableSupportWorkflowPageState extends State<FableSupportWorkflowPage> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.isAuthenticated();
+    // A provider may revoke auth without emitting a widget event. A rebuild
+    // must NEVER render tickets from a different identity revision or logout.
+    final visibleTickets = enabled && _ticketsIdentity == widget.identityRevision()
+        ? _tickets : null;
     return Scaffold(
       appBar: AppBar(title: const Text('Support tickets')),
       body: SafeArea(child: ListView(padding: const EdgeInsets.all(20), children: [
@@ -173,8 +183,8 @@ class _FableSupportWorkflowPageState extends State<FableSupportWorkflowPage> {
           onPressed: enabled && !_busy ? _load : null,
           child: const Text('Load tickets'),
         ),
-        if (_tickets != null && _tickets!.isEmpty) const Text('No tickets.'),
-        for (final ticket in _tickets ?? const <FableSupportTicket>[])
+        if (visibleTickets != null && visibleTickets.isEmpty) const Text('No tickets.'),
+        for (final ticket in visibleTickets ?? const <FableSupportTicket>[])
           ListTile(title: Text(ticket.subject), subtitle: Text(ticket.status)),
       ])),
     );
