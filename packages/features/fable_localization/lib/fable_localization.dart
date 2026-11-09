@@ -10,6 +10,10 @@ export 'src/client_copy_sync.dart';
 class FableLocalizationFeature extends FableFeature {
  const FableLocalizationFeature():super(id:'localization',title:'Localization',icon:Icons.language,
   backendKeywords:const ['language','translation']);
+ @override bool canLaunchFable(FableContract contract) {
+   final languages=contract.operations['languages.list'];
+   return contract.isFeatureAvailable(id) && languages?.method=='GET';
+ }
  @override Widget screen(FableContract contract)=>FableLanguagesPage(contract:contract);
 }
 const FableLocalizationFeature localizationFeature=FableLocalizationFeature();

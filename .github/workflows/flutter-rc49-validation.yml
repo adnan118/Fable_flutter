@@ -57,6 +57,8 @@ jobs:
           node --test test/rc130-public-guest-media-audit.test.mjs
           # RC136/137: tier declarations and Fable-vs-Other protected media isolation.
           node --test test/rc136-three-media-encryption-tiers-audit.test.mjs test/rc137-external-media-source-audit.test.mjs
+          # RC142 Stage 4: only verified Backend-policy consumer screens may be advertised.
+          node --test test/rc142-verified-feature-activation-audit.test.mjs
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
