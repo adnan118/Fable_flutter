@@ -57,7 +57,7 @@ class MediaUploadBindings {
     for (final role in required.entries) {
       final op = catalog.require(role.key);
       final canonicalPath = op.path.replaceAllMapped(
-        RegExp(r'\\{([a-zA-Z_][a-zA-Z0-9_]*)\\}'),
+        RegExp(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'),
         (match) => ':${match.group(1)}',
       );
       if (op.method.toUpperCase() != role.value || !op.requiresAuth ||
