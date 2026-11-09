@@ -33,5 +33,20 @@ jobs:
         run: |
           dart format tools/rc159-external-staging-https.dart
           dart analyze tools/rc159-external-staging-https.dart
+      - name: Diagnose public DNS and HTTPS egress without credentials
+        run: |
+          set +e
+          echo "RC159 DNS for dedicated staging hostname:"
+          getent ahostsv4 fable-rc151-free-ephemeral-api.onrender.com | head -n 4
+          echo "RC159 neutral public TLS control:"
+          curl --silent --show-error --connect-timeout 8 --max-time 15 \
+            --output /dev/null \
+            --write-out 'control_http=%{http_code} tls_time=%{time_appconnect}s\\n' \
+            https://example.com/
+          echo "RC159 staging public TLS/read-only health:"
+          curl --silent --show-error --connect-timeout 8 --max-time 30 \
+            --output /dev/null \
+            --write-out 'staging_http=%{http_code} tls_time=%{time_appconnect}s\\n' \
+            https://fable-rc151-free-ephemeral-api.onrender.com/health
       - name: Exercise real external HTTPS without credentials or writes
         run: dart tools/rc159-external-staging-https.dart
