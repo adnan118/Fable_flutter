@@ -17,9 +17,11 @@ test('External backend never uses Fable contract pages or inferred operations',(
   assert.match(app,/if\(external==null\)return false/);
   assert.match(app,/if\(feature.id=='auth'\)return connection.externalAuthBinding!=null/);
   assert.match(app,/final authBinding=await ExternalAuthBinding.loadOptional\(rootBundle,catalog\)/);
-  assert.match(app,/if\(feature.externalScreen\(external,bindings\)!=null\)return true/);
-  assert.match(app,/if\(!kDebugMode\)return false/);
-  assert.match(app,/if\(readOperation==null\|\|!external.supports\(readOperation\)\)return false/);
+  // RC142: only explicit, verified external consumer screens can appear.
+  // A matching GET or debug preview is never evidence of a working feature.
+  assert.match(app,/return feature.externalScreen\(external,bindings\)!=null/);
+  assert.doesNotMatch(app,/if\(!kDebugMode\)return false/);
+  assert.doesNotMatch(app,/if\(readOperation==null\|\|!external.supports\(readOperation\)\)return false/);
   assert.match(app,/if\(feature.id=='auth'&&snapshot.externalAuthBinding==null\)return false/);
   assert.doesNotMatch(app,/connection\.fableContract\?\.isFeatureAvailable\(feature\.id\) \?\? true/);
 });
