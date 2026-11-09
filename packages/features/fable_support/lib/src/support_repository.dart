@@ -44,7 +44,14 @@ abstract interface class FableSupportRequestEncoder {
   Map<String, dynamic> encode({required String subject, required String description});
 }
 
-class FableSupportRepository {
+/// UI consumes this contract, not a guessed Fable or Other Backend URL.
+/// Host supplies a repository whose operations and DTOs were verified.
+abstract interface class FableSupportWorkflowPort {
+  Future<List<FableSupportTicket>> list();
+  Future<void> create({required String subject, required String description});
+}
+
+class FableSupportRepository implements FableSupportWorkflowPort {
   const FableSupportRepository({required this.gateway, required this.operations,
       required this.decodeList, required this.encoder});
   final BackendApiGateway gateway;
