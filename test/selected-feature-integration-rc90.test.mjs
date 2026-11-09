@@ -171,3 +171,47 @@ test('RC90 never mistakes a narrow Fable fixture contract for project completene
       x.code==='FABLE_CONTRACT_AUDIT_UNAVAILABLE'));
   }finally{rmSync(root,{recursive:true,force:true});}
 });
+
+
+test('RC143 rejects generic financial mutation even when Other Backend declares POST',()=>{
+  const root=fixture(['payments']);
+  try{
+    external(root,[{operationId:'ext.checkout',method:'POST',
+      path:'/financial/checkout',auth:'bearer'}],
+      {payments:{create:'ext.checkout'}});
+    const row=auditSelectedFeatureIntegration(root).features[0];
+    assert.ok(row.missing.some(x=>x.code==='FINANCIAL_TYPED_ADAPTER_REQUIRED'));
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+test('RC143 flags inbound webhook/provider credentials and public mutations',()=>{
+  for(const operation of [
+    {operationId:'provider.send',method:'POST',path:'/messages/send',
+      auth:'provider',credentialHeader:'X-Provider-Key'},
+    {operationId:'incoming.webhook',method:'POST',path:'/webhooks/messages',
+      auth:'bearer'},
+    {operationId:'public.send',method:'POST',path:'/messages/send',
+      auth:'none'},
+  ]){
+    const root=fixture(['messaging']);
+    try{
+      external(root,[operation],{messaging:{create:operation.operationId}});
+      const row=auditSelectedFeatureIntegration(root).features[0];
+      if(operation.auth==='provider'||operation.path.includes('/webhooks/'))
+        assert.ok(row.missing.some(x=>x.code==='SERVER_ONLY_EXTERNAL_OPERATION'));
+      if(operation.auth!=='bearer')
+        assert.ok(row.missing.some(x=>x.code==='EXTERNAL_WRITE_AUTH_UNVERIFIED'));
+    }finally{rmSync(root,{recursive:true,force:true});}
+  }
+});
+test('RC143 authorized support create is not flagged as unsafe mutation',()=>{
+  const root=fixture(['support']);
+  try{
+    external(root,[{operationId:'support.create',method:'POST',
+      path:'/tickets',auth:'bearer'}],
+      {support:{create:'support.create'}});
+    const row=auditSelectedFeatureIntegration(root).features[0];
+    assert.equal(row.missing.some(x=>x.code==='SERVER_ONLY_EXTERNAL_OPERATION'),false);
+    assert.equal(row.missing.some(x=>x.code==='EXTERNAL_WRITE_AUTH_UNVERIFIED'),false);
+    assert.equal(row.missing.some(x=>x.code==='FINANCIAL_TYPED_ADAPTER_REQUIRED'),false);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
