@@ -63,6 +63,9 @@ jobs:
           node --test test/rc143-external-feature-policy-audit.test.mjs
           # RC144: Support UI must be injected through verified ticket API/DTOs and account scope.
           node --test test/rc144-support-workflow-audit.test.mjs
+          # RC153 Stage 4: fixture is source-only; real projects need exact project/export/feature pins.
+          node --test test/rc153-stage4-feature-contract-binding.test.mjs
+          node tools/verify-stage4-feature-binding.mjs --mode source
           # The generated feature below is *synthetic*, never treated as real project verification.
           node tools/rc116-ci-compile-fixture.mjs --ci-mock-only
           node tools/enforce-feature-architecture-rc115.mjs
