@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_feature_contract/fable_feature_contract.dart';
 export 'src/media_read_repository.dart';
+export 'src/domain/media_read_models.dart';
+export 'src/application/read_media_metadata_use_case.dart';
+export 'src/data/fable_media_read_source.dart';
 export 'src/media_upload_repository.dart';
 export 'src/protected_media_playback_repository.dart';
 export 'src/domain/media_byte_range.dart';
