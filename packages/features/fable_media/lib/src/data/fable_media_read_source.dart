@@ -164,6 +164,30 @@ MediaRuntimeCapabilities decodeFableRuntimeCapabilities(Object? input) {
       drm['queryTokensAllowed'] != false) {
     throw const FormatException('Unprotected media runtime contract refused');
   }
+  // The tier describes the Backend's actual project setting, never a
+  // user-controlled switch that enables DRM or gives Flutter the AES secret.
+  final tierRaw = protection['encryptionTier'];
+  final tierVerified = tierRaw != null;
+  final tier = tierVerified
+      ? _enum(MediaEncryptionTier.values, tierRaw)
+      : (drm['enabled'] == true
+          ? MediaEncryptionTier.drm : MediaEncryptionTier.none);
+  if (tierVerified) {
+    final enc = _record(protection['encryption']);
+    if (enc['tier'] != tierRaw ||
+        enc['clientSideKeyRequired'] != false ||
+        enc['requiresExternalLicense'] !=
+            (tier == MediaEncryptionTier.drm) ||
+        enc['atRestEncrypted'] !=
+            (tier == MediaEncryptionTier.local) ||
+        (tier == MediaEncryptionTier.local &&
+          enc['localUploadStrategy'] != 'BUFFERED_PROXY_ONLY')) {
+      throw const FormatException('Untrusted media encryption tier contract');
+    }
+  }
+  if ((tier == MediaEncryptionTier.drm) != (drm['enabled'] == true)) {
+    throw const FormatException('Media DRM tier/contract mismatch');
+  }
   final limits = _record(data['limits']);
   final features = _record(data['features']);
   if (features['signedS3Downloads'] != false) {
@@ -182,6 +206,8 @@ MediaRuntimeCapabilities decodeFableRuntimeCapabilities(Object? input) {
   return MediaRuntimeCapabilities(
     schemaVersion: 12,
     driver: _enum(MediaStorageDriver.values, data['driver']),
+    encryptionTier: tier,
+    encryptionTierVerified: tierVerified,
     maxUploadBytes: _positive(limits['maxUploadBytes']),
     maxParallelParts: maxParallel,
     acceptedMimeTypes: types.cast<String>(),
