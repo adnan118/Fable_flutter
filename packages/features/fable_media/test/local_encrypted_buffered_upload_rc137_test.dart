@@ -88,4 +88,26 @@ void main(){
       expect(gateway.lastOperation,isNull);
     }finally{await dir.delete(recursive:true);}
   });
+
+  test('RC140 refuses unverified LOCAL and rejects oversize before network',()async{
+    final dir=await Directory.systemTemp.createTemp('fable-local-bounds-');
+    final file=File('${dir.path}/x.png');
+    await file.writeAsBytes([137,80,78,71]);
+    final gateway=_Gateway();
+    try {
+      final unverified=FableLocalEncryptedBufferedUploader(
+        gateway:gateway,selectedBackend:_selectedFable,catalog:_catalog(),
+        runtime:_Policy(MediaEncryptionTier.local,verified:false),
+        identityRevision:()=>1,isSessionCurrent:()=>true);
+      await expectLater(unverified.upload(file:file,kind:'IMAGE',mimeType:'image/png'),
+        throwsStateError);
+      final tooSmall=FableLocalEncryptedBufferedUploader(
+        gateway:gateway,selectedBackend:_selectedFable,catalog:_catalog(),
+        runtime:_Policy(MediaEncryptionTier.local,max:2),
+        identityRevision:()=>1,isSessionCurrent:()=>true);
+      await expectLater(tooSmall.upload(file:file,kind:'IMAGE',mimeType:'image/png'),
+        throwsRangeError);
+      expect(gateway.lastOperation,isNull);
+    } finally {await dir.delete(recursive:true);}
+  });
 }
