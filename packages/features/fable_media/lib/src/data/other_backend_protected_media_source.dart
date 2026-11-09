@@ -101,13 +101,23 @@ final class OtherBackendProtectedMediaSource
   }
 
   @override Future<Uint8List> read(MediaByteRange range) async {
-    final chunk=await readChunk(range);
+    final chunk=await _readGuarded(range,requireProgressive:false);
     if(!isActive)throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
     return chunk.bytes;
   }
 
-  @override Future<MediaByteChunk> readChunk(MediaByteRange range) async {
+  @override Future<MediaByteChunk> readChunk(MediaByteRange range) =>
+      _readGuarded(range,requireProgressive:true);
+
+  Future<MediaByteChunk> _readGuarded(MediaByteRange range,{
+    required bool requireProgressive,
+  }) async {
     if(!range.isValid)throw const MediaReadFailure(MediaReadFailureKind.invalidInput);
+    // Generic clear byte-range transports are NEVER CDM/DRM renderers.
+    // Even a licensed DRM declaration requires a separately verified native
+    // or browser DRM license/player adapter. Do not fall back to clear ranges.
+    if(_declaration.encryptionTier==MediaEncryptionTier.drm)
+      throw const MediaReadFailure(MediaReadFailureKind.unsupported);
     if(!isActive){
       _invalidate(MediaSessionInvalidation.accountChanged);
       throw const MediaReadFailure(MediaReadFailureKind.sessionChanged);
@@ -128,6 +138,55 @@ final class OtherBackendProtectedMediaSource
           (_mime!=null&&_mime!=chunk.mimeType)){
         _invalidate(MediaSessionInvalidation.resourceChanged);
         throw const MediaReadFailure(MediaReadFailureKind.invalidResponse);
+      }
+      if(requireProgressive &&
+          !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*
+      return chunk;
+    } on MediaReadFailure catch(error) {
+      if(const {MediaReadFailureKind.unauthenticated,
+            MediaReadFailureKind.forbidden,
+            MediaReadFailureKind.expired,
+            MediaReadFailureKind.sessionChanged}.contains(error.kind)) {
+        _invalidate(MediaSessionInvalidation.playbackEnded);
+      }
+      rethrow;
+    } catch(_){
+      // Do not leak external server HTTP data / secrets into UI messages.
+      throw const MediaReadFailure(MediaReadFailureKind.unknown);
+    }
+  }
+
+  @override Future<void> close() async{
+    if(_closed)return;
+    _closed=true;
+    _transport.cancelPendingReads();
+    await _subscription?.cancel();
+    try { await _transport.close(); } finally {
+      await _signals.close();
+    }
+  }
+}
+
+/// An explicit composition-root choice. The external factory and its
+/// verification belong to the selected outside Backend, not Fable.
+enum ProjectMediaBackendKind { fable, other }
+
+final class ProjectMediaBackendBinding {
+  ProjectMediaBackendBinding({
+    required this.kind,
+    required this.backendId,
+    required this.openProtectedSource,
+  }){
+    if(backendId.trim().isEmpty)throw ArgumentError('Backend identity required');
+  }
+  final ProjectMediaBackendKind kind;
+  final String backendId;
+  final Future<DescribedMediaByteSource> Function(String assetId)
+      openProtectedSource;
+}
+).hasMatch(chunk.mimeType)){
+        _invalidate(MediaSessionInvalidation.resourceChanged);
+        throw const MediaReadFailure(MediaReadFailureKind.unsupported);
       }
       _total=chunk.totalLength;
       _mime=chunk.mimeType;

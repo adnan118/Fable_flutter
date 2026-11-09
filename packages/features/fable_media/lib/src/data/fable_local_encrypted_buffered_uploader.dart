@@ -9,12 +9,17 @@ import '../domain/media_read_models.dart';
 final class FableLocalEncryptedBufferedUploader {
   FableLocalEncryptedBufferedUploader({
     required this.gateway,
+    required BackendSelection selectedBackend,
     required OperationCatalog catalog,
     required this.runtime,
     required int Function() identityRevision,
     required bool Function() isSessionCurrent,
   }) : _revision=identityRevision,
        _sessionCurrent=isSessionCurrent {
+    // A Fable route must not be dispatched through an Other/OpenAPI custom
+    // backend, even if its catalog happens to contain the same operation ID.
+    if(!selectedBackend.canUseFableContract || catalog is! FableContract)
+      throw StateError('Verified Fable Backend selection and contract required');
     final operation=catalog.require('media.upload');
     if(operation.method.toUpperCase()!='POST' ||
         operation.path!='/media' ||

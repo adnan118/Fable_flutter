@@ -35,3 +35,21 @@ test('RC137 backend selection remains explicit for Fable versus independent Othe
   assert.ok(exports.includes('other_backend_protected_media_source.dart'));
   assert.ok(exports.includes('fable_local_encrypted_buffered_uploader.dart'));
 });
+
+test('RC139 generic external range reader can never impersonate licensed DRM/CDM',()=>{
+  const external=read(root+'lib/src/data/other_backend_protected_media_source.dart');
+  const uploader=read(root+'lib/src/data/fable_local_encrypted_buffered_uploader.dart');
+  for(const token of [
+    "if(_declaration.encryptionTier==MediaEncryptionTier.drm)",
+    "MediaReadFailureKind.unsupported",
+    "requireProgressive:true",
+    "requireProgressive:false",
+    "RegExp(r'^(audio|video)/",
+    "MediaSessionInvalidation.resourceChanged",
+  ])assert.ok(external.includes(token),token);
+  for(const token of [
+    "required BackendSelection selectedBackend",
+    "!selectedBackend.canUseFableContract",
+    "catalog is! FableContract",
+  ])assert.ok(uploader.includes(token),token);
+});

@@ -36,6 +36,11 @@ class _Policy implements MediaMetadataReadPort {
         serverAuthoritativeProgress:true,
         encryptionTier:tier,encryptionTierVerified:verified);
 }
+const _selectedFable=BackendSelection(
+  kind:'fable',adapter:'fable-contract',status:'ready',contractImported:true);
+const _selectedOther=BackendSelection(
+  kind:'other',adapter:'openapi',status:'ready',contractImported:true);
+
 FableContract _catalog()=>FableContract(
   contractHash:List.filled(64,'a').join(),
   operations:{'media.upload':FableOperation(
@@ -51,7 +56,7 @@ void main(){
     await file.writeAsBytes([137,80,78,71]);
     final gateway=_Gateway();
     final uploader=FableLocalEncryptedBufferedUploader(
-      gateway:gateway,catalog:_catalog(),
+      gateway:gateway,selectedBackend:_selectedFable,catalog:_catalog(),
       runtime:_Policy(MediaEncryptionTier.local),
       identityRevision:()=>1,isSessionCurrent:()=>true);
     try {
@@ -63,10 +68,16 @@ void main(){
       expect(form.files.length,1);
     } finally {await directory.delete(recursive:true);}
   });
+  test('RC139 Fable uploader rejects a selected Other Backend even with Fable IDs',(){
+    expect(()=>FableLocalEncryptedBufferedUploader(
+      gateway:_Gateway(),selectedBackend:_selectedOther,catalog:_catalog(),
+      runtime:_Policy(MediaEncryptionTier.local),
+      identityRevision:()=>1,isSessionCurrent:()=>true),throwsStateError);
+  });
   test('RC137 stops if backend did not verify LOCAL tier',()async{
     final gateway=_Gateway();
     final uploader=FableLocalEncryptedBufferedUploader(
-      gateway:gateway,catalog:_catalog(),
+      gateway:gateway,selectedBackend:_selectedFable,catalog:_catalog(),
       runtime:_Policy(MediaEncryptionTier.none),
       identityRevision:()=>1,isSessionCurrent:()=>true);
     final dir=await Directory.systemTemp.createTemp();
