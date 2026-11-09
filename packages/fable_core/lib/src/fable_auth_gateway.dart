@@ -36,10 +36,12 @@ class FableAuthGateway implements BackendApiGateway {
     );
   }
 
-  /// Stable namespace shared by FableAuthGateway instances for the same
-  /// Backend origin and project. Used by app-level identity-scoped stores.
+  /// RC156: the signed import identity, not a human-friendly project name,
+  /// scopes every Keychain/Keystore token and session identity event. Two
+  /// distinct Backend projects can share both host and display name; old
+  /// name-only namespaces are never reused or auto-migrated.
   static String sessionNamespaceFor(Uri base, FableContract contract) =>
-    'fable.${sha256.convert(utf8.encode('${base.origin}|${contract.projectName}')).toString().substring(0,32)}';
+    'fable.${sha256.convert(utf8.encode('${base.origin}|${contract.projectName}|${contract.contractHash}')).toString().substring(0,32)}';
 
   /// Stable identity for a selected managed-entity store. A contract refresh
   /// invalidates the old context even when the project origin is unchanged.
