@@ -32,3 +32,9 @@
 ## حدود القبول
 
 هذه **حماية محلية لعزل الجلسات حسب العقد**، وليست اختبار HTTP متكاملًا على جهاز Flutter أو حلًا لسرقة التوكن الصحيح. عقد `ci_fable` ما يزال fixture اختبار فقط؛ يبقى ربط مشروع Backend مُثبت عبر HTTPS، وSupport، وS3/DRM والقدرات الـ17 في جدول المرحلة الرابعة. المرحلة السابعة **NO-GO**.
+
+## CI forensic note — initial RC156 attempt
+
+- Initial run [42673224145](https://github.com/adnan118/Fable_flutter/actions/runs/42673224145) failed Dart analysis due to a **test-only** positional `expect(..., reason)` argument. Fixed to a named `reason:` argument before the next run.
+- The subsequent run [42673681426](https://github.com/adnan118/Fable_flutter/actions/runs/42673681426) reported **SUCCESS** for Flutter analyze/application/feature-package tests and Android debug APK, but the **overall workflow was failure** and no `ios-unsigned` job appeared in the returned GitHub job records. The native iOS check therefore remains **unverified** for that exact commit; passing Android/Flutter is insufficient to merge this PR.
+- Re-run on a new exact head is required; treat macOS availability/workflow scheduling as infrastructure until a separate log demonstrates a code error. No code or release claims are inferred from a missing job.
