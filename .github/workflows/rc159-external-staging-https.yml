@@ -1,0 +1,37 @@
+name: RC159 external staging HTTPS acceptance
+
+on:
+  push:
+    branches: [rc159-independent-external-https-dart-smoke]
+    paths:
+      - tools/rc159-external-staging-https.dart
+      - .github/workflows/rc159-external-staging-https.yml
+  pull_request:
+    paths:
+      - tools/rc159-external-staging-https.dart
+      - .github/workflows/rc159-external-staging-https.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rc159-dart-https-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-https:
+    name: External TLS and anonymous HTTP boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Check Dart source compiles and is statically valid
+        run: |
+          dart format tools/rc159-external-staging-https.dart
+          dart analyze tools/rc159-external-staging-https.dart
+      - name: Exercise real external HTTPS without credentials or writes
+        run: dart tools/rc159-external-staging-https.dart
