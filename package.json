@@ -13,6 +13,7 @@
     "wizard:offline": "node tools/offline-sync-wizard.mjs",
     "wizard:check": "node tools/audit-selected-feature-integration.mjs",
     "wizard:check:strict": "node tools/audit-selected-feature-integration.mjs --strict",
+    "wizard:stage4:verify": "node tools/verify-stage4-feature-binding.mjs --mode source",
     "wizard:scope:generate": "node tools/generate-managed-scoped-operations.mjs",
     "wizard:architecture:check": "node tools/enforce-feature-architecture-rc115.mjs",
     "wizard:feature:generate": "node tools/generate-typed-feature-rc116.mjs"
