@@ -18,10 +18,21 @@ FableContract _catalog(){
     ops.prepare:'POST',ops.status:'GET',ops.chunk:'POST',ops.partUrl:'POST',
     ops.partAck:'POST',ops.complete:'POST',ops.abort:'DELETE',
   };
+  // RC157: widget test doubles must also carry the exact Fable contract
+  // routes; no fictitious /verified/* path can bypass production verification.
+  const paths=<String,String>{
+    'media.upload.prepare':'/media/uploads/prepare',
+    'media.upload.status':'/media/uploads/{id}',
+    'media.upload.chunk':'/media/uploads/{id}/chunk',
+    'media.upload.partUrl':'/media/uploads/{id}/parts/{partNumber}/url',
+    'media.upload.partAck':'/media/uploads/{id}/parts/{partNumber}/complete',
+    'media.upload.complete':'/media/uploads/{id}/complete',
+    'media.upload.abort':'/media/uploads/{id}',
+  };
   return FableContract(
     contractHash:List.filled(64,'a').join(),
     operations:{for(final e in methods.entries)e.key:FableOperation(
-      e.key,e.value,'/verified/${e.key}',List.filled(64,'b').join(),
+      e.key,e.value,paths[e.key]!,List.filled(64,'b').join(),
       requiresAuth:true,enforceAuth:true)},
     featureIds:const {'media'},projectName:'rc111-widget-simulation',
     selectionMode:'explicit',
