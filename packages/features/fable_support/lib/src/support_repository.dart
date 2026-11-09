@@ -10,7 +10,9 @@ class FableSupportOperations {
     final list = catalog.require(listOperationId);
     final create = catalog.require(createOperationId);
     for (final op in [list, create]) {
-      if (!op.requiresAuth || op.credentialHeader != null ||
+      if (!op.requiresAuth || !op.enforceAuth || op.credentialHeader != null ||
+          op.path.toLowerCase().contains('/webhooks/') ||
+          op.id.toLowerCase().contains('webhook') ||
           op.path.contains('{') || op.path.contains(':') || op.path.contains('?')) {
         throw const FormatException('Support requires authenticated fixed-path operations');
       }
