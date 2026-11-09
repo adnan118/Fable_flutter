@@ -156,8 +156,19 @@ def main(app: pathlib.Path) -> None:
             if not launch_result or ":" not in launch_result:
                 raise RuntimeError(f"{kind} simctl did not return a process id")
             time.sleep(7)
-            # terminate returns nonzero if app exited/crashed on startup.
-            simctl("terminate", udid, bundle, timeout=60)
+            # GitHub Xcode 27 may stall during the first simctl terminate while
+            # the simulator is under first-boot pressure. Never count a timeout
+            # as success: require a confirmed zero-exit terminate, with one
+            # bounded retry, or fail the native acceptance gate.
+            for attempt in range(2):
+                try:
+                    simctl("terminate", udid, bundle, timeout=90)
+                    break
+                except RuntimeError as error:
+                    if attempt != 0 or "Timed out: xcrun" not in str(error):
+                        raise
+                    print("RC153 iOS: simulator terminate stalled; retrying once", flush=True)
+                    time.sleep(5)
             print(f"PASS: {kind} iOS 27 UIScene process stayed alive", flush=True)
         finally:
             try:
