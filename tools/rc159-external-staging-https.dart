@@ -83,13 +83,14 @@ Future<void> assertExternalStatus(
 
 Future<void> main() async {
   final client = HttpClient()
+    ..findProxy = HttpClient.findProxyFromEnvironment
     ..connectionTimeout = const Duration(seconds: 20)
     ..idleTimeout = const Duration(seconds: 3)
     ..maxConnectionsPerHost = 2;
 
   try {
     // Free Render may sleep between test runs. No authenticated requests.
-    await assertExternalStatus(client, '/health', 200, attempts: 18);
+    await assertExternalStatus(client, '/health', 200, attempts: 8);
     await assertExternalStatus(client, '/health/ready', 200, attempts: 8);
     await assertExternalStatus(client, '/auth/me/account', 401);
     await assertExternalStatus(client, '/permissions/me', 401);
