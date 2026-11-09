@@ -4,8 +4,10 @@ import 'package:fable_media/fable_media.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _OutsideTransport implements OtherBackendVerifiedMediaTransport {
-  _OutsideTransport({this.delay});
+  _OutsideTransport({this.delay,this.mimeType='video/mp4'});
   final Completer<MediaByteChunk>? delay;
+  final String mimeType;
+  int requests=0;
   final _events=StreamController<MediaSessionInvalidation>.broadcast(sync:true);
   bool active=true,cancelled=false,closed=false;
   @override Stream<MediaSessionInvalidation> get invalidations=>_events.stream;
@@ -13,8 +15,9 @@ class _OutsideTransport implements OtherBackendVerifiedMediaTransport {
   @override void cancelPendingReads(){cancelled=true;}
   @override Future<void> close()async{closed=true;await _events.close();}
   @override Future<MediaByteChunk> readVerifiedRange(MediaByteRange range) async{
+    requests++;
     if(delay!=null)return delay!.future;
-    return MediaByteChunk(start:range.start,totalLength:1000,mimeType:'video/mp4',
+    return MediaByteChunk(start:range.start,totalLength:1000,mimeType:mimeType,
       bytes:Uint8List.fromList(List<int>.filled(range.length,42)));
   }
   void revoke(){active=false;_events.add(MediaSessionInvalidation.playbackEnded);}
@@ -69,6 +72,28 @@ void main(){
     expect(transport.cancelled,true);
     await expectLater(source.readChunk(MediaByteRange(start:0,length:1)),
       throwsA(isA<MediaReadFailure>()));
+    await source.close();
+  });
+  test('RC139 DRM declaration cannot route clear bytes through generic source',() async{
+    final transport=_OutsideTransport();
+    final source=OtherBackendProtectedMediaSource(
+      declaration:_declaration(tier:MediaEncryptionTier.drm,licensed:true),
+      transport:transport,identityRevision:()=>1);
+    await expectLater(source.readChunk(MediaByteRange(start:0,length:5)),
+      throwsA(isA<MediaReadFailure>()));
+    await expectLater(source.read(MediaByteRange(start:0,length:5)),
+      throwsA(isA<MediaReadFailure>()));
+    expect(transport.requests,0);
+    await source.close();
+  });
+  test('RC139 image bytes work for generic reader but cannot enter native player',() async{
+    final transport=_OutsideTransport(mimeType:'image/png');
+    final source=OtherBackendProtectedMediaSource(
+      declaration:_declaration(),transport:transport,identityRevision:()=>1);
+    expect((await source.read(MediaByteRange(start:0,length:5))).length,5);
+    await expectLater(source.readChunk(MediaByteRange(start:5,length:5)),
+      throwsA(isA<MediaReadFailure>()));
+    expect(source.isActive,false);
     await source.close();
   });
   test('RC137 outside Backend invalid Range metadata is never published',() async{
