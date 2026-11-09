@@ -317,9 +317,30 @@ function auditOne(root,feature,backend,master,external,explicit,selectedIds=[]){
       const op=external.operations.get(id);
       if(!op)add('BOUND_OPERATION_NOT_FOUND',role+' → '+id,
         'العملية غير موجودة في كتالوج Backend المستورد؛ صحح الربط',id);
-      else if(ACTION_METHODS[role]&&!ACTION_METHODS[role].includes(op.method))
-        add('BOUND_METHOD_MISMATCH',role+' → '+id+' '+op.method,
-          'تحقق من method المطلوب لهذا الدور',id);
+      else {
+        if(!ACTION_METHODS[role]){
+          add('BOUND_UNKNOWN_ROLE',role+' → '+id,
+            'اربط دوراً معروفاً ومدققاً للميزة',id);
+        } else if(!ACTION_METHODS[role].includes(op.method)){
+          add('BOUND_METHOD_MISMATCH',role+' → '+id+' '+op.method,
+            'تحقق من method المطلوب لهذا الدور',id);
+        }
+        const mutating=!['read','list'].includes(role);
+        if(op.auth==='provider' ||
+           op.path.toLowerCase().includes('/webhooks/') ||
+           id.toLowerCase().includes('webhook')){
+          add('SERVER_ONLY_EXTERNAL_OPERATION',role+' → '+id,
+            'Webhooks ومفاتيح المزود ليست عمليات Flutter؛ أضف Backend Client API موثقاً',id);
+        }
+        if(mutating&&op.auth!=='bearer'){
+          add('EXTERNAL_WRITE_AUTH_UNVERIFIED',role+' → '+id,
+            'الكتابة تتطلب مصادقة مستخدم Bearer مثبتة، لا endpoint عام ولا Provider secret',id);
+        }
+        if(feature==='payments'&&mutating){
+          add('FINANCIAL_TYPED_ADAPTER_REQUIRED',role+' → '+id,
+            'Checkout/Refund/Capture تتطلب Idempotency وStep-up وUNCERTAIN بعقد مستقل',id);
+        }
+      }
     }
     // Keep the existing catalog's typed and per-feature semantics authoritative.
     if(!external.verified)

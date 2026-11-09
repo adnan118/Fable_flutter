@@ -24,7 +24,11 @@ class ExternalFeatureBindings {
     if(raw is! Map)throw const FormatException('Feature operation mappings are invalid');
     final result=<String,Map<String,String>>{};
     for(final entry in raw.entries){
-      if(entry.key is! String||entry.value is! Map)throw const FormatException('Invalid feature operation mapping');
+      if(entry.key is! String||entry.value is! Map||
+          !RegExp(r'^[a-z][a-z0-9_-]{1,80}$').hasMatch(entry.key as String)){
+        throw const FormatException('Invalid feature operation mapping');
+      }
+      final feature=entry.key as String;
       final actions=<String,String>{};
       for(final action in (entry.value as Map).entries){
         if(action.key is! String||action.value is! String||!methods.containsKey(action.key) ||
@@ -32,7 +36,24 @@ class ExternalFeatureBindings {
           throw const FormatException('Unknown feature operation role');
         }
         final op=catalog.require(action.value as String);
-        if(!methods[action.key]!.contains(op.method))throw const FormatException('Feature operation verb mismatch');
+        if(!methods[action.key]!.contains(op.method))
+          throw const FormatException('Feature operation verb mismatch');
+        final role=action.key as String;
+        final mutation=!const {'read','list'}.contains(role);
+        // Provider keys and inbound server webhooks are NEVER mobile API roles.
+        if(op.credentialHeader!=null||
+           op.path.toLowerCase().contains('/webhooks/')||
+           op.id.toLowerCase().contains('webhook')){
+          throw const FormatException('Server-only/provider webhook cannot bind to Flutter feature');
+        }
+        if(mutation && (!op.requiresAuth||!op.enforceAuth)){
+          throw const FormatException('External mutation requires enforced user authorization');
+        }
+        // A generic mutation is not an approved checkout, refund or capture:
+        // these require typed financial flows and provider uncertainty handling.
+        if(feature=='payments' && mutation){
+          throw const FormatException('Financial mutations require a dedicated verified adapter');
+        }
         final params=RegExp(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}').allMatches(op.path).map((m)=>m.group(1)).toList();
         if(entry.key=='notifications' && (!op.requiresAuth || op.credentialHeader!=null ||
             (action.key=='list' && params.isNotEmpty) ||
