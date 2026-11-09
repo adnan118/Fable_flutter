@@ -140,51 +140,7 @@ final class OtherBackendProtectedMediaSource
         throw const MediaReadFailure(MediaReadFailureKind.invalidResponse);
       }
       if(requireProgressive &&
-          !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*
-      return chunk;
-    } on MediaReadFailure catch(error) {
-      if(const {MediaReadFailureKind.unauthenticated,
-            MediaReadFailureKind.forbidden,
-            MediaReadFailureKind.expired,
-            MediaReadFailureKind.sessionChanged}.contains(error.kind)) {
-        _invalidate(MediaSessionInvalidation.playbackEnded);
-      }
-      rethrow;
-    } catch(_){
-      // Do not leak external server HTTP data / secrets into UI messages.
-      throw const MediaReadFailure(MediaReadFailureKind.unknown);
-    }
-  }
-
-  @override Future<void> close() async{
-    if(_closed)return;
-    _closed=true;
-    _transport.cancelPendingReads();
-    await _subscription?.cancel();
-    try { await _transport.close(); } finally {
-      await _signals.close();
-    }
-  }
-}
-
-/// An explicit composition-root choice. The external factory and its
-/// verification belong to the selected outside Backend, not Fable.
-enum ProjectMediaBackendKind { fable, other }
-
-final class ProjectMediaBackendBinding {
-  ProjectMediaBackendBinding({
-    required this.kind,
-    required this.backendId,
-    required this.openProtectedSource,
-  }){
-    if(backendId.trim().isEmpty)throw ArgumentError('Backend identity required');
-  }
-  final ProjectMediaBackendKind kind;
-  final String backendId;
-  final Future<DescribedMediaByteSource> Function(String assetId)
-      openProtectedSource;
-}
-).hasMatch(chunk.mimeType)){
+          !RegExp(r'^(audio|video)/[a-z0-9][a-z0-9.+_-]*$').hasMatch(chunk.mimeType)){
         _invalidate(MediaSessionInvalidation.resourceChanged);
         throw const MediaReadFailure(MediaReadFailureKind.unsupported);
       }
