@@ -12,6 +12,7 @@ dependencies:
     path: ../../fable_feature_contract
   crypto: ^3.0.6
   dio: ^5.8.0
+  http_parser: ^4.1.0
   shared_preferences: ^2.3.0
   fable_core:
     path: ../../fable_core

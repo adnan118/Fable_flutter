@@ -17,6 +17,8 @@ export 'src/domain/media_read_result.dart';
 export 'src/application/read_media_range_use_case.dart';
 export 'src/data/fable_media_byte_source.dart';
 export 'src/data/fable_public_guest_byte_source.dart';
+export 'src/data/other_backend_protected_media_source.dart';
+export 'src/data/fable_local_encrypted_buffered_uploader.dart';
 export 'src/presentation/media_range_controller.dart';
 export 'src/domain/upload_workflow_port.dart';
 export 'src/application/resumable_upload_workflow.dart';
