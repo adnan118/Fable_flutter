@@ -51,19 +51,19 @@ final class FableDpopNativeBridge {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    private func keyQuery() -> [CFString: Any] {
+    private func keyQuery() -> [String: Any] {
         [
-            kSecClass: kSecClassKey,
-            kSecAttrApplicationTag: keyTag,
-            kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: keyTag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom
         ]
     }
 
     private func obtainPrivateKey() throws -> SecKey {
         var existing: CFTypeRef?
         var query = keyQuery()
-        query[kSecReturnRef] = kCFBooleanTrue
-        query[kSecMatchLimit] = kSecMatchLimitOne
+        query[kSecReturnRef as String] = kCFBooleanTrue
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         let status = SecItemCopyMatching(query as CFDictionary, &existing)
         if status == errSecSuccess {
             guard let existing = existing else { throw ProofError.invalid }
@@ -78,16 +78,16 @@ final class FableDpopNativeBridge {
             .privateKeyUsage, &error
         ) else { throw ProofError.invalid }
 
-        let privateAttrs: [CFString: Any] = [
-            kSecAttrIsPermanent: true,
+        let privateAttrs: [String: Any] = [
+            kSecAttrIsPermanent as String: true,
             kSecAttrApplicationTag: keyTag,
-            kSecAttrAccessControl: control
+            kSecAttrAccessControl as String: control
         ]
-        let attributes: [CFString: Any] = [
+        let attributes: [String: Any] = [
             kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecAttrKeySizeInBits: 256,
-            kSecAttrTokenID: kSecAttrTokenIDSecureEnclave,
-            kSecPrivateKeyAttrs: privateAttrs
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+            kSecPrivateKeyAttrs as String: privateAttrs
         ]
         guard let key = SecKeyCreateRandomKey(attributes as CFDictionary, &error)
         else {
