@@ -1,6 +1,7 @@
 export 'src/fable_contract.dart';
 export 'src/backend_transport_adapter.dart';
 export 'src/fable_dpop_proof_signer.dart';
+export 'src/fable_native_dpop_proof_signer.dart';
 export 'src/backend_credential_provider.dart';
 export 'src/fable_api.dart';
 export 'src/fable_cache.dart';
