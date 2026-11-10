@@ -235,7 +235,7 @@ class FableManagedScopedOperation {
     final op=contract.require(operationId);
     if(op.id!=operationId||op.method!=method||op.path!=path ||
        op.contractHash!=contractHash || !op.requiresAuth ||
-       op.credentialHeader!=null ||
+       !op.enforceAuth || op.credentialHeader!=null ||
        path=='/auth'||path.startsWith('/auth/') ||
        path=='/managed-entities/public'||path.startsWith('/managed-entities/public/') ||
        path=='/permissions'||path.startsWith('/permissions/') ||
@@ -251,11 +251,21 @@ class FableManagedAccountsRepository {
   final FableContract contract;
 
   String _operation(String path,String method){
-    final choices=contract.operations.values.where((o)=>o.path==path &&
-      o.method==method && o.requiresAuth && o.credentialHeader==null).toList();
-    if(choices.length!=1)throw StateError(
-      'Managed Accounts operation not exported by this Fable project: $method $path');
-    return choices.single.id;
+    // Only a unique, authenticated, *enforced* source operation may enable
+    // an entity action. Map keys are the IDs sent to FableAuthGateway; an
+    // inconsistent alias must not route an unrelated operation.
+    final choices=contract.operations.entries.where((entry) {
+      final op=entry.value;
+      return entry.key==op.id && op.path==path && op.method==method &&
+          op.requiresAuth && op.enforceAuth && op.credentialHeader==null;
+    }).toList();
+    // Duplicate path/method declarations remain ambiguous even if only one
+    // claimant is trusted. Never silently choose a preferred alias.
+    final sameRoute=contract.operations.values.where((op)=>
+        op.path==path && op.method==method).length;
+    if(choices.length!=1 || sameRoute!=1)throw StateError(
+      'Managed Accounts operation not verified for this Fable project: $method $path');
+    return choices.single.key;
   }
   bool can(String path,String method){
     try {_operation(path,method);return true;}catch(_){return false;}
