@@ -34,6 +34,10 @@ test('RC166 iOS requires Secure Enclave and no plaintext key fallback',()=>{
   'ecdsaSignatureMessageX962SHA256'])assert.ok(ios.includes(value),value);
  assert.ok(!ios.includes('P256.Signing.PrivateKey('));
 });
+test('RC166 existing iOS keys require Secure Enclave token ID at lookup',()=>{
+ assert.equal((ios.match(/kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave/g)||[]).length,2);
+ assert.ok(ios.includes('private func keyQuery(origin: String)'));
+});
 test('RC166 iOS converts DER ECDSA to RFC7515 P1363',()=>{
  assert.ok(ios.includes('encodeP1363('));
  assert.ok(ios.includes('return Data(r + s)'));
