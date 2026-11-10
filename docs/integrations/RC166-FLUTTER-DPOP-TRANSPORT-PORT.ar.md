@@ -22,3 +22,13 @@
 يتطلب الإغلاق: تطبيق موقّع حقيقي أصلي للمفاتيح في Android/iOS، حفظ/ربط هوية المفتاح الصحيح عبر تبديل الحسابات وإعادة تثبيت التطبيق، تشغيل Flutter offline tests على SDK مناسب **بدون GitHub Actions**، تشغيل بناء Backend وPrisma، قاعدة MariaDB حقيقية وعقد مشروع غير تجريبي، ثم اختبار حسابين عبر HTTPS لسرقة Bearer+Installation ID، إعادة تشغيل `jti`، Refresh، Logout، صلاحيات Support وMedia.
 
 **قرار:** لا دمج ولا نشر على Render قبل نجاح تلك الشروط؛ ثغرة [Backend #33](https://github.com/adnan118/Fable/issues/33) لا تزال مفتوحة.
+
+## تدقيق Source دون Flutter SDK
+
+أضيف `tools/rc166-dpop-source-audit.mjs`، ويُشغّل من جذر مستودع Flutter:
+
+```sh
+node --test tools/rc166-dpop-source-audit.mjs
+```
+
+أُجريت مطابقة مباشرة عبر موصل GitHub لـ**16/16 قاعدة مصدر ناجحة** تشمل التقييد بـFable، توقيع كل محاولة، `DPoP` مقابل `Bearer`، فحوص `tokenType`، منع الترويسات المحقونة، وحالات اختبار Dart السبع. هذا لا يعني تشغيل اختبار Dart؛ لا يتوفر Flutter SDK أو محاكي في البيئة الحالية، لذا تبقى PR #88 **DRAFT**. حماية الخادم الحي لم تتغير.
