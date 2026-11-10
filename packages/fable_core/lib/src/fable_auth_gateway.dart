@@ -5,6 +5,7 @@ import 'backend_transport_adapter.dart';
 import 'fable_api.dart';
 import 'fable_contract.dart';
 import 'fable_session.dart';
+import 'fable_dpop_proof_signer.dart';
 part 'fable_auth_security.dart';
 part 'fable_auth_contact.dart';
 part 'fable_auth_username.dart';
@@ -20,9 +21,10 @@ class FableAuthGateway implements BackendApiGateway {
     required Uri baseUri,
     required FableContract contract,
     FableSecureSession? secureSession,
+    FableDpopProofSigner? dpopProofSigner,
     bool allowHttpForLocalDevelopment = false,
     Dio? client,
-  }) : _baseUri = baseUri,
+  }) : _baseUri = baseUri, _dpopProofSigner = dpopProofSigner,
        session = secureSession ?? FableSecureSession(namespace: sessionNamespaceFor(baseUri,contract)) {
     _contract = contract;
     _api = FableApiClient(
@@ -32,6 +34,7 @@ class FableAuthGateway implements BackendApiGateway {
       client: client,
       allowHttpForLocalDevelopment: allowHttpForLocalDevelopment,
       refreshSession: _refreshSession,
+      dpopProofSigner: dpopProofSigner,
       adapter: FableTransportAdapter(catalog: contract),
     );
   }
@@ -49,6 +52,7 @@ class FableAuthGateway implements BackendApiGateway {
     '${contract.contractHash}|${base.origin}';
 
   final Uri _baseUri;
+  final FableDpopProofSigner? _dpopProofSigner;
   final FableSecureSession session;
   String get managedEntityBackendIdentity =>
     managedEntityBackendIdentityFor(_baseUri,_contract);
@@ -712,6 +716,15 @@ class FableAuthGateway implements BackendApiGateway {
       required int expectedIdentity, String? expectedRefreshToken}) async {
     final access = payload['accessToken'];
     final refresh = payload['refreshToken'];
+    // Avoid silently saving a proof-bound session when this app has no native
+    // key signer, or a Bearer session when it expected sender constraints.
+    // Older Fable Backend versions may omit tokenType; this is accepted only
+    // by clients that did not opt into DPoP.
+    final tokenType = payload['tokenType'];
+    if ((_dpopProofSigner != null && tokenType != 'DPoP') ||
+        (_dpopProofSigner == null && tokenType == 'DPoP')) {
+      throw const FormatException('Fable session proof binding mismatch');
+    }
     // فشل التاريخ يمنع حفظ أسرار جلسة منتهية؛ JWT/Session DB يظلان
     // مصدر الصلاحية النهائي، ولا نعد هذا اختباراً لتكامل Backend الحي.
     _expiresAt(payload['expiresAt'],context:'session');
