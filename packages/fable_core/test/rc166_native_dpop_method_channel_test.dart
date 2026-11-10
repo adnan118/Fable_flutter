@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fable_core/fable_core.dart';
@@ -10,6 +11,24 @@ String _proof() => [
   List<String>.filled(110,'b').join(),
   List<String>.filled(110,'c').join(),
 ].join('.');
+
+class _OfflineSession extends FableSecureSession {
+  _OfflineSession():super(namespace:'rc166.native.policy.local.test');
+  @override Future<String> installationId() async =>
+      'device-fixture-stable-but-not-credential';
+}
+const _policyCatalog=FableContract(
+  contractHash:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  projectName:'rc166-only-test-catalog',
+  selectionMode:'explicit',
+  featureIds:<String>{'auth'},
+  operations:<String,FableOperation>{
+    'auth.session-policy':FableOperation('auth.session-policy','GET',
+      '/auth/session-policy','hash',requiresAuth:false,enforceAuth:true),
+    'auth.login':FableOperation('auth.login','POST','/auth/login','hash',
+      requiresAuth:false,enforceAuth:true),
+  },
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -111,4 +130,72 @@ void main() {
       method:'GET',htu:Uri.parse('https://api.example.test/me')),
       throwsStateError);
   });
+  test('RC166 pinned native auth checks required runtime policy before signing login',() async {
+    var policies=0,logins=0,signs=0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_native,(call) async {
+      signs++;
+      return _proof();
+    });
+    final dio=Dio();
+    dio.interceptors.add(InterceptorsWrapper(onRequest:(options,handler) {
+      if(options.path=='/auth/session-policy') {
+        policies++;
+        expect(options.headers.containsKey('DPoP'),false);
+        return handler.resolve(Response<dynamic>(
+          requestOptions:options,statusCode:200,data:<String,dynamic>{
+            'mode':'multi','maxActive':5,'overflow':'revoke-oldest',
+            'onePerInstallation':true,
+            'dpop':{'flutter':'required','proofType':'dpop+jwt','algorithm':'ES256'},
+          }));
+      }
+      if(options.path=='/auth/login') {
+        logins++;
+        expect(options.headers['DPoP'],isA<String>());
+        return handler.resolve(Response<dynamic>(
+          requestOptions:options,statusCode:200,data:<String,dynamic>{}));
+      }
+      handler.reject(DioException(requestOptions:options,
+        type:DioExceptionType.badResponse));
+    }));
+    final client=FableApiClient(baseUri:Uri.parse('https://api.example.test'),
+      contract:_policyCatalog,session:_OfflineSession(),
+      dpopProofSigner:FableNativeDpopProofSigner(
+        serverOrigin:Uri.parse('https://api.example.test')),client:dio);
+    addTearDown(client.dispose);
+    await client.request('auth.login',authorized:false,body:<String,dynamic>{});
+    await client.request('auth.login',authorized:false,body:<String,dynamic>{});
+    expect(policies,1);expect(logins,2);expect(signs,2);
+  });
+
+  test('RC166 pinned native login fails before proof if server DPoP is off',() async {
+    var logins=0,signs=0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_native,(call) async {
+      signs++;return _proof();
+    });
+    final dio=Dio();
+    dio.interceptors.add(InterceptorsWrapper(onRequest:(options,handler) {
+      if(options.path=='/auth/session-policy') {
+        return handler.resolve(Response<dynamic>(
+          requestOptions:options,statusCode:200,data:<String,dynamic>{
+            'mode':'multi','maxActive':5,'overflow':'revoke-oldest',
+            'onePerInstallation':true,
+            'dpop':{'flutter':'off','proofType':'dpop+jwt','algorithm':'ES256'},
+          }));
+      }
+      logins++;
+      handler.reject(DioException(requestOptions:options,
+        type:DioExceptionType.badResponse));
+    }));
+    final client=FableApiClient(baseUri:Uri.parse('https://api.example.test'),
+      contract:_policyCatalog,session:_OfflineSession(),
+      dpopProofSigner:FableNativeDpopProofSigner(
+        serverOrigin:Uri.parse('https://api.example.test')),client:dio);
+    addTearDown(client.dispose);
+    await expectLater(client.request('auth.login',authorized:false),
+      throwsA(isA<FableApiException>()));
+    expect(logins,0);expect(signs,0);
+  });
+
 }
