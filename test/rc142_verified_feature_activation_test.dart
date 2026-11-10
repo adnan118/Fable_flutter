@@ -15,7 +15,7 @@ FableContract project({
   operations:operations??{
     'auth.login':const FableOperation('auth.login','POST','/auth/login',_digest,
       requiresAuth:false,enforceAuth:true),
-    'account.me':const FableOperation('account.me','GET','/account/me',_digest,
+    'account.me':const FableOperation('account.me','GET','/auth/me/account',_digest,
       requiresAuth:true,enforceAuth:true),
     'notifications.inbox':const FableOperation('notifications.inbox','GET',
       '/notifications/inbox',_digest,requiresAuth:true,enforceAuth:true),
@@ -71,7 +71,7 @@ void main(){
     final wrong={...good.operations,
       'auth.login':const FableOperation('auth.login','GET','/auth/login',_digest,
         requiresAuth:false,enforceAuth:true),
-      'account.me':const FableOperation('account.me','POST','/account/me',_digest,
+      'account.me':const FableOperation('account.me','POST','/auth/me/account',_digest,
         requiresAuth:true,enforceAuth:true),
       'notifications.read':const FableOperation('notifications.read','GET',
         '/notifications/{id}/read',_digest,requiresAuth:true,enforceAuth:true),

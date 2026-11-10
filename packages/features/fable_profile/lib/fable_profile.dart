@@ -3,8 +3,10 @@ import 'package:fable_core/fable_core.dart';
 import 'package:fable_feature_contract/fable_feature_contract.dart';
 import 'src/external_profile_page.dart';
 import 'src/fable_account_page.dart';
+import 'src/profile_account_route_policy.dart';
 
 export 'src/external_profile_repository.dart';
+export 'src/profile_account_route_policy.dart';
 export 'src/managed_accounts_repository.dart' show FableManagedScopedOperation, FableManagedAccountsRepository;
 export 'src/external_profile_page.dart';
 
@@ -13,11 +15,8 @@ class FableProfileFeature extends FableFeature {
     id: 'profile', title: 'Profile', icon: Icons.person_outline,
     backendKeywords: const ['profile', 'account']);
 
-  @override bool canLaunchFable(FableContract contract) {
-    final account=contract.operations['account.me'];
-    return contract.isFeatureAvailable(id) &&
-      account?.method=='GET' && account?.requiresAuth==true;
-  }
+  @override bool canLaunchFable(FableContract contract) =>
+    FableProfileAccountRoutePolicy.canRead(contract);
   @override Widget screen(FableContract contract)=>FableAccountPage(contract:contract);
 
   @override
