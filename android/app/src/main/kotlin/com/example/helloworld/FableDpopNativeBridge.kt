@@ -31,7 +31,6 @@ import java.util.UUID
 internal class FableDpopNativeBridge(messenger: BinaryMessenger) {
     companion object {
         private const val CHANNEL = "fable/dpop_native_v1"
-        private const val KEY_ALIAS = "fable.dpop.p256.v1"
     }
 
     private val channel = MethodChannel(messenger, CHANNEL)
@@ -43,7 +42,9 @@ internal class FableDpopNativeBridge(messenger: BinaryMessenger) {
                 when (call.method) {
                     "sign" -> result.success(sign(call))
                     "clear" -> {
-                        clear()
+                        val origin = call.argument<String>("origin")
+                            ?: throw IllegalStateException("origin")
+                        clear(origin)
                         result.success(true)
                     }
                     else -> result.notImplemented()
@@ -61,9 +62,23 @@ internal class FableDpopNativeBridge(messenger: BinaryMessenger) {
 
     private fun keyStore(): KeyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
-    private fun getOrCreate(): java.security.KeyPair {
+    // Avoid correlating the same public key across different Fable origins.
+    private fun alias(origin: String): String {
+        val parsed = URI(origin)
+        if (parsed.scheme != "https" || parsed.host.isNullOrBlank() ||
+            parsed.rawQuery != null || parsed.rawFragment != null ||
+            parsed.userInfo != null || parsed.path !in setOf("", "/")) {
+            throw IllegalStateException("origin")
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(origin.toByteArray(StandardCharsets.US_ASCII))
+        return "fable.dpop.p256." + b64(digest).take(32)
+    }
+
+    private fun getOrCreate(origin: String): java.security.KeyPair {
+        val keyAlias = alias(origin)
         val store = keyStore()
-        val existing = store.getEntry(KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
+        val existing = store.getEntry(keyAlias, null) as? KeyStore.PrivateKeyEntry
         if (existing != null) {
             val public = existing.certificate.publicKey as? ECPublicKey
                 ?: throw IllegalStateException("key")
@@ -73,7 +88,7 @@ internal class FableDpopNativeBridge(messenger: BinaryMessenger) {
         val generator = KeyPairGenerator.getInstance(KEY_ALGORITHM_EC, "AndroidKeyStore")
         generator.initialize(
             KeyGenParameterSpec.Builder(
-                KEY_ALIAS, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+                keyAlias, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
             )
                 .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
                 .setDigests(KeyProperties.DIGEST_SHA256)
@@ -96,8 +111,8 @@ internal class FableDpopNativeBridge(messenger: BinaryMessenger) {
         }
     }
 
-    private fun clear() {
-        keyStore().deleteEntry(KEY_ALIAS)
+    private fun clear(origin: String) {
+        keyStore().deleteEntry(alias(origin))
     }
 
     private fun b64(bytes: ByteArray): String =
@@ -168,7 +183,7 @@ internal class FableDpopNativeBridge(messenger: BinaryMessenger) {
             url.port != origin.port || url.scheme != origin.scheme) {
             throw IllegalStateException("target")
         }
-        val pair = getOrCreate()
+        val pair = getOrCreate(expectedOrigin)
         val public = pair.public as ECPublicKey
         val header = JSONObject()
             .put("alg", "ES256").put("typ", "dpop+jwt")
