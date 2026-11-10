@@ -69,12 +69,17 @@ class FableInboxRoutePolicy {
       return false;
     }
 
+    String normalizedRoute(String path) => path.replaceAllMapped(
+      RegExp(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'),
+      (match) => ':' + match.group(1)!,
+    );
+
     // No ambiguous second operation is permitted to share either privileged
     // Fable route. Other Backends keep their separately imported catalogs.
     bool uniqueRoute(FableOperation operation) =>
         contract.operations.entries.where((entry) =>
           entry.value.method == operation.method &&
-          entry.value.path == operation.path).length == 1;
+          normalizedRoute(entry.value.path) == normalizedRoute(operation.path)).length == 1;
     if (!uniqueRoute(list!) || !uniqueRoute(read!)) return false;
 
     bool matches(FableOperation? operation, String method, String route) {
@@ -86,12 +91,7 @@ class FableInboxRoutePolicy {
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(operation.contractHash)) {
         return false;
       }
-      // OpenAPI uses {id}; the NestJS source uses :id.
-      final normalized = operation.path.replaceAllMapped(
-        RegExp(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'),
-        (match) => ':' + match.group(1)!,
-      );
-      return normalized == route;
+      return normalizedRoute(operation.path) == route;
     }
 
     return matches(list, 'GET', '/notifications/inbox') &&
