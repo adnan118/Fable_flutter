@@ -45,10 +45,9 @@ class FableInboxItem {
       publishedAt:time(value['publishedAt']),readAt:time(value['readAt']));
   }
 }
-/// RC161: match the actual Fable RC66 user inbox controller before showing
-/// the inbox or sending a per-user read receipt. Presence of an operation ID
-/// alone does not prove its destination, verb, authentication, or feature grant.
-/// Other Backend must use its independently imported operation catalog instead.
+/// RC161: verify the actual Fable RC66 user inbox routes and Backend policy.
+/// An operation ID by itself does NOT prove URL, verb, or authorization.
+/// Other Backend uses its separately reviewed operation catalog.
 class FableInboxRoutePolicy {
   const FableInboxRoutePolicy._();
 
@@ -60,45 +59,20 @@ class FableInboxRoutePolicy {
     if (!contract.isFeatureAvailable('notifications')) return false;
     final list = contract.operations[listOperationId];
     final read = contract.operations[markReadOperationId];
+
     bool matches(FableOperation? operation, String method, String route) {
       if (operation == null ||
           operation.method != method ||
           !operation.requiresAuth ||
           !operation.enforceAuth ||
           operation.credentialHeader != null ||
-          !RegExp(r'^[a-f0-9]{64}
-  const FableInboxRepository(this.gateway, {
-    this.listOperationId='notifications.inbox',
-    this.markReadOperationId='notifications.read',
-    this.requireUuidIds=true,
-  });
-  final BackendApiGateway gateway;
-  final String listOperationId, markReadOperationId;
-  final bool requireUuidIds;
-  Future<List<FableInboxItem>> list() async {
-    final response=await gateway.execute(listOperationId);
-    final raw=response.data;
-    // Fable notification inbox currently returns a top-level list. Do not
-    // silently accept some unrelated success envelope on a changed API.
-    if(raw is! List)throw const FormatException('Expected inbox list');
-    if(raw.length>100)throw const FormatException('Inbox exceeds bounded page');
-    return List.unmodifiable(raw.map((item)=>FableInboxItem.fromPayload(item,requireUuidIds:requireUuidIds)));
-  }
-  Future<void> markRead(String id) async {
-    if(!(requireUuidIds ? _uuid.hasMatch(id) : _safeId.hasMatch(id))){
-      throw ArgumentError('Invalid notification id');
-    }
-    await gateway.execute(markReadOperationId,path:{'id':id});
-  }
-}
-).hasMatch(operation.contractHash)) {
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(operation.contractHash)) {
         return false;
       }
-      // OpenAPI imports spell path parameters {id}; the NestJS controller
-      // spells them :id. Both normalize to the same exact server route.
+      // OpenAPI uses {id}; the NestJS source uses :id.
       final normalized = operation.path.replaceAllMapped(
         RegExp(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'),
-        (match) => ':${match.group(1)}',
+        (match) => ':' + match.group(1)!,
       );
       return normalized == route;
     }
