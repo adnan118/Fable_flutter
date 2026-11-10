@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'fable_dpop_proof_signer.dart';
+import 'fable_contract.dart';
 
 /// RC166: a platform-backed signer. The P-256 private key never enters Dart.
 ///
@@ -69,4 +70,39 @@ final class FableNativeDpopProofSigner implements FableDpopProofSigner {
     }
     return signed;
   }
+}
+
+/**
+ * RC166 opt-in is intentionally compile-time pinned to BOTH a real backend
+ * contract hash and its HTTPS origin. This prevents fixture imports or an
+ * Other Backend from silently enabling sender-constrained authentication.
+ *
+ * Production rollout must be coordinated with Backend RC165, real native
+ * private key availability, server schema migration and forced re-login.
+ */
+FableDpopProofSigner? resolveFableDpopProofSigner(
+  Uri baseUri,
+  OperationCatalog catalog,
+  FableDpopProofSigner? explicitlyProvided,
+) {
+  if (explicitlyProvided != null) return explicitlyProvided;
+  const enabled = bool.fromEnvironment('FABLE_DPOP_NATIVE_ENABLED',
+    defaultValue: false);
+  if (!enabled || catalog is! FableContract) return null;
+
+  const expectedHash = String.fromEnvironment(
+    'FABLE_DPOP_BACKEND_CONTRACT_HASH');
+  const expectedOrigin = String.fromEnvironment(
+    'FABLE_DPOP_BACKEND_ORIGIN');
+  if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(expectedHash) ||
+      expectedHash != catalog.contractHash ||
+      catalog.selectionMode != 'explicit' ||
+      !catalog.isFeatureAvailable('auth') ||
+      catalog.projectName == 'fable-test' ||
+      catalog.projectName == 'test-project' ||
+      expectedOrigin.isEmpty ||
+      baseUri.origin != expectedOrigin) {
+    throw StateError('DPoP requires a verified non-fixture Fable project pin');
+  }
+  return FableNativeDpopProofSigner(serverOrigin: baseUri);
 }
