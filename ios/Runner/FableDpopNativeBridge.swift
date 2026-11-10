@@ -124,9 +124,14 @@ final class FableDpopNativeBridge {
             else { throw ProofError.invalid }
             var raw = Array(bytes[offset..<(offset + len)])
             offset += len
+            // DER INTEGER is signed; its first byte must be nonnegative.
+            // A leading 0x00 is REQUIRED when a valid 256-bit r/s has its
+            // high bit set. Do not reject that high bit after stripping.
+            guard let leading = raw.first, leading & 0x80 == 0 else {
+                throw ProofError.invalid
+            }
             while raw.count > 1 && raw[0] == 0 { raw.removeFirst() }
-            guard raw.count <= 32 && raw.first.map({ $0 & 0x80 == 0 }) == true
-            else { throw ProofError.invalid }
+            guard raw.count <= 32 else { throw ProofError.invalid }
             return Array(repeating: UInt8(0), count: 32 - raw.count) + raw
         }
         let r = try readInt()
