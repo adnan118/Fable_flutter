@@ -34,7 +34,9 @@ class _FableInboxPageState extends State<FableInboxPage> {
  bool get _supported {
    final fable=widget.fableContract;
    if(fable!=null)return _origin.isNotEmpty&&
-     fable.supports(widget.listOperationId)&&fable.supports(widget.markReadOperationId);
+     FableInboxRoutePolicy.verified(fable,
+       listOperationId:widget.listOperationId,
+       markReadOperationId:widget.markReadOperationId);
    final external=widget.externalCatalog;
    if(external==null)return false;
    final list=external.operations[widget.listOperationId];

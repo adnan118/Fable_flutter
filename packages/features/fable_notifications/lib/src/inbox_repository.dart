@@ -45,6 +45,43 @@ class FableInboxItem {
       publishedAt:time(value['publishedAt']),readAt:time(value['readAt']));
   }
 }
+/// RC161: verify the actual Fable RC66 user inbox routes and Backend policy.
+/// An operation ID by itself does NOT prove URL, verb, or authorization.
+/// Other Backend uses its separately reviewed operation catalog.
+class FableInboxRoutePolicy {
+  const FableInboxRoutePolicy._();
+
+  static bool verified(
+    FableContract contract, {
+    String listOperationId = 'notifications.inbox',
+    String markReadOperationId = 'notifications.read',
+  }) {
+    if (!contract.isFeatureAvailable('notifications')) return false;
+    final list = contract.operations[listOperationId];
+    final read = contract.operations[markReadOperationId];
+
+    bool matches(FableOperation? operation, String method, String route) {
+      if (operation == null ||
+          operation.method != method ||
+          !operation.requiresAuth ||
+          !operation.enforceAuth ||
+          operation.credentialHeader != null ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(operation.contractHash)) {
+        return false;
+      }
+      // OpenAPI uses {id}; the NestJS source uses :id.
+      final normalized = operation.path.replaceAllMapped(
+        RegExp(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'),
+        (match) => ':' + match.group(1)!,
+      );
+      return normalized == route;
+    }
+
+    return matches(list, 'GET', '/notifications/inbox') &&
+        matches(read, 'POST', '/notifications/:id/read');
+  }
+}
+
 class FableInboxRepository {
   const FableInboxRepository(this.gateway, {
     this.listOperationId='notifications.inbox',

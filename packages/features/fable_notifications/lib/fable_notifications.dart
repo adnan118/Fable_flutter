@@ -2,19 +2,14 @@ import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'package:fable_feature_contract/fable_feature_contract.dart';
 import 'src/inbox_page.dart';
+import 'src/inbox_repository.dart';
 export 'src/inbox_repository.dart';
 export 'src/notification_navigation.dart';
 export 'src/inbox_refresh_signal.dart';
 class FableNotificationsFeature extends FableFeature {
  const FableNotificationsFeature():super(id:'notifications',title:'Notifications',icon:Icons.notifications_none,backendKeywords:const ['notification','push']);
- @override bool canLaunchFable(FableContract contract) {
-   final list=contract.operations['notifications.inbox'],
-     markRead=contract.operations['notifications.read'];
-   return contract.isFeatureAvailable(id) &&
-     list?.method=='GET' && list?.requiresAuth==true &&
-     const ['POST','PATCH','PUT'].contains(markRead?.method) &&
-     markRead?.requiresAuth==true;
- }
+ @override bool canLaunchFable(FableContract contract) =>
+     FableInboxRoutePolicy.verified(contract);
  @override Widget screen(FableContract contract)=>FableInboxPage(contract:contract);
  @override Widget? externalScreen(ExternalOperationCatalog catalog,ExternalFeatureBindings bindings) {
    // Never guess a route, payload or permission from a non-Fable API.
