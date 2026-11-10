@@ -1,0 +1,53 @@
+name: RC160 real Flutter gateway external HTTPS acceptance
+
+on:
+  push:
+    branches: [rc160-flutter-gateway-real-https-denial-acceptance]
+    paths:
+      - packages/fable_core/test/rc160_real_https_invalid_bearer_test.dart
+      - .github/workflows/rc160-flutter-gateway-external-https.yml
+  pull_request:
+    paths:
+      - packages/fable_core/test/rc160_real_https_invalid_bearer_test.dart
+      - .github/workflows/rc160-flutter-gateway-external-https.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rc160-gateway-https-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-flutter-gateway-https:
+    name: Flutter UnifiedApiClient external invalid-Bearer HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify source fixture, never approve it as a real imported project
+        run: |
+          node tools/verify-fable-contract.mjs --mode source
+          node tools/verify-stage4-feature-binding.mjs --mode source
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.8'
+          cache: true
+      - name: Resolve fable_core Flutter package only
+        working-directory: packages/fable_core
+        run: flutter pub get
+      - name: Analyze the real HTTPS Flutter test
+        working-directory: packages/fable_core
+        run: dart analyze test/rc160_real_https_invalid_bearer_test.dart
+      - name: Preflight outside-Render HTTPS with valid TLS, no credentials
+        run: dart tools/rc159-external-staging-https.dart
+      - name: Actual Flutter gateway external invalid-Bearer operations
+        working-directory: packages/fable_core
+        run: |
+          flutter test --reporter expanded --dart-define=FABLE_RC160_REAL_HTTPS=true \
+            test/rc160_real_https_invalid_bearer_test.dart
