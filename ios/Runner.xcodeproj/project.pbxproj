@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		C120AA010000000000000001 /* FableProtectedMediaBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C120AA010000000000000002 /* FableProtectedMediaBridge.swift */; };
+		C120AA020000000000000001 /* FableDpopNativeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C120AA020000000000000002 /* FableDpopNativeBridge.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -42,6 +43,7 @@
 
 /* Begin PBXFileReference section */
 		C120AA010000000000000002 /* FableProtectedMediaBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FableProtectedMediaBridge.swift; sourceTree = "<group>"; };
+		C120AA020000000000000002 /* FableDpopNativeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FableDpopNativeBridge.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				C120AA010000000000000002 /* FableProtectedMediaBridge.swift */,
+				C120AA020000000000000002 /* FableDpopNativeBridge.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -273,6 +276,7 @@
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				C120AA010000000000000001 /* FableProtectedMediaBridge.swift in Sources */,
+				C120AA020000000000000001 /* FableDpopNativeBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
