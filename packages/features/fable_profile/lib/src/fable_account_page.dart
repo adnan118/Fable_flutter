@@ -5,6 +5,7 @@ import 'package:fable_core/fable_core.dart';
 import 'package:fable_design_system/fable_design_system.dart';
 import 'managed_accounts_repository.dart';
 import 'managed_accounts_page.dart';
+import 'profile_account_route_policy.dart';
 
 /// Safe Fable core account view. A project-specific Profile remains a separate
 /// capability and needs its own declared contract and screens.
@@ -23,7 +24,10 @@ class _FableAccountPageState extends State<FableAccountPage> {
   String? _error;
   bool _busy=false;
 
-  bool get _supported=>widget.contract.supports('account.me') && _url.isNotEmpty;
+  bool get _supported=>_url.isNotEmpty &&
+      FableProfileAccountRoutePolicy.canRead(widget.contract);
+  bool get _canUpdateDisplayName=>_supported &&
+      FableProfileAccountRoutePolicy.canUpdateDisplayName(widget.contract);
   bool get _isAr=>Localizations.localeOf(context).languageCode=='ar';
   bool _current(int generation, FableAuthGateway client, int revision) =>
       mounted && generation==_generation && identical(client,_gateway) &&
@@ -85,7 +89,7 @@ class _FableAccountPageState extends State<FableAccountPage> {
   }
 
   Future<void> _updateDisplayName() async {
-    if(_busy || _account==null || !widget.contract.supports('account.displayName.update'))return;
+    if(_busy || _account==null || !_canUpdateDisplayName)return;
     final name=_displayName.text.trim();
     if(name.isEmpty || name.length>100 || RegExp(r'[\x00-\x1F\x7F<>]').hasMatch(name)){
       setState(()=>_error=_isAr?'الاسم غير صالح (1–100 حرف).':'Invalid display name (1–100 characters).');
@@ -126,7 +130,7 @@ class _FableAccountPageState extends State<FableAccountPage> {
           if(_account!.username?.isNotEmpty==true) SelectableText(_account!.username!,textAlign:TextAlign.center),
           if(_account!.email?.isNotEmpty==true) SelectableText(_account!.email!,textAlign:TextAlign.center),
           if(_account!.phone?.isNotEmpty==true) SelectableText(_account!.phone!,textAlign:TextAlign.center),
-          if(widget.contract.supports('account.displayName.update')) ...[
+          if(_canUpdateDisplayName) ...[
             const SizedBox(height:14),
             TextField(controller:_displayName,maxLength:100,enabled:!_busy,
               decoration:InputDecoration(labelText:ar?'الاسم الظاهر':'Display name')),
