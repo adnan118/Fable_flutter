@@ -380,8 +380,19 @@ class UnifiedApiClient implements BackendApiGateway {
             final proof = await signer.signProof(
               method: op.method, htu: htu, accessToken: token,
             );
+            final parts = proof.split('.');
             if (proof.length < 100 || proof.length > 4096 ||
-                !RegExp(r'^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+
+                parts.length != 3 ||
+                parts.any((part) => part.isEmpty ||
+                    RegExp(r'[^A-Za-z0-9_-]').hasMatch(part))) {
+              throw FableApiException(401,'invalid_dpop_proof');
+            }
+            attemptHeaders['DPoP'] = proof;
+          }
+        }
+        final response = await _dio.request<dynamic>(
+          endpoint,
+          options: Options(method: op.method, headers: attemptHeaders,
             followRedirects: false,
             responseType:mediaRange==null?ResponseType.json:ResponseType.stream,
             validateStatus: (status) => status != null && status < 500),
