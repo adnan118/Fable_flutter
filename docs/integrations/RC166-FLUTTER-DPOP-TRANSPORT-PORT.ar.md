@@ -1,34 +1,39 @@
-# RC166 — Flutter DPoP transport integration port (Stage 4)
+# RC166 — توقيع DPoP الأصلي في Flutter وAndroid وiOS
 
-**10 تشرين الثاني 2026** — حالة المسودة، لا تستخدم GitHub Actions معيار قبول.
+**10 تشرين الثاني 2026** | المرحلة الرابعة | **مسودة غير مدمجة وغير منشورة** | لا نعتمد على GitHub Actions.
 
-## ما تم
+## الإنجازات الفعلية في PR #88
 
-- `FableDpopProofSigner`: واجهة حقن لتنفيذ منصة أصلي يحتفظ بمفتاح P-256 الخاص في Android Keystore أو iOS Keychain/Secure Enclave حين يتوفر. هذه الواجهة لا تنشئ مفتاحًا ولا تخزن مفتاحًا ضمن Dart، ولا تعطي تنفيذًا احتياطيًا برمجيًا.
-- `UnifiedApiClient`: يحقن الموقّع فقط إذا كان العقد `FableContract` والناقل `FableTransportAdapter`، ويحوّل `Authorization` إلى `DPoP` للطلبات المحمية. `DPoP` في الترويسات العامة و`Dio BaseOptions` ممنوع.
-- يولّد إثباتًا للعمليات العامة التي تنشئ جلسة فقط، وبمسار وطريقة مطابقين للعمليات المعلنة: Password Login وRefresh و2FA complete وOTP complete وGoogle/Apple.
-- كل محاولة HTTP `_send` توقّع إثباتًا جديدًا؛ إثبات `jti` المستهلك لا يعاد استخدامه عند GET retry أو بعد تدوير Refresh Token.
-- `FableAuthGateway` يرفض تخزين جلسة تعلن `tokenType=DPoP` من دون موقّع، أو جلسة Bearer عندما اختار التطبيق موقّعًا. المشاريع الأقدم دون DPoP لا تتغيّر افتراضيًا.
-- اختبارات `rc166_fable_dpop_transport_port_test.dart` تغطي التفويض والإثبات للطلب المحمي ولـlogin العام، إعادة توقيع retry، عدم تسرب الإثبات للعمليات العامة غير المتعلقة بالدخول، رفض Other Backend وDio ambient header.
+1. **Android:** `FableDpopNativeBridge.kt` يستخدم `AndroidKeyStore` لإنشاء زوج مفاتيح P-256، ويرفض أي مفتاح لا يبلّغ النظام أنه داخل عتاد آمن (`KeyInfo.isInsideSecureHardware`). يوقّع `ES256` ويحّول توقيع ECDSA من DER إلى P1363 كما يتطلب JWS. `jti` عشوائي مختلف لكل طلب، و`ath` هو SHA-256 لرمز الوصول الحالي. المفتاح الخاص لا يعبر `MethodChannel`.
+2. **iOS:** `FableDpopNativeBridge.swift` ينشئ مفتاح P-256 دائمًا داخل **Secure Enclave** باستخدام Security.framework، ويستخرج المفتاح العام فقط لإنشاء JWK، ويوقّع `ecdsaSignatureMessageX962SHA256` ثم يحول DER إلى P1363. أُضيف الملف إلى `Runner.xcodeproj`، وتُسجّل القناة ضمن `FlutterImplicitEngineDelegate` الداعم لـUIScene.
+3. **عزل المفاتيح:** بصمة عنوان Backend HTTPS تحدد اسم مفتاح مختلف لكل Origin، حتى لا يكون للمشاريع المختلفة مفتاح مشترك يسمح بتتبع المستخدم. لا يوجد مسار لتصدير المفتاح الخاص.
+4. **Dart:** `FableNativeDpopProofSigner` يثبت أصل HTTPS ويرفض URL مختلفًا أو Query/Fragment داخل `htu` ويرسل الطريقة والمسار والرمز إلى قناة المنصة فقط. يمنع الخطأ إعادة المحاولة بمفتاح برمجي غير محمي.
+5. **التفعيل المركزي:** `UnifiedApiClient` و`FableAuthGateway` يستعملان `resolveFableDpopProofSigner` نفسه. التفعيل **متوقف افتراضيًا** ولا يتاح إلا بعقد Fable حقيقي مع تطابق بصمة العقد وعنوان Backend:
+   - `--dart-define=FABLE_DPOP_NATIVE_ENABLED=true`
+   - `--dart-define=FABLE_DPOP_BACKEND_CONTRACT_HASH=<64-hex>`
+   - `--dart-define=FABLE_DPOP_BACKEND_ORIGIN=https://<verified-host>`
+   لا تفعّل هذه القيم على Render RC155 أو باستخدام Fixture `test-project`.
+6. **سلامة الشبكة:** كل HTTP attempt يوقّع إثباتًا جديدًا. بعد انتظار التوقيع الأصلي تعاد مقارنة `identityRevision` وسياق الكيان والإلغاء قبل الإرسال. يحظر إدخال `DPoP` بشكل محيط عبر `Dio` أو `Other Backend`. تتحقق جلسات `DPoP` من `tokenType` قبل تخزين رموزها.
 
-## ما لم يُنجز
+## فحوص دون GitHub Actions
 
-هذه **ليست** حماية أجهزة مكتملة. `FableDpopProofSigner` هو منفذ حقن فقط، وليس تنفيذ Android/iOS للمفتاح أو توقيع ES256 حقيقيًا. بيانات التوقيع في اختبار Dart صورية لفحص الترويسات وليست إثباتًا صالحًا على Backend.
+أُضيفت **7 اختبارات Flutter للناقل** بموّقع صوري للتحقق من Routing/Retry، و**6 اختبارات Flutter لقناة المنصة** لفحص تثبيت HTTPS والرمز وفشل غياب الجهاز. هذه اختبارات مكتوبة **ولم تُشغّل على Flutter SDK** في هذه البيئة.
 
-كذلك لم يتوفر Flutter SDK أو محاكيا iOS وAndroid داخل بيئة الفحص الحالية؛ لم يتم تشغيل `flutter test` ولا `flutter analyze`، ولم نُجر اتصال HTTPS بحساب مصادق عليه أو ننشر RC166. يحتفظ Backend RC165 [PR #37](https://github.com/adnan118/Fable/pull/37) بحالة DRAFT، وخادم Render لا يزال RC155.
-
-## قبول الإصدار لاحقًا
-
-يتطلب الإغلاق: تطبيق موقّع حقيقي أصلي للمفاتيح في Android/iOS، حفظ/ربط هوية المفتاح الصحيح عبر تبديل الحسابات وإعادة تثبيت التطبيق، تشغيل Flutter offline tests على SDK مناسب **بدون GitHub Actions**، تشغيل بناء Backend وPrisma، قاعدة MariaDB حقيقية وعقد مشروع غير تجريبي، ثم اختبار حسابين عبر HTTPS لسرقة Bearer+Installation ID، إعادة تشغيل `jti`، Refresh، Logout، صلاحيات Support وMedia.
-
-**قرار:** لا دمج ولا نشر على Render قبل نجاح تلك الشروط؛ ثغرة [Backend #33](https://github.com/adnan118/Fable/issues/33) لا تزال مفتوحة.
-
-## تدقيق Source دون Flutter SDK
-
-أضيف `tools/rc166-dpop-source-audit.mjs`، ويُشغّل من جذر مستودع Flutter:
+أُضيف تدقيقان مصدران مستقلان دون Actions:
 
 ```sh
 node --test tools/rc166-dpop-source-audit.mjs
+node --test tools/rc166-native-dpop-source-audit.mjs
 ```
 
-أُجريت مطابقة مباشرة عبر موصل GitHub لـ**16/16 قاعدة مصدر ناجحة** تشمل التقييد بـFable، توقيع كل محاولة، `DPoP` مقابل `Bearer`، فحوص `tokenType`، منع الترويسات المحقونة، وحالات اختبار Dart السبع. هذا لا يعني تشغيل اختبار Dart؛ لا يتوفر Flutter SDK أو محاكي في البيئة الحالية، لذا تبقى PR #88 **DRAFT**. حماية الخادم الحي لم تتغير.
+التحقق المباشر عبر مستودع GitHub للملفات المحدثة أعطى **29/29 نقطة مصدرية ناجحة**، منها تضمين Swift ضمن Xcode، وإعداد KeyStore، وربط قناة المنصة، واشتراط Origin والعقد، وفحص تبديل الحساب. هذا ليس تشغيلًا لأكواد Swift/Kotlin أو إثباتًا لنوعية المفتاح على جهاز فعلي.
+
+## قيود القبول الأساسية
+
+- **Android Emulator وiOS Simulator:** قد لا يمتلكان عتادًا آمنًا؛ الإصدار الصارم **يرفض التوقيع** ولا يرجع إلى مفتاح برمجي. يجب فحص أجهزة فعلية تدعم KeyStore hardware وSecure Enclave. فشل محاكٍ بلا عتاد متوقع، وليس اختبارًا ناجحًا للمفتاح.
+- **لم يتم تجميع native bridge** باستخدام Android SDK أو Xcode، ولم يُجر `flutter analyze` أو `flutter test` أو اختبار DPoP حيّ بحسابين.
+- Backend [RC165 PR #37](https://github.com/adnan118/Fable/pull/37) ما زال مسودة دون تشغيل MariaDB/Prisma كامل أو نشر. خادم Render ما زال RC155؛ خطر سرقة Bearer + Installation ID موثق في [Backend #33](https://github.com/adnan118/Fable/issues/33).
+- يلزم اختبار تبديل الحسابات والجلسات، وإبطال المفتاح عند فقدان العتاد، وسلوك إعادة تثبيت التطبيق، وخطة ترحيل جلسات Bearer، وضبط `AUTH_DPOP_FLUTTER_MODE=required` على خادم مختبَر **بعد** قبول العميل والعقد الحقيقي.
+- يلزم إتمام [Flutter #82](https://github.com/adnan118/Fable_flutter/issues/82): حسابان تجريبيان مؤقتان عبر HTTPS، ثبات المفتاح وتجدّد `jti`، عزل Auth وAccess وMedia، الاختبارات الحيّة على الأجهزة، وتوثيق التنظيف.
+
+**القرار: PR #88 وPR #37 ما زالا DRAFT وغير قابلين للإعلان عن إغلاق الثغرة أو الاعتماد الإنتاجي؛ Stage 4 مستمرة، Stage 7 NO-GO.**
