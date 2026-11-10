@@ -18,7 +18,10 @@ class _SignedProofPort implements FableDpopProofSigner {
     uris.add(htu);
     accessTokens.add(accessToken);
     // Fixture syntax ONLY: does not sign or expose a P-256 private key.
-    return '${'a' * 110}.${'b' * 110}.${'c' * (110 + calls)}';
+    final h=List<String>.filled(110,'a').join();
+    final p=List<String>.filled(110,'b').join();
+    final sig=List<String>.filled(110+calls,'c').join();
+    return [h,p,sig].join('.');
   }
 }
 class _Session extends FableSecureSession {
