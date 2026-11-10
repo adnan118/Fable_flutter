@@ -6,10 +6,12 @@ on:
     paths:
       - packages/fable_core/test/rc160_real_https_invalid_bearer_test.dart
       - .github/workflows/rc160-flutter-gateway-external-https.yml
+      - docs/integrations/RC160-FLUTTER-REAL-GATEWAY-HTTPS-ACCEPTANCE.ar.md
   pull_request:
     paths:
       - packages/fable_core/test/rc160_real_https_invalid_bearer_test.dart
       - .github/workflows/rc160-flutter-gateway-external-https.yml
+      - docs/integrations/RC160-FLUTTER-REAL-GATEWAY-HTTPS-ACCEPTANCE.ar.md
   workflow_dispatch:
 
 permissions:
