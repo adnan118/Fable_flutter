@@ -92,6 +92,18 @@ test('RC166 Dart API is not duplicated or truncated after network retry block',(
  assert.ok(!core.includes(').hasMatch(proof)) {\\n'));
  assert.match(core.trimEnd(),/}\s*$/);
 });
+test('RC166 hardware signer checks verified public Backend DPoP policy before login or refresh',()=>{
+ assert.ok(core.includes("_ensureNativeDpopServerReady()"));
+ assert.ok(core.includes("fable.operations['auth.session-policy']"));
+ assert.ok(core.includes("op.method != 'GET' || op.path != '/auth/session-policy'"));
+ assert.ok(core.includes("!policy.requiresNativeDpop"));
+ assert.ok(core.includes("bootstrap && signer is FableNativeDpopProofSigner"));
+});
+test('RC166 server policy probe is public and avoids self-recursion',()=>{
+ assert.ok(core.includes("await _send(op,'/auth/session-policy'"));
+ assert.ok(core.includes("'auth.login': '/auth/login'"));
+ assert.ok(!core.includes("'auth.session-policy': '/auth/session-policy',"));
+});
 test('RC166 never uses GitHub Actions as acceptance evidence',()=>{
  assert.ok(!bridge.includes('GitHub Actions'));
 });
