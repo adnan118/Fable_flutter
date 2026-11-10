@@ -88,6 +88,50 @@ class UnifiedApiClient implements BackendApiGateway {
   final FableDpopProofSigner? dpopProofSigner;
   Future<bool>? _refreshing;
   int? _refreshingIdentity;
+  Future<void>? _nativeDpopReady;
+
+  // A pinned native signer must never send credentials to a Backend that has
+  // not confirmed the matching RFC9449 mode at its verified public endpoint.
+  // This is a DPoP-enabled-only capability probe, not a generic guessed URL.
+  Future<void> _ensureNativeDpopServerReady() =>
+      _nativeDpopReady ??= _checkNativeDpopServerReady();
+
+  Future<void> _checkNativeDpopServerReady() async {
+    final fable = contract;
+    if (fable is! FableContract) {
+      throw FableApiException(412,'dpop_backend_contract_required');
+    }
+    final op = fable.operations['auth.session-policy'];
+    final matching = fable.operations.entries.where((entry) =>
+        entry.value.method == 'GET' &&
+        entry.value.path == '/auth/session-policy').length;
+    if (op == null || op.id != 'auth.session-policy' ||
+        op.method != 'GET' || op.path != '/auth/session-policy' ||
+        op.requiresAuth || !op.enforceAuth ||
+        op.credentialHeader != null || matching != 1) {
+      throw FableApiException(412,'dpop_session_policy_operation_missing');
+    }
+    // _send sees no Authorization and a non-bootstrap operation ID, so
+    // this probe cannot recurse or accidentally sign a public policy GET.
+    final response=await _send(op,'/auth/session-policy',
+      <String,String>{},null,null,null);
+    if(response.statusCode != 200) {
+      throw FableApiException(412,'dpop_server_policy_unavailable');
+    }
+    Object? data=response.data;
+    if(data is Map && data['data'] is Map) data=data['data'];
+    if(data is! Map) {
+      throw FableApiException(412,'dpop_server_policy_invalid');
+    }
+    final raw=Map<String,dynamic>.from(data);
+    if(raw['onePerInstallation'] is! bool) {
+      throw FableApiException(412,'dpop_server_policy_invalid');
+    }
+    final policy=FableSessionPolicy.fromMap(raw);
+    if(!policy.requiresNativeDpop) {
+      throw FableApiException(412,'dpop_server_not_required');
+    }
+  }
   Future<Response<dynamic>> request(String operationId,{Map<String,dynamic>? path,
     Map<String,dynamic>? query,Object? body,bool? authorized,CancelToken? cancelToken,
     String? ifMatch,String? securityChallengeId,String? managedEntityId,
@@ -374,6 +418,9 @@ class UnifiedApiClient implements BackendApiGateway {
               !op.requiresAuth && op.enforceAuth && op.credentialHeader == null;
           final header = attemptHeaders['Authorization'];
           if (header != null || bootstrap) {
+            if(bootstrap && signer is FableNativeDpopProofSigner) {
+              await _ensureNativeDpopServerReady();
+            }
             if (header != null && !header.startsWith('DPoP ')) {
               throw FableApiException(401,'dpop_transport_mismatch');
             }
