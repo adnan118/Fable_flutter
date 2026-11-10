@@ -44,8 +44,27 @@ jobs:
       - name: Analyze the real HTTPS Flutter test
         working-directory: packages/fable_core
         run: dart analyze test/rc160_real_https_invalid_bearer_test.dart
-      - name: Preflight outside-Render HTTPS with valid TLS, no credentials
-        run: dart tools/rc159-external-staging-https.dart
+      - name: Public HTTPS preflight with strict curl TLS and no credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RC160: probing dedicated Render Free HTTPS health with native curl trust store."
+          status=""
+          for attempt in $(seq 1 8); do
+            status="$(curl --silent --show-error --connect-timeout 8 --max-time 25 \
+              --output /dev/null --write-out '%{http_code}' \
+              https://fable-rc151-free-ephemeral-api.onrender.com/health)" || status="transport-error"
+            if [[ "$status" == "200" ]]; then
+              echo "RC160_CURL_TLS_PREFLIGHT_OK: external /health HTTP 200"
+              break
+            fi
+            echo "RC160_CURL_READONLY_RETRY: attempt=$attempt status=$status"
+            sleep 8
+          done
+          if [[ "$status" != "200" ]]; then
+            echo "RC160_CURL_PREFLIGHT_FAILED: cannot independently verify HTTPS 200"
+            exit 1
+          fi
       - name: Actual Flutter gateway external invalid-Bearer operations
         working-directory: packages/fable_core
         run: |
