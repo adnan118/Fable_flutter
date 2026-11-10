@@ -4,6 +4,7 @@ import 'fable_contract.dart';
 import 'fable_session.dart';
 import 'backend_transport_adapter.dart';
 import 'backend_credential_provider.dart';
+import 'fable_dpop_proof_signer.dart';
 import 'fable_retry_policy.dart';
 
 /// A bounded media Range request, restricted to the verified Fable content GET.
@@ -28,7 +29,7 @@ abstract interface class BackendApiGateway {
 
 class UnifiedApiClient implements BackendApiGateway {
   UnifiedApiClient({required Uri baseUri,required this.contract,required this.session,
-    this.refreshSession, this.credentialProvider, BackendTransportAdapter? adapter,
+    this.refreshSession, this.credentialProvider, this.dpopProofSigner, BackendTransportAdapter? adapter,
     bool allowHttpForLocalDevelopment=false, Dio? client,
     this.retryPolicy=const FableRetryPolicy()}) :
     _baseUri=baseUri,
@@ -53,11 +54,14 @@ class UnifiedApiClient implements BackendApiGateway {
     // ambient credentials in BaseOptions. Such defaults could leak to public
     // operations even when our own request headers contain no token.
     const ambientCredentials = <String>{
-      'authorization', 'cookie', 'proxy-authorization', 'x-api-key',
+      'authorization', 'cookie', 'proxy-authorization', 'x-api-key', 'dpop',
     };
     if (_dio.options.headers.keys.any((key) =>
         ambientCredentials.contains(key.toString().toLowerCase()))) {
       throw ArgumentError('Do not put authentication credentials in Dio BaseOptions');
+    }
+    if (dpopProofSigner != null && (contract is! FableContract || this.adapter is! FableTransportAdapter)) {
+      throw ArgumentError('DPoP signer is restricted to verified Fable contracts');
     }
     if (!identical(this.adapter.catalog, contract)) {
       throw ArgumentError('Backend adapter must use the verified catalog');
@@ -78,6 +82,8 @@ class UnifiedApiClient implements BackendApiGateway {
   /// Inject a scheme-specific, runtime-only provider for declared non-Bearer
   /// protected operations. Transport and features never inspect its secrets.
   final BackendCredentialProvider? credentialProvider;
+  /// Optional native hardware-held proof port. Never enabled implicitly.
+  final FableDpopProofSigner? dpopProofSigner;
   Future<bool>? _refreshing;
   int? _refreshingIdentity;
   Future<Response<dynamic>> request(String operationId,{Map<String,dynamic>? path,
@@ -177,7 +183,7 @@ class UnifiedApiClient implements BackendApiGateway {
     // Authentication is controlled by the verified operation contract,
     // never by an untrusted header map or a feature-level guess.
     if (headers.keys.any((key) => const <String>{
-      'authorization','cookie','set-cookie','host','proxy-authorization',
+      'authorization','dpop','cookie','set-cookie','host','proxy-authorization',
       'forwarded','x-forwarded-for','x-forwarded-host','connection',
       'origin','referer','content-length','transfer-encoding','content-type',
     }.contains(key.toLowerCase()))) {
@@ -206,7 +212,7 @@ class UnifiedApiClient implements BackendApiGateway {
       }
       _validateCredentialValue(token);
       accessTokenSent = token;
-      headers['Authorization']='Bearer $token';
+      headers['Authorization']=dpopProofSigner==null?'Bearer $token':'DPoP $token';
     }
     if (useAuthorization && op.credentialHeader == null &&
         session.identityRevision != requestIdentity) {
@@ -311,7 +317,7 @@ class UnifiedApiClient implements BackendApiGateway {
     if (cancelToken?.isCancelled ?? false) {
       throw FableApiException(0, 'request_cancelled');
     }
-    headers['Authorization']='Bearer $fresh';
+    headers['Authorization']=dpopProofSigner==null?'Bearer $fresh':'DPoP $fresh';
     final retried=await _send(op,endpoint,headers,query,body,cancelToken,
       expectedIdentity: requestIdentity,contextStillValid:contextStillValid,
       mediaRange:mediaRange);
@@ -346,9 +352,36 @@ class UnifiedApiClient implements BackendApiGateway {
         throw FableApiException(0, 'request_cancelled');
       }
       try {
-        final response = await _dio.request<dynamic>(
-          endpoint,
-          options: Options(method: op.method, headers: headers,
+        // A DPoP jti is single-use. Sign anew for EVERY retry (including an
+        // uncertain network failure); never reuse request headers with an
+        // already accepted proof.
+        final attemptHeaders = <String,String>{...headers};
+        final signer = dpopProofSigner;
+        if (signer != null) {
+          const publicBootstrap = <String,String>{
+            'auth.login': '/auth/login',
+            'auth.refresh': '/auth/refresh',
+            'auth.2fa.login.complete': '/auth/2fa/login/complete',
+            'auth.otp.login.complete': '/auth/otp/login/complete',
+            'auth.social.google': '/auth/social/google',
+            'auth.social.apple': '/auth/social/apple',
+          };
+          final publicPath = publicBootstrap[op.id];
+          final bootstrap = publicPath != null &&
+              op.method == 'POST' && op.path == publicPath &&
+              !op.requiresAuth && op.enforceAuth && op.credentialHeader == null;
+          final header = attemptHeaders['Authorization'];
+          if (header != null || bootstrap) {
+            if (header != null && !header.startsWith('DPoP ')) {
+              throw FableApiException(401,'dpop_transport_mismatch');
+            }
+            final token = header == null ? null : header.substring(5);
+            final htu = Uri.parse('${_baseUri.origin}$endpoint');
+            final proof = await signer.signProof(
+              method: op.method, htu: htu, accessToken: token,
+            );
+            if (proof.length < 100 || proof.length > 4096 ||
+                !RegExp(r'^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+
             followRedirects: false,
             responseType:mediaRange==null?ResponseType.json:ResponseType.stream,
             validateStatus: (status) => status != null && status < 500),
@@ -411,7 +444,86 @@ class UnifiedApiClient implements BackendApiGateway {
 /// New integrations should depend on BackendApiGateway or UnifiedApiClient.
 class FableApiClient extends UnifiedApiClient {
   FableApiClient({required super.baseUri,required super.contract,required super.session,
-    super.refreshSession,super.credentialProvider,super.adapter,super.allowHttpForLocalDevelopment,super.client,super.retryPolicy});
+    super.refreshSession,super.credentialProvider,super.dpopProofSigner,super.adapter,super.allowHttpForLocalDevelopment,super.client,super.retryPolicy});
+}
+
+class FableApiException implements Exception {
+  FableApiException(this.status,this.code,{this.message,this.details});
+  final int status;final String code;final String? message;final Object? details;
+  @override String toString()=> 'FableApiException($status, $code)';
+}
+).hasMatch(proof)) {
+              throw FableApiException(401,'invalid_dpop_proof');
+            }
+            attemptHeaders['DPoP'] = proof;
+          }
+        }
+        final response = await _dio.request<dynamic>(
+          endpoint,
+          options: Options(method: op.method, headers: attemptHeaders,
+            followRedirects: false,
+            responseType:mediaRange==null?ResponseType.json:ResponseType.stream,
+            validateStatus: (status) => status != null && status < 500),
+          queryParameters: query, data: body, cancelToken: cancelToken,
+        );
+        rejectChangedContext();
+        if (safeRead && attempt < retryPolicy.maxReadRetries &&
+            retryPolicy.retryableStatus(response.statusCode ?? 0)) {
+          final delay = retryPolicy.backoff(attempt,
+            retryAfter: response.headers.value('retry-after'));
+          if (delay != null) {
+            await Future<void>.delayed(delay);
+            continue;
+          }
+        }
+        return response;
+      } on DioException catch (error) {
+        rejectChangedContext();
+        final status = error.response?.statusCode ?? 0;
+        if (safeRead && attempt < retryPolicy.maxReadRetries &&
+            (retryPolicy.retryableTransport(error) ||
+             retryPolicy.retryableStatus(status))) {
+          final delay = retryPolicy.backoff(attempt,
+            retryAfter: error.response?.headers.value('retry-after'));
+          if (delay != null) {
+            await Future<void>.delayed(delay);
+            continue;
+          }
+        }
+        if (cancelToken?.isCancelled ?? false ||
+            error.type == DioExceptionType.cancel) {
+          throw FableApiException(0, 'request_cancelled');
+        }
+        final payload = error.response?.data;
+        final code = payload is Map
+            ? (payload['errorCode'] ?? payload['code'] ?? 'network_error').toString()
+            : 'network_error';
+        throw FableApiException(status, code, details: payload);
+      }
+    }
+  }
+  Response<dynamic> _checked(Response<dynamic> response){
+    final code=response.statusCode??0;
+    if (code == 403) session.reportAuthorizationDenied();
+    if(code<200 || code>=300){
+      final payload=response.data;
+      final name=payload is Map ? (payload['errorCode']??payload['code']??'api_error').toString():'api_error';
+      throw FableApiException(code,name,details:payload);
+    }
+    return response;
+  }
+  @override
+  Future<Response<dynamic>> execute(String operationId,{Map<String,dynamic>? path,
+    Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,String? ifMatch}) =>
+      request(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
+  @override
+  void dispose()=>_dio.close(force:true);
+}
+/// Compatibility wrapper for apps generated by older RCs.
+/// New integrations should depend on BackendApiGateway or UnifiedApiClient.
+class FableApiClient extends UnifiedApiClient {
+  FableApiClient({required super.baseUri,required super.contract,required super.session,
+    super.refreshSession,super.credentialProvider,super.dpopProofSigner,super.adapter,super.allowHttpForLocalDevelopment,super.client,super.retryPolicy});
 }
 
 class FableApiException implements Exception {
