@@ -70,7 +70,10 @@ final class FableDpopNativeBridge {
         [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: try keyTag(for: origin),
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            // Existing keys must be hardware-backed too. Without the token ID,
+            // a pre-existing software EC key with this tag could be selected.
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave
         ]
     }
 
