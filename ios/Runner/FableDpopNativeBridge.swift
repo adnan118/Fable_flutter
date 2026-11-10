@@ -8,7 +8,6 @@ import Security
 /// This must be registered on the iOS UIScene implicit Flutter engine.
 final class FableDpopNativeBridge {
     private let channel: FlutterMethodChannel
-    private let keyTag = "fable.dpop.p256.v1".data(using: .utf8)!
 
     init(messenger: FlutterBinaryMessenger) {
         channel = FlutterMethodChannel(name: "fable/dpop_native_v1", binaryMessenger: messenger)
@@ -26,7 +25,11 @@ final class FableDpopNativeBridge {
                     }
                     response(try self.sign(values))
                 case "clear":
-                    try self.clear()
+                    guard let values = call.arguments as? [String: Any],
+                          let origin = values["origin"] as? String else {
+                        throw ProofError.invalid
+                    }
+                    try self.clear(origin: origin)
                     response(true)
                 default:
                     response(FlutterMethodNotImplemented)
@@ -51,17 +54,29 @@ final class FableDpopNativeBridge {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    private func keyQuery() -> [String: Any] {
+    // An origin-specific Secure Enclave key avoids cross-project correlation.
+    private func keyTag(for origin: String) throws -> Data {
+        guard let c = URLComponents(string: origin),
+              normalizedOrigin(c) != nil,
+              c.path.isEmpty || c.path == "/",
+              c.query == nil, c.fragment == nil
+        else { throw ProofError.invalid }
+        let bytes = Data(SHA256.hash(data: Data(origin.utf8))).prefix(16)
+        let tag = "fable.dpop.p256." + bytes.map { String(format: "%02x", $0) }.joined()
+        return Data(tag.utf8)
+    }
+
+    private func keyQuery(origin: String) throws -> [String: Any] {
         [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: keyTag,
+            kSecAttrApplicationTag as String: try keyTag(for: origin),
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom
         ]
     }
 
-    private func obtainPrivateKey() throws -> SecKey {
+    private func obtainPrivateKey(origin: String) throws -> SecKey {
         var existing: CFTypeRef?
-        var query = keyQuery()
+        var query = try keyQuery(origin: origin)
         query[kSecReturnRef as String] = kCFBooleanTrue
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         let status = SecItemCopyMatching(query as CFDictionary, &existing)
@@ -80,11 +95,11 @@ final class FableDpopNativeBridge {
 
         let privateAttrs: [String: Any] = [
             kSecAttrIsPermanent as String: true,
-            kSecAttrApplicationTag: keyTag,
+            kSecAttrApplicationTag as String: try keyTag(for: origin),
             kSecAttrAccessControl as String: control
         ]
         let attributes: [String: Any] = [
-            kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
             kSecPrivateKeyAttrs as String: privateAttrs
@@ -167,7 +182,7 @@ final class FableDpopNativeBridge {
             throw ProofError.invalid
         }
 
-        let privateKey = try obtainPrivateKey()
+        let privateKey = try obtainPrivateKey(origin: origin)
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw ProofError.invalid
         }
@@ -206,8 +221,8 @@ final class FableDpopNativeBridge {
         return signingInput + "." + base64url(try encodeP1363(signature))
     }
 
-    private func clear() throws {
-        let code = SecItemDelete(keyQuery() as CFDictionary)
+    private func clear(origin: String) throws {
+        let code = SecItemDelete(try keyQuery(origin: origin) as CFDictionary)
         guard code == errSecSuccess || code == errSecItemNotFound else {
             throw ProofError.invalid
         }
