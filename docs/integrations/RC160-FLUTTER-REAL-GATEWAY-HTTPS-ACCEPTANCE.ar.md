@@ -24,3 +24,10 @@
 **معيار النجاح**: `RC160_FLUTTER_GATEWAY_EXTERNAL_PASS` من تشغيل GitHub Actions الناجح على SHA دقيق، ونجاح اختبارات Flutter الأساسية وAndroid وiOS من RC49 قبل الدمج.
 
 **المتبقي**: [#82](https://github.com/adnan118/Fable_flutter/issues/82) اختبار موبايل مُصادق عليه بمشروع مُثبت عبر HTTPS، [#33](https://github.com/adnan118/Fable/issues/33) خطر نسخ Bearer ومعرّف التثبيت، [#35](https://github.com/adnan118/Fable/issues/35) Support، S3/DRM، MySQL 8.4، وبقية القدرات الـ17. المرحلة السابعة لا تزال NO-GO.
+
+## دليل التنفيذ الأول — 10 نوفمبر 2026
+
+- في البداية فشل تحليل Dart بسبب استخدام getter غير موجود `HttpOverrides.global`؛ صُحّح إلى `HttpOverrides.current` مع إعادة سياسة الشبكة بعد الاختبار.
+- تعثر تشغيل تمهيدي آخر بسبب انتهاء مهلة `dart:io` لعنوان Render على مشغّل خارجي قبل بدء Flutter. أضفنا فحص `curl` تمهيديًا باستخدام TLS صحيح و`HTTP 200` إلزامي، دون bypass للشهادة أو تتبع للتحويلات.
+- **نجح التشغيل الفعلي** [GitHub Actions #42774659208](https://github.com/adnan118/Fable_flutter/actions/runs/42774659208) على `dccbdeab4d950fda3d5305545c894e5074210053`: `dart analyze` بلا أخطاء؛ `RC160_CURL_TLS_PREFLIGHT_OK`؛ `account.me HTTP 401`؛ `auth.sessions HTTP 401`؛ `RC160_FLUTTER_GATEWAY_EXTERNAL_PASS`؛ و`All tests passed!`.
+- هذه أدلة تشغيل **الخادم الخارجي ومكتبة Flutter** من CI، وليست دليل قبول Flutter Android/iOS مصادقًا عليه أو اختبار User A/B عبر نفس الجهاز. لا نحسب `test-project` عقدًا مثبتًا.
