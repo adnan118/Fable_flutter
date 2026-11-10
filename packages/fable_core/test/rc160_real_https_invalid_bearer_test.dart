@@ -90,7 +90,7 @@ void main() {
       // flutter_test blocks network by default to avoid accidental live tests.
       // This explicitly opt-in test restores the native HTTP stack only for
       // its own duration; ordinary CI tests remain offline and deterministic.
-      final originalOverrides = HttpOverrides.global;
+      final originalOverrides = HttpOverrides.current;
       HttpOverrides.global = null;
       addTearDown(() => HttpOverrides.global = originalOverrides);
 
