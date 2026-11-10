@@ -6,6 +6,7 @@ import 'fable_api.dart';
 import 'fable_contract.dart';
 import 'fable_session.dart';
 import 'fable_dpop_proof_signer.dart';
+import 'fable_native_dpop_proof_signer.dart';
 part 'fable_auth_security.dart';
 part 'fable_auth_contact.dart';
 part 'fable_auth_username.dart';
@@ -24,7 +25,8 @@ class FableAuthGateway implements BackendApiGateway {
     FableDpopProofSigner? dpopProofSigner,
     bool allowHttpForLocalDevelopment = false,
     Dio? client,
-  }) : _baseUri = baseUri, _dpopProofSigner = dpopProofSigner,
+  }) : _baseUri = baseUri,
+       _dpopProofSigner = resolveFableDpopProofSigner(baseUri,contract,dpopProofSigner),
        session = secureSession ?? FableSecureSession(namespace: sessionNamespaceFor(baseUri,contract)) {
     _contract = contract;
     _api = FableApiClient(
@@ -34,7 +36,7 @@ class FableAuthGateway implements BackendApiGateway {
       client: client,
       allowHttpForLocalDevelopment: allowHttpForLocalDevelopment,
       refreshSession: _refreshSession,
-      dpopProofSigner: dpopProofSigner,
+      dpopProofSigner: _dpopProofSigner,
       adapter: FableTransportAdapter(catalog: contract),
     );
   }
