@@ -55,8 +55,8 @@ test('prevent ambient and provider-driven DPoP injection',()=>{
   assert.ok(transport.includes("'proxy-authorization', 'dpop'"));
 });
 test('FableAuthGateway binds injected signer to entire session lifecycle',()=>{
-  assert.ok(auth.includes('dpopProofSigner: dpopProofSigner'));
-  assert.ok(auth.includes('_dpopProofSigner = dpopProofSigner'));
+  assert.ok(auth.includes('dpopProofSigner: _dpopProofSigner'));
+  assert.ok(auth.includes('_dpopProofSigner = resolveFableDpopProofSigner(baseUri,contract,dpopProofSigner)'));
 });
 test('saving a DPoP session without signer fails closed',()=>{
   assert.ok(auth.includes("_dpopProofSigner == null && tokenType == 'DPoP'"));
