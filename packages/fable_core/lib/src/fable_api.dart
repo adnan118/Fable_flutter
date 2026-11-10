@@ -5,6 +5,7 @@ import 'fable_session.dart';
 import 'backend_transport_adapter.dart';
 import 'backend_credential_provider.dart';
 import 'fable_dpop_proof_signer.dart';
+import 'fable_native_dpop_proof_signer.dart';
 import 'fable_retry_policy.dart';
 
 /// A bounded media Range request, restricted to the verified Fable content GET.
@@ -29,10 +30,11 @@ abstract interface class BackendApiGateway {
 
 class UnifiedApiClient implements BackendApiGateway {
   UnifiedApiClient({required Uri baseUri,required this.contract,required this.session,
-    this.refreshSession, this.credentialProvider, this.dpopProofSigner, BackendTransportAdapter? adapter,
+    this.refreshSession, this.credentialProvider, FableDpopProofSigner? dpopProofSigner, BackendTransportAdapter? adapter,
     bool allowHttpForLocalDevelopment=false, Dio? client,
     this.retryPolicy=const FableRetryPolicy()}) :
     _baseUri=baseUri,
+    dpopProofSigner=resolveFableDpopProofSigner(baseUri,contract,dpopProofSigner),
     adapter=adapter ?? (contract.sendsInstallationId
       ? FableTransportAdapter(catalog:contract)
       : ExternalTransportAdapter(catalog:contract,sessionMode:refreshSession==null
@@ -60,7 +62,7 @@ class UnifiedApiClient implements BackendApiGateway {
         ambientCredentials.contains(key.toString().toLowerCase()))) {
       throw ArgumentError('Do not put authentication credentials in Dio BaseOptions');
     }
-    if (dpopProofSigner != null && (contract is! FableContract || this.adapter is! FableTransportAdapter)) {
+    if (this.dpopProofSigner != null && (contract is! FableContract || this.adapter is! FableTransportAdapter)) {
       throw ArgumentError('DPoP signer is restricted to verified Fable contracts');
     }
     if (!identical(this.adapter.catalog, contract)) {
