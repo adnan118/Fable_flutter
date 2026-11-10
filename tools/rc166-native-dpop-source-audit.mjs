@@ -76,6 +76,18 @@ test('RC166 identity and entity can change while hardware signs: abort pre-send'
  assert.ok(after.includes('rejectChangedContext()'));
  assert.ok(after.includes('session.identityRevision != expectedIdentity'));
 });
+test('RC166 iOS app delegate strongly retains the weak-handler native bridge',()=>{
+ assert.ok(delegate.includes('private var nativeDpopBridge: FableDpopNativeBridge?'));
+ assert.ok(delegate.includes('nativeDpopBridge = FableDpopNativeBridge(messenger: registrar.messenger())'));
+ assert.ok(!delegate.includes('_ = FableDpopNativeBridge(messenger:'));
+});
+test('RC166 Dart API is not duplicated or truncated after network retry block',()=>{
+ assert.equal((core.match(/class FableApiClient extends UnifiedApiClient/g)||[]).length,1);
+ assert.equal((core.match(/class FableApiException implements Exception/g)||[]).length,1);
+ assert.equal((core.match(/class UnifiedApiClient implements BackendApiGateway/g)||[]).length,1);
+ assert.ok(!core.includes(').hasMatch(proof)) {\\n'));
+ assert.match(core.trimEnd(),/}\s*$/);
+});
 test('RC166 never uses GitHub Actions as acceptance evidence',()=>{
  assert.ok(!bridge.includes('GitHub Actions'));
 });
