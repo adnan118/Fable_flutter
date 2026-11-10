@@ -390,6 +390,16 @@ class UnifiedApiClient implements BackendApiGateway {
             attemptHeaders['DPoP'] = proof;
           }
         }
+        // Native key signing can wait for hardware. Re-check the user and
+        // entity after it completes, immediately before network dispatch.
+        rejectChangedContext();
+        if (expectedIdentity != null &&
+            session.identityRevision != expectedIdentity) {
+          throw FableApiException(409, 'session_changed_discard_response');
+        }
+        if (cancelToken?.isCancelled ?? false) {
+          throw FableApiException(0, 'request_cancelled');
+        }
         final response = await _dio.request<dynamic>(
           endpoint,
           options: Options(method: op.method, headers: attemptHeaders,
