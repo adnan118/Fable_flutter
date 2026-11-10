@@ -20,6 +20,11 @@ import workmanager_apple
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     // UIScene: register native UI/platform channels with the implicit engine,
     // NOT during application didFinishLaunchingWithOptions.
+    // Native DPoP hardware key must be registered with the UIScene engine,
+    // not with the former launch-time Flutter view controller.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FableNativeDpop") {
+      _ = FableDpopNativeBridge(messenger: registrar.messenger())
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FableProtectedMedia") {
       let bridge = FableProtectedMediaBridge(messenger: registrar.messenger())
       registrar.register(
