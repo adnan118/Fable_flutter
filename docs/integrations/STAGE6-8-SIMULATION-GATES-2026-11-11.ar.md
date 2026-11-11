@@ -11,7 +11,7 @@
 | البوابة | المضمون | الحالة والأدلة |
 |---|---|---|
 | 6.1 | اختيار Fable/Other، عقد المشروع، العزل ومنع ترقية `test-project` | **SIM ACCEPTED — logic/source only:** RC174 PR #89 merged؛ 7/7 pure Node assertions + 8/8 read-only actual Flutter/Dart/native source checks (11 Nov). Full RC174 CLI against complete checkout and `flutter test` not executed |
-| 6.2 | DPoP/Auth sender binding، تجديد Session، replay، refresh، logout | **SIM MODEL ACCEPTED:** RC175 14/14 Node cryptographic/model tests (with 6.3 overlap), mock-only credentials and P-256 keys؛ لا يثبت تشغيل Backend أو Native |
+| 6.2 | DPoP/Auth sender binding، تجديد Session، replay، refresh، logout | **SIM MODEL ACCEPTED:** RC175 16/16 Node cryptographic/model tests (with 6.3 overlap), mock-only credentials and P-256 keys؛ لا يثبت تشغيل Backend أو Native |
 | 6.3 | Permissions/Media ACL، عزل مستخدم A/B، نتائج HTTP المتأخرة | **PARTIAL MODEL:** RC175 has 3 relevant mock scenarios; full source-level media/upload and widget simulation still needed |
 | 6.4 | NONE/LOCAL/DRM + encrypted Media/Range/session expiry | **PENDING**: model + source test; no unsafe DRM fallback |
 | 6.5 | Offline/SQLite/Drift/sync/identity/collision/background retry | **PENDING**: model with injected clock/storage and no actual OS scheduler |
