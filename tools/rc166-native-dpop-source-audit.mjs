@@ -94,8 +94,12 @@ test('RC166 Dart API is not duplicated or truncated after network retry block',(
 });
 test('RC166 hardware signer checks verified public Backend DPoP policy before login or refresh',()=>{
  assert.ok(core.includes("_ensureNativeDpopServerReady()"));
- assert.ok(core.includes("fable.operations['auth.session-policy']"));
- assert.ok(core.includes("op.method != 'GET' || op.path != '/auth/session-policy'"));
+ assert.ok(core.includes("fable.operations.entries.where((entry) =>"));
+ assert.ok(core.includes("entry.key == entry.value.id"));
+ assert.ok(core.includes("entry.value.path == '/auth/session-policy'"));
+ assert.ok(core.includes("sameRouteCount != 1"));
+ assert.ok(core.includes("!entry.value.requiresAuth"));
+ assert.ok(core.includes("entry.value.credentialHeader == null"));
  assert.ok(core.includes("!policy.requiresNativeDpop"));
  assert.ok(core.includes("bootstrap && signer is FableNativeDpopProofSigner"));
 });
