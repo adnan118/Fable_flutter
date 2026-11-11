@@ -51,6 +51,8 @@ export class SimulatedMediaTierServer {
     if(typeof id!=='string'||!id||typeof owner!=='string'||!owner||
       !Buffer.isBuffer(bytes)||bytes.length===0||!safe(generation)||generation===0)
       fail('INVALID_ASSET');
+    const prior=this.assets.get(id);
+    if(prior&&generation<=prior.generation)fail('STALE_ASSET_GENERATION');
     if(tier==='DRM')fail('DRM_LICENSED_PACKAGER_REQUIRED');
     // No automatic fallback from DRM to LOCAL or NONE.
     const key=tier==='LOCAL'?randomBytes(32):null;
