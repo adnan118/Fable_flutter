@@ -1301,17 +1301,18 @@
     "status": "MODEL_ONLY_NO_NATIVE_OR_LIVE_E2E",
     "acceptedGates": [
       "6.1",
-      "6.2"
-    ],
-    "partialGates": [
+      "6.2",
       "6.3"
     ],
+    "partialGates": [],
     "totalGates": 8,
     "rc174PureNodeTests": "7/7 PASS",
     "rc175ProtocolModelTests": "16/16 PASS",
     "rc175SourceAssertions": "8/8 source-only",
     "allFamiliesLiveE2EVerified": false,
-    "sourceNote": "RC175 model is a separate Node test double. This does not mark any real Flutter feature complete.",
-    "tracker": "docs/integrations/STAGE6-8-SIMULATION-GATES-2026-11-11.ar.md"
+    "sourceNote": "RC174/RC175/RC176 tests are source gates and independent Node simulators. No Flutter/Dart/native runtime or live E2E accepted.",
+    "tracker": "docs/integrations/STAGE6-8-SIMULATION-GATES-2026-11-11.ar.md",
+    "rc176MediaRaceTests": "4/4 PASS",
+    "rc176MediaSourceAssertions": "16/16 source-only"
   }
 }
