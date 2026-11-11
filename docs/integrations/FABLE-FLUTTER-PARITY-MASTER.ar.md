@@ -1,3 +1,5 @@
+> **RC179 Flutter — خدمات اختيارية (11 نوفمبر 2026):** نجحت 22/22 محاكاة Node لـ Push وPasskeys وSocial وPayments وSupport. مجموع محاكاة المرحلة السادسة حتى RC179 = 92/92. البوابة 6.6 مكتملة بالمحاكاة فقط، والتقدم 6/8. لم نشغّل Firebase/APNs أو OAuth أو مزود الدفع أو Native Passkeys؛ القدرات الـ17 ليست E2E معتمدة. [التقرير](./RC179-STAGE6-OPTIONAL-PROVIDERS-SIMULATION.ar.md).
+
 > **RC178 — Offline/Sync (11 نوفمبر 2026):** اجتاز نموذج Node المستقل 23/23 اختبارًا للمزامنة المقيدة بعقد، واستمرار Idempotency، وBackoff، وتعارضات ETag، وعزل A/B، والتشغيل الخلفي Best Effort. اكتملت البوابة 6.5 بالمحاكاة، وأصبح التقدم 5/8. **لم نختبر Drift/SQLite أو WorkManager أو BGTaskScheduler فعليًا، ولم تكتمل ميزات Flutter E2E.** [التقرير](./RC178-STAGE6-OFFLINE-SYNC-SIMULATION.ar.md).
 
 > **RC177 — Media Tier/Range (11 نوفمبر 2026):** أنجزنا 20/20 اختبار محاكاة Node مستقل: NONE مع ACL، LOCAL مع AES-256-GCM وRange محدود وسليم، وDRM بلا أي تراجع أمني دون مزوّد مرخّص. البوابة 6.4 مكتملة بالمحاكاة فقط، والتقدم 4/8؛ هذا ليس تشغيل Flutter أو Backend أو Native، ولا اعتماد DRM أو أي ميزة E2E. [التقرير](./RC177-STAGE6-MEDIA-TIER-RANGE-SIMULATION.ar.md).
