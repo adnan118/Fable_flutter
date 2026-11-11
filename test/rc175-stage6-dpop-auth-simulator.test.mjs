@@ -108,3 +108,19 @@ test('RC175 14 HTTP HTU or query-bearing HTU cannot be signed',()=>{
    assert.throws(()=>signSimulatedDpop({device:client.device,method:'GET',htu,
      accessToken:client.session.accessToken}),/INVALID_PROOF_URL/);
 });
+
+
+test('RC175 15 account A session is denied immediately after A to B switch',()=>{
+ const {server,client}=setup(),prior={...client.session};
+ const signed=proof(server,client);
+ client.login('user-B');
+ assert.throws(()=>server.verifyRequest({sessionId:prior.sessionId,method:'GET',
+   path:'/permissions/me',accessToken:prior.accessToken,proof:signed}),
+   /SESSION_UNAUTHORIZED/);
+});
+test('RC175 16 an A refresh scheduled before switch cannot resurrect A after B login',async()=>{
+ const {client}=setup(),pending=client.refresh();
+ client.login('user-B');
+ await assert.rejects(pending,/STALE_IDENTITY/);
+ assert.equal(client.session.userId,'user-B');
+});
