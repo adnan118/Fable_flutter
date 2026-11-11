@@ -135,11 +135,11 @@ export class SimulatedFlutterClient {
  async readMedia(assetId,networkPause=Promise.resolve()){
    const epoch=this.identityRevision;
    const s=this.request('GET','/media/'+assetId+'/content');
-   const bytes=this.server.mediaRead(s,assetId);
+   // A simulated network pause occurs BEFORE server-side authorization/read.
    await networkPause;
-   if(epoch!==this.identityRevision||this.session?.sessionId!==s.id){
-     bytes.fill(0);reject('STALE_IDENTITY');
-   }
-   return bytes;
+   if(epoch!==this.identityRevision||this.session?.sessionId!==s.id)
+     reject('STALE_IDENTITY');
+   if(s.revoked)reject('SESSION_UNAUTHORIZED');
+   return this.server.mediaRead(s,assetId);
  }
 }
