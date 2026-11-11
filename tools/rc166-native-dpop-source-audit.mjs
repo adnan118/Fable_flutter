@@ -103,6 +103,14 @@ test('RC166 hardware signer checks verified public Backend DPoP policy before lo
  assert.ok(core.includes("!policy.requiresNativeDpop"));
  assert.ok(core.includes("bootstrap && signer is FableNativeDpopProofSigner"));
 });
+test('RC166 auth policy is freshly checked on EVERY token exchange',()=>{
+ assert.ok(core.includes('Future<void> _ensureNativeDpopServerReady() =>'));
+ assert.ok(core.includes('_checkNativeDpopServerReady();'));
+ assert.ok(!core.includes('_nativeDpopReady'));
+ const cases=read('packages/fable_core/test/rc166_native_dpop_method_channel_test.dart');
+ assert.ok(cases.includes('server flips DPoP from required to off'));
+ assert.ok(cases.includes('expect(checks,2);expect(logins,1);expect(signs,1);'));
+});
 test('RC166 server policy probe is public and avoids self-recursion',()=>{
  assert.ok(core.includes("await _send(op,'/auth/session-policy'"));
  assert.ok(core.includes("'auth.login': '/auth/login'"));
