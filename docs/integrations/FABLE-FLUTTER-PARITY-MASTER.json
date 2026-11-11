@@ -1302,7 +1302,8 @@
     "acceptedGates": [
       "6.1",
       "6.2",
-      "6.3"
+      "6.3",
+      "6.4"
     ],
     "partialGates": [],
     "totalGates": 8,
@@ -1310,9 +1311,10 @@
     "rc175ProtocolModelTests": "16/16 PASS",
     "rc175SourceAssertions": "8/8 source-only",
     "allFamiliesLiveE2EVerified": false,
-    "sourceNote": "RC174/RC175/RC176 tests are source gates and independent Node simulators. No Flutter/Dart/native runtime or live E2E accepted.",
+    "sourceNote": "All RC174-177 source gates and Node test models are NOT Flutter/native/live E2E; DRM remains unavailable without licensed integration.",
     "tracker": "docs/integrations/STAGE6-8-SIMULATION-GATES-2026-11-11.ar.md",
     "rc176MediaRaceTests": "4/4 PASS",
-    "rc176MediaSourceAssertions": "16/16 source-only"
+    "rc176MediaSourceAssertions": "16/16 source-only",
+    "rc177TierRangeTests": "20/20 PASS (local Node cryptographic model only)"
   }
 }
