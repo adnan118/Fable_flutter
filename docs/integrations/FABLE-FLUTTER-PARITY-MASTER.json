@@ -1308,7 +1308,7 @@
     ],
     "totalGates": 8,
     "rc174PureNodeTests": "7/7 PASS",
-    "rc175ProtocolModelTests": "14/14 PASS",
+    "rc175ProtocolModelTests": "16/16 PASS",
     "rc175SourceAssertions": "8/8 source-only",
     "allFamiliesLiveE2EVerified": false,
     "sourceNote": "RC175 model is a separate Node test double. This does not mark any real Flutter feature complete.",
