@@ -65,7 +65,7 @@ class ExternalTransportAdapter implements BackendTransportAdapter {
     const reserved = <String>{
       'authorization', 'cookie', 'set-cookie', 'host', 'origin', 'referer',
       'x-installation-id', 'x-forwarded-for', 'x-forwarded-host', 'forwarded',
-      'proxy-authorization', 'content-length', 'transfer-encoding', 'connection',
+      'proxy-authorization', 'dpop', 'content-length', 'transfer-encoding', 'connection',
       'idempotency-key', 'x-csrf-token', 'content-type',
     };
     for (final entry in headers.entries) {

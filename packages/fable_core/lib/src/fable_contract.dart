@@ -26,18 +26,33 @@ class FableOperation {
 /// GET /auth/session-policy is the authoritative deployed runtime setting.
 class FableSessionPolicy {
   const FableSessionPolicy({required this.mode,required this.maxActive,
-    required this.overflow,this.onePerInstallation,this.runtimeEndpoint});
+    required this.overflow,this.onePerInstallation,this.runtimeEndpoint,
+    this.dpopFlutterMode});
   final String mode;
   final int maxActive;
   final String overflow;
   final bool? onePerInstallation;
   final String? runtimeEndpoint;
+  /// Null denotes a legacy Backend without an authoritative DPoP policy.
+  /// It MUST NOT be interpreted as 'required' or as proof of support.
+  final String? dpopFlutterMode;
+  bool get requiresNativeDpop => dpopFlutterMode == 'required';
 
   bool get allowsMultipleSessions => mode=='multi' && (maxActive==0 || maxActive>1);
 
   factory FableSessionPolicy.fromMap(Map<String,dynamic> source) {
     final mode=source['mode'],max=source['maxActive'],overflow=source['overflow'];
     final installation=source['onePerInstallation'],endpoint=source['runtimeEndpoint'];
+    final dpop=source['dpop'];
+    String? dpopMode;
+    if(dpop!=null){
+      if(dpop is! Map || dpop['flutter'] is! String ||
+          !const {'off','required'}.contains(dpop['flutter']) ||
+          dpop['proofType']!='dpop+jwt' || dpop['algorithm']!='ES256') {
+        throw const FormatException('Invalid DPoP session policy contract');
+      }
+      dpopMode=dpop['flutter'] as String;
+    }
     if(mode is! String || !const {'single','multi'}.contains(mode) ||
        max is! int || max<0 || max>100 ||
        (mode=='single' && max!=1) ||
@@ -47,7 +62,8 @@ class FableSessionPolicy {
       throw const FormatException('Invalid backend session policy contract');
     }
     return FableSessionPolicy(mode:mode,maxActive:max,overflow:overflow,
-      onePerInstallation:installation as bool?,runtimeEndpoint:endpoint as String?);
+      onePerInstallation:installation as bool?,runtimeEndpoint:endpoint as String?,
+      dpopFlutterMode:dpopMode);
   }
 }
 
