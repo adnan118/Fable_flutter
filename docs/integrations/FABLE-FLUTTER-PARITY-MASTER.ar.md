@@ -1,3 +1,5 @@
+> **RC180 Flutter — Android/iOS boundaries (11 نوفمبر 2026):** اجتازت 16/16 محاكاة Node لفشل MethodChannel وعدم توفر عتاد DPoP والتبديل بين الحسابات وحدود تشغيل الأعمال الخلفية. مجموع المحاكاة حتى RC180 = 108/108، والتقدم 7/8. لم تُنفَّذ تطبيقات Android أو iOS أو توقيعات أجهزة حقيقية. [التقرير](./RC180-STAGE6-NATIVE-BOUNDARY-SIMULATION.ar.md).
+
 > **RC179 Flutter — خدمات اختيارية (11 نوفمبر 2026):** نجحت 22/22 محاكاة Node لـ Push وPasskeys وSocial وPayments وSupport. مجموع محاكاة المرحلة السادسة حتى RC179 = 92/92. البوابة 6.6 مكتملة بالمحاكاة فقط، والتقدم 6/8. لم نشغّل Firebase/APNs أو OAuth أو مزود الدفع أو Native Passkeys؛ القدرات الـ17 ليست E2E معتمدة. [التقرير](./RC179-STAGE6-OPTIONAL-PROVIDERS-SIMULATION.ar.md).
 
 > **RC178 — Offline/Sync (11 نوفمبر 2026):** اجتاز نموذج Node المستقل 23/23 اختبارًا للمزامنة المقيدة بعقد، واستمرار Idempotency، وBackoff، وتعارضات ETag، وعزل A/B، والتشغيل الخلفي Best Effort. اكتملت البوابة 6.5 بالمحاكاة، وأصبح التقدم 5/8. **لم نختبر Drift/SQLite أو WorkManager أو BGTaskScheduler فعليًا، ولم تكتمل ميزات Flutter E2E.** [التقرير](./RC178-STAGE6-OFFLINE-SYNC-SIMULATION.ar.md).
