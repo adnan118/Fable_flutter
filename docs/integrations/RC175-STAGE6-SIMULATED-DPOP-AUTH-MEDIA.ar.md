@@ -5,12 +5,12 @@
 ## What was actually executed
 
 - Local Node.js 22.16.0 on a disposable filesystem, no Flutter SDK, Android SDK, Xcode, production API, actual mobile keys, real user accounts, secrets, paid services or GitHub Actions.
-- `node --test test/rc175-stage6-dpop-auth-simulator.test.mjs` model test suite: **14/14 PASS, 0 FAIL** (initial URL canonicalization bug found during development and corrected before acceptance).
-- Combined with RC174 pure Node suite: **21/21 PASS, 0 FAIL** locally; they exercise independently authored simulation logic, **not the actual Flutter SDK runtime**.
+- `node --test test/rc175-stage6-dpop-auth-simulator.test.mjs` model test suite: **16/16 PASS, 0 FAIL** (initial URL canonicalization bug found during development and corrected before acceptance).
+- Combined with RC174 pure Node suite: **23/23 PASS, 0 FAIL** locally; they exercise independently authored simulation logic, **not the actual Flutter SDK runtime**.
 - Separately checked eight explicit DPoP/native/transport assertions in existing current GitHub Flutter source; **8/8 source checks true**, without executing Kotlin, Swift or Dart.
 - Exact model source lives at `tools/rc175-stage6-dpop-auth-simulator.mjs`; test file at `test/rc175-stage6-dpop-auth-simulator.test.mjs`. The files have to be rerun on the merged repository to obtain full-repository execution evidence.
 
-## 14 cases
+## 16 cases
 
 1. Real Node P-256 ES256 (P1363) signing and verification of a simulated resource proof.
 2. A copied valid access token/installation label cannot replace the sender's P-256 private key.
@@ -26,6 +26,8 @@
 12. In-flight Media bytes from A are discarded after A→B switch.
 13. Public JWK header contains no private EC scalar.
 14. Non-HTTPS and query-bearing proof URLs are rejected.
+15. Prior user A session is revoked when the same simulated client logs into B.
+16. In-flight refresh from A cannot resurrect A after switching to B.
 
 ## Exact scope boundary
 
