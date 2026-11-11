@@ -1304,7 +1304,8 @@
       "6.2",
       "6.3",
       "6.4",
-      "6.5"
+      "6.5",
+      "6.6"
     ],
     "partialGates": [],
     "totalGates": 8,
@@ -1317,6 +1318,8 @@
     "rc176MediaRaceTests": "4/4 PASS",
     "rc176MediaSourceAssertions": "16/16 source-only",
     "rc177TierRangeTests": "20/20 PASS (local Node cryptographic model only)",
-    "rc178OfflineSyncTests": "23/23 PASS (local in-memory Node model)"
+    "rc178OfflineSyncTests": "23/23 PASS (local in-memory Node model)",
+    "rc179ProviderTests": "22/22 PASS (exact Git blob SHA matched local Node simulation)",
+    "combinedNodeModelTests": "92/92 PASS (RC174-RC179; no native/production E2E)"
   }
 }
