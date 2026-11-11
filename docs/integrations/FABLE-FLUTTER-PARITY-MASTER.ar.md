@@ -1,3 +1,5 @@
+> **RC181 Flutter — ختام المرحلة السادسة بالمحاكاة (11 نوفمبر 2026):** اكتملت البوابات الثماني تطويريًا بالمحاكاة، بعد نجاح 126/126 اختبار Node (بينها 18/18 تكامل نموذج RC181). هذا **لا يساوي** نجاح Flutter الحقيقي أو تشغيل الأجهزة أو قبول الإنتاج. تبقى ميزات Flutter الـ17 دون `complete` أو `liveE2EVerified`، وStage7 حالة `NO-GO`. [تقرير الإغلاق](./RC181-STAGE6-8-GATES-SIMULATION-ACCEPTANCE.ar.md).
+
 > **RC180 Flutter — Android/iOS boundaries (11 نوفمبر 2026):** اجتازت 16/16 محاكاة Node لفشل MethodChannel وعدم توفر عتاد DPoP والتبديل بين الحسابات وحدود تشغيل الأعمال الخلفية. مجموع المحاكاة حتى RC180 = 108/108، والتقدم 7/8. لم تُنفَّذ تطبيقات Android أو iOS أو توقيعات أجهزة حقيقية. [التقرير](./RC180-STAGE6-NATIVE-BOUNDARY-SIMULATION.ar.md).
 
 > **RC179 Flutter — خدمات اختيارية (11 نوفمبر 2026):** نجحت 22/22 محاكاة Node لـ Push وPasskeys وSocial وPayments وSupport. مجموع محاكاة المرحلة السادسة حتى RC179 = 92/92. البوابة 6.6 مكتملة بالمحاكاة فقط، والتقدم 6/8. لم نشغّل Firebase/APNs أو OAuth أو مزود الدفع أو Native Passkeys؛ القدرات الـ17 ليست E2E معتمدة. [التقرير](./RC179-STAGE6-OPTIONAL-PROVIDERS-SIMULATION.ar.md).
