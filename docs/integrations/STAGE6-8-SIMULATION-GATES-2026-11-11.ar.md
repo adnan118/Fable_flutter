@@ -14,12 +14,12 @@
 | 6.2 | DPoP/Auth sender binding، تجديد Session، replay، refresh، logout | **SIM MODEL ACCEPTED:** RC175 16/16 Node cryptographic/model tests (with 6.3 overlap), mock-only credentials and P-256 keys؛ لا يثبت تشغيل Backend أو Native |
 | 6.3 | Permissions/Media ACL، عزل مستخدم A/B، نتائج HTTP المتأخرة | **SIM ACCEPTED — model/source only:** RC175 ownership and session tests + RC176 4/4 pending-request revocation/ABA tests and 16/16 source invariants checked through GitHub; full Dart/widget execution not claimed |
 | 6.4 | NONE/LOCAL/DRM + encrypted Media/Range/session expiry | **SIM ACCEPTED — model only:** RC177 20/20 executed Node AES-256-GCM, authenticated bounded Range, expired sessions and strict DRM no-fallback; no Flutter/native/backend E2E |
-| 6.5 | Offline/SQLite/Drift/sync/identity/collision/background retry | **PENDING**: model with injected clock/storage and no actual OS scheduler |
+| 6.5 | Offline/SQLite/Drift/sync/identity/collision/background retry | **SIM ACCEPTED — model only:** RC178 23/23 Node cache/queue/ACK/version/idempotency/identity/single-flight/backoff and OS-best-effort mock tests; real Drift/WorkManager/BGTaskScheduler unexecuted |
 | 6.6 | Selected providers (Push, Passkeys, social, payments, support) | **PENDING**: safe adapters/provider simulations only where verified contracts exist; unsupported operations remain blocked |
 | 6.7 | Android/iOS platform boundaries and hardware-dependency failure modes | **PENDING**: simulate MethodChannel and missing-hardware failure; do NOT report native compiled/device PASS |
 | 6.8 | Wizard/generator 17-family selection regression and integrated acceptance | **PENDING**: deterministic combined tests, status ledger and release NO-GO |
 
-**Progress: 4/8 development-simulation gates accepted; 6.5–6.8 pending.** These are acceptance of *specified simulations* only. A mobile feature remains `complete:false` and `liveE2EVerified:false` until independently verified; no test runner should upgrade those flags from source strings.
+**Progress: 5/8 development-simulation gates accepted; 6.6–6.8 pending.** These are acceptance of *specified simulations* only. A mobile feature remains `complete:false` and `liveE2EVerified:false` until independently verified; no test runner should upgrade those flags from source strings.
 
 ## Invariants
 
@@ -38,3 +38,5 @@
 - [RC176 Media response-race/source simulation](./RC176-STAGE6-MEDIA-RACE-SIMULATION.ar.md)
 
 - [RC177 Tier/Range crypto simulation](./RC177-STAGE6-MEDIA-TIER-RANGE-SIMULATION.ar.md)
+
+- [RC178 Offline/Sync model simulation](./RC178-STAGE6-OFFLINE-SYNC-SIMULATION.ar.md)
