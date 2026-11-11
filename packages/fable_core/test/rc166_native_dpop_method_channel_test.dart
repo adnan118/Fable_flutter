@@ -166,7 +166,7 @@ void main() {
     addTearDown(client.dispose);
     await client.request('auth.login',authorized:false,body:<String,dynamic>{});
     await client.request('auth.login',authorized:false,body:<String,dynamic>{});
-    expect(policies,1);expect(logins,2);expect(signs,2);
+    expect(policies,2);expect(logins,2);expect(signs,2);
   });
 
   test('RC166 pinned native login fails before proof if server DPoP is off',() async {
@@ -268,6 +268,42 @@ void main() {
       throwsA(isA<FableApiException>()));
     expect(requests,0);
     expect(signatures,0);
+  });
+
+  test('RC166 server flips DPoP from required to off: next login fails closed',() async {
+    var checks=0,logins=0,signs=0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_native,(call) async {
+      signs++;return _proof();
+    });
+    final dio=Dio();
+    dio.interceptors.add(InterceptorsWrapper(onRequest:(options,handler) {
+      if(options.path=='/auth/session-policy') {
+        checks++;
+        return handler.resolve(Response<dynamic>(
+          requestOptions:options,statusCode:200,data:<String,dynamic>{
+            'mode':'multi','maxActive':5,'overflow':'revoke-oldest',
+            'onePerInstallation':true,
+            'dpop':{'flutter':checks==1?'required':'off',
+              'proofType':'dpop+jwt','algorithm':'ES256'},
+          }));
+      }
+      if(options.path=='/auth/login') {
+        logins++;
+        return handler.resolve(Response<dynamic>(
+          requestOptions:options,statusCode:200,data:<String,dynamic>{}));
+      }
+      throw StateError('Unexpected network operation');
+    }));
+    final client=FableApiClient(baseUri:Uri.parse('https://api.example.test'),
+      contract:_policyCatalog,session:_OfflineSession(),
+      dpopProofSigner:FableNativeDpopProofSigner(
+        serverOrigin:Uri.parse('https://api.example.test')),client:dio);
+    addTearDown(client.dispose);
+    await client.request('auth.login',authorized:false,body:<String,dynamic>{});
+    await expectLater(client.request('auth.login',authorized:false,
+        body:<String,dynamic>{}),throwsA(isA<FableApiException>()));
+    expect(checks,2);expect(logins,1);expect(signs,1);
   });
 
 }
