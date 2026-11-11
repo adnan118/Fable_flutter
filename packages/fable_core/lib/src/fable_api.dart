@@ -88,13 +88,12 @@ class UnifiedApiClient implements BackendApiGateway {
   final FableDpopProofSigner? dpopProofSigner;
   Future<bool>? _refreshing;
   int? _refreshingIdentity;
-  Future<void>? _nativeDpopReady;
-
-  // A pinned native signer must never send credentials to a Backend that has
-  // not confirmed the matching RFC9449 mode at its verified public endpoint.
-  // This is a DPoP-enabled-only capability probe, not a generic guessed URL.
+  // Never cache a security policy across enroll/refresh requests. If the
+  // server is rolled back, disabled or misconfigured after a prior login,
+  // every new token exchange must fail closed rather than trust stale state.
+  // This probe contains no password or token and cannot recurse into DPoP.
   Future<void> _ensureNativeDpopServerReady() =>
-      _nativeDpopReady ??= _checkNativeDpopServerReady();
+      _checkNativeDpopServerReady();
 
   Future<void> _checkNativeDpopServerReady() async {
     final fable = contract;
