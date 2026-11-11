@@ -17,6 +17,6 @@
     "wizard:scope:generate": "node tools/generate-managed-scoped-operations.mjs",
     "wizard:architecture:check": "node tools/enforce-feature-architecture-rc115.mjs",
     "wizard:feature:generate": "node tools/generate-typed-feature-rc116.mjs",
-    "test:stage6:simulation": "node --test test/rc174-stage6-source-preflight.test.mjs test/rc175-stage6-dpop-auth-simulator.test.mjs test/rc176-stage6-media-race-simulation.test.mjs test/rc176-stage6-media-source-contract-audit.test.mjs test/rc177-stage6-media-tier-simulator.test.mjs"
+    "test:stage6:simulation": "node --test test/rc174-stage6-source-preflight.test.mjs test/rc175-stage6-dpop-auth-simulator.test.mjs test/rc176-stage6-media-race-simulation.test.mjs test/rc176-stage6-media-source-contract-audit.test.mjs test/rc177-stage6-media-tier-simulator.test.mjs test/rc178-stage6-offline-sync-simulator.test.mjs"
   }
 }
