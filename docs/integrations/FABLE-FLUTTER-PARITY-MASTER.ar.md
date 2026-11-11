@@ -1,3 +1,5 @@
+> **RC178 — Offline/Sync (11 نوفمبر 2026):** اجتاز نموذج Node المستقل 23/23 اختبارًا للمزامنة المقيدة بعقد، واستمرار Idempotency، وBackoff، وتعارضات ETag، وعزل A/B، والتشغيل الخلفي Best Effort. اكتملت البوابة 6.5 بالمحاكاة، وأصبح التقدم 5/8. **لم نختبر Drift/SQLite أو WorkManager أو BGTaskScheduler فعليًا، ولم تكتمل ميزات Flutter E2E.** [التقرير](./RC178-STAGE6-OFFLINE-SYNC-SIMULATION.ar.md).
+
 > **RC177 — Media Tier/Range (11 نوفمبر 2026):** أنجزنا 20/20 اختبار محاكاة Node مستقل: NONE مع ACL، LOCAL مع AES-256-GCM وRange محدود وسليم، وDRM بلا أي تراجع أمني دون مزوّد مرخّص. البوابة 6.4 مكتملة بالمحاكاة فقط، والتقدم 4/8؛ هذا ليس تشغيل Flutter أو Backend أو Native، ولا اعتماد DRM أو أي ميزة E2E. [التقرير](./RC177-STAGE6-MEDIA-TIER-RANGE-SIMULATION.ar.md).
 
 > **RC176 — حماية السباق في Media (11 نوفمبر 2026):** نجحت 4/4 محاكاة لسحب الصلاحيات أثناء الانتظار، Logout، تبديل A→B→A، وإبطال الجلسة، مع تحقق 16/16 شرط مصدر فعلي عبر GitHub. أصبح تقدم المرحلة السادسة **3/8 محاكاة تطويرية**؛ لم يُشغّل Flutter SDK أو جهاز فعلي، وحالات الميزات الـ17 لا تزال غير معتمدة E2E. [التقرير](./RC176-STAGE6-MEDIA-RACE-SIMULATION.ar.md).
