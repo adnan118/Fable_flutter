@@ -113,3 +113,10 @@ test('19 metadata requires matching identity and current access policy',()=>{
  s.allow('user-A',false);
  assert.throws(()=>s.metadata('asset-A','user-A'),/MEDIA_FORBIDDEN/);
 });
+
+test('20 replacing an asset without advancing the generation is blocked',async()=>{
+ const {s,read,bytes}=fixture();
+ assert.throws(()=>s.upload({id:'asset-A',owner:'user-A',bytes:Buffer.from('changed'),tier:'LOCAL',generation:1}),
+   /STALE_ASSET_GENERATION/);
+ assert.deepEqual(await read(0,29),bytes.subarray(0,30));
+});
