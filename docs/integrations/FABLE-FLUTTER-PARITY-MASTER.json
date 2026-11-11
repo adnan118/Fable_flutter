@@ -1298,7 +1298,7 @@
   "latestSlice": "RC97 Auth source-closure: all 40 operations assigned to owners and source-evidenced: 31 Flutter Mobile, 7 separate Web cookie SDK, 2 separate Admin password-policy SDK. 0 real-provider/DB E2E accepted, 0/17 feature families production accepted. RC96 P2 managed invitations source and Flutter CI passed; Backend RC66 main unchanged. Backend Actions gate remains blocked, so Web/Admin mock tests run in Flutter CI mirror. RC106 source-only P2 scoped transport guard: recheck managed selection before HTTP dispatch/retries and after response; delayed 403 for old entity never clears newer selection. Simulated Dio tests; P6 real DB and device E2E still pending. RC107: pinned Fable-only managed operation Dart constants generated from reviewed contract with preview/apply and safe no-overwrite; duplicate local disable flags handled, verified via CI simulation. RC106 scoped transport guards preserved. Backend/device live E2E and per-feature DTO/Repository not accepted. RC108 P3 Notifications: source-only identity epoch pin for push/inbox navigation, old-login tap rejected across async Auth and route dispatch; simulated Flutter + source tests. Real FCM/APNs/backend/device E2E pending P6. RC109 P3 Push: session epoch + async stage checks, serialized native deletion/registration, same-session consent fence, optional platform seam for deterministic mock races. FCM/APNs and DB/device live E2E pending. RC110 P3 Media: Fable/Other verified Auth epoch fence for prepare/status/chunk/R2 partAck/complete/abort, cancel checks and deterministic mock race tests; live Backend/DB/R2/device E2E pending. RC111 P3 Media: upload widget identity events, source-rebind and generation guards against stale restore/progress/checkpoint/completion; widget mock tests. Reviewed Fable RC66 playback/refresh/end paths but did not invent client mappings. Live P6 pending. RC112 P3 Protected Media: source-pinned Fable playback/refresh/end with auth-epoch token revocation and expiry validation, no guessed operation IDs and no Other Backend adapter. Native player/DRM and P6 live E2E remain pending. RC113 P3 Media: verified signed content GET with Fable Bearer plus bounded 206 byte range, no query token, no-store, cancel identity/refresh/end. Android/iOS native player and DRM + P6 live E2E pending. RC114: benchmark target independent of legacy Flutter code; additive pure Dart typed Media port/usecase, Fable-only data adapter, presentation typed controller and negative architecture graph CI. Existing media legacy paths + native player + P6 live E2E pending. RC115: new packages now fail CI and feature-sync apply unless they follow typed Domain/Application/Data/Presentation with an architecture marker. Fixed old-package legacy baseline remains explicitly uncertified; typed codegen, upload UI migration, native player and P6 E2E pending. RC116: independently project-pinned Fable-only multi-GET generator produces flat typed entity/DTO/domain port/usecase/data adapter/presentation controller, tests, and 4-layer marker. Unsupported schemas, Other Backend and mutations fail closed. Manual app DI/navigation and P6 live E2E remain pending. RC117 Track B: media session-bound source invalidation, account/refresh/end/close events and proactive UI byte purge; Track A native player and P6 still open.",
   "stage6DevelopmentSimulation": {
     "date": "2026-11-11",
-    "status": "MODEL_ONLY_NO_NATIVE_OR_LIVE_E2E",
+    "status": "DEVELOPMENT_SIMULATION_ACCEPTED_8_OF_8__NO_REAL_FLUTTER_E2E",
     "acceptedGates": [
       "6.1",
       "6.2",
@@ -1306,7 +1306,8 @@
       "6.4",
       "6.5",
       "6.6",
-      "6.7"
+      "6.7",
+      "6.8"
     ],
     "partialGates": [],
     "totalGates": 8,
@@ -1314,14 +1315,15 @@
     "rc175ProtocolModelTests": "16/16 PASS",
     "rc175SourceAssertions": "8/8 source-only",
     "allFamiliesLiveE2EVerified": false,
-    "sourceNote": "Simulated tests are isolated Node models; no executed Dart/Flutter/Drift/Android/iOS or real E2E. Backend contract/permissions remain authority.",
+    "sourceNote": "8/8 development-simulation acceptance is NOT native/mobile/live E2E approval. Full Flutter checkout CLI, SDK builds, project-specific contract, external providers and Stage7 go-live remain unverified.",
     "tracker": "docs/integrations/STAGE6-8-SIMULATION-GATES-2026-11-11.ar.md",
     "rc176MediaRaceTests": "4/4 PASS",
     "rc176MediaSourceAssertions": "16/16 source-only",
     "rc177TierRangeTests": "20/20 PASS (local Node cryptographic model only)",
     "rc178OfflineSyncTests": "23/23 PASS (local in-memory Node model)",
     "rc179ProviderTests": "22/22 PASS (exact Git blob SHA matched local Node simulation)",
-    "combinedNodeModelTests": "108/108 PASS RC174-RC180 (no native binaries or live E2E)",
-    "rc180NativeBoundaryTests": "16/16 PASS (fake MethodChannel/OS scheduler in Node)"
+    "combinedNodeModelTests": "126/126 PASS (RC174-RC181, temp Node workspace)",
+    "rc180NativeBoundaryTests": "16/16 PASS (fake MethodChannel/OS scheduler in Node)",
+    "rc181IntegratedTests": "18/18 PASS (local model composition; exact Git blob matched)"
   }
 }
