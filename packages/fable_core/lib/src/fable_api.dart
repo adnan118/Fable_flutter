@@ -113,7 +113,7 @@ class UnifiedApiClient implements BackendApiGateway {
     final sameRouteCount = fable.operations.values.where((op) =>
         op.method == 'GET' && op.path == '/auth/session-policy').length;
     if (matches.length != 1 || sameRouteCount != 1 ||
-        matches.single.value.contractHash != fable.contractHash) {
+        matches.single.value.contractHash.isEmpty) {
       throw FableApiException(412,'dpop_session_policy_operation_missing');
     }
     final op = matches.single.value;
