@@ -73,36 +73,56 @@ final class FableNativeDpopProofSigner implements FableDpopProofSigner {
 }
 
 /**
- * RC166 opt-in is intentionally compile-time pinned to BOTH a real backend
- * contract hash and its HTTPS origin. This prevents fixture imports or an
- * Other Backend from silently enabling sender-constrained authentication.
+ * RC188: Fable mobile DPoP is enabled by default; no paid provider or
+ * external API key is needed. The native P-256 private key stays hardware-held.
  *
- * Production rollout must be coordinated with Backend RC165, real native
- * private key availability, server schema migration and forced re-login.
+ * A release build MUST have independently pinned the exact Fable contract SHA
+ * and HTTPS Backend origin (supplied by the trusted project build workflow).
+ * Missing, stale or fixture pins FAIL CLOSED: never downgrade to Bearer.
+ * Only non-release development/fixture tests may run without the signer.
+ * Other Backend and browser-only clients are not silently enrolled.
  */
 FableDpopProofSigner? resolveFableDpopProofSigner(
   Uri baseUri,
   OperationCatalog catalog,
   FableDpopProofSigner? explicitlyProvided,
 ) {
-  if (explicitlyProvided != null) return explicitlyProvided;
+  // Preserve explicit test ports and the existing external-backend rejection
+  // in UnifiedApiClient; release Fable must still pass its pin validation.
+  if (explicitlyProvided != null && (catalog is! FableContract || !kReleaseMode)) {
+    return explicitlyProvided;
+  }
+  if (catalog is! FableContract || kIsWeb) return null;
+
   const enabled = bool.fromEnvironment('FABLE_DPOP_NATIVE_ENABLED',
-    defaultValue: false);
-  if (!enabled || catalog is! FableContract) return null;
+    defaultValue: true);
+  if (!enabled) {
+    if (kReleaseMode) {
+      throw StateError('Fable DPoP cannot be disabled in a release build');
+    }
+    return null; // explicit test/dev exception, never release
+  }
 
   const expectedHash = String.fromEnvironment(
     'FABLE_DPOP_BACKEND_CONTRACT_HASH');
   const expectedOrigin = String.fromEnvironment(
     'FABLE_DPOP_BACKEND_ORIGIN');
-  if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(expectedHash) ||
-      expectedHash != catalog.contractHash ||
-      catalog.selectionMode != 'explicit' ||
-      !catalog.isFeatureAvailable('auth') ||
-      catalog.projectName == 'fable-test' ||
-      catalog.projectName == 'test-project' ||
-      expectedOrigin.isEmpty ||
-      baseUri.origin != expectedOrigin) {
-    throw StateError('DPoP requires a verified non-fixture Fable project pin');
+  final correctlyPinned =
+      RegExp(r'^[a-f0-9]{64}).hasMatch(expectedHash) &&
+      expectedHash == catalog.contractHash &&
+      catalog.selectionMode == 'explicit' &&
+      catalog.isFeatureAvailable('auth') &&
+      catalog.projectName != 'fable-test' &&
+      catalog.projectName != 'test-project' &&
+      expectedOrigin.isNotEmpty &&
+      baseUri.origin == expectedOrigin &&
+      baseUri.scheme == 'https';
+
+  if (!correctlyPinned) {
+    if (kReleaseMode) {
+      throw StateError('DPoP requires a verified non-fixture Fable project pin');
+    }
+    return null; // unpinned development fixture; do not sign for an unknown host
   }
-  return FableNativeDpopProofSigner(serverOrigin: baseUri);
+  return explicitlyProvided ?? FableNativeDpopProofSigner(serverOrigin: baseUri);
 }
