@@ -101,6 +101,8 @@ export class SimulatedFlutterClient {
    this.session=null;this.refreshFlight=null;
  }
  login(userId){
+   // Switch A→B revokes the prior simulated session before exposing B's credentials.
+   if(this.session)this.server.revoke(this.session.sessionId);
    this.identityRevision++;
    this.session=this.server.issue({userId,device:this.device});return this.session;
  }
