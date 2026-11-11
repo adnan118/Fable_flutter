@@ -17,15 +17,16 @@ class _OfflineSession extends FableSecureSession {
   @override Future<String> installationId() async =>
       'device-fixture-stable-but-not-credential';
 }
+const _testContractHash='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const _policyCatalog=FableContract(
-  contractHash:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  contractHash:_testContractHash,
   projectName:'rc166-only-test-catalog',
   selectionMode:'explicit',
   featureIds:<String>{'auth'},
   operations:<String,FableOperation>{
-    'auth.session-policy':FableOperation('auth.session-policy','GET',
-      '/auth/session-policy','hash',requiresAuth:false,enforceAuth:true),
-    'auth.login':FableOperation('auth.login','POST','/auth/login','hash',
+    'AuthController_sessionPolicy':FableOperation('AuthController_sessionPolicy','GET',
+      '/auth/session-policy',_testContractHash,requiresAuth:false,enforceAuth:true),
+    'auth.login':FableOperation('auth.login','POST','/auth/login',_testContractHash,
       requiresAuth:false,enforceAuth:true),
   },
 );
