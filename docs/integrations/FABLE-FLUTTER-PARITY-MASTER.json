@@ -1305,7 +1305,8 @@
       "6.3",
       "6.4",
       "6.5",
-      "6.6"
+      "6.6",
+      "6.7"
     ],
     "partialGates": [],
     "totalGates": 8,
@@ -1320,6 +1321,7 @@
     "rc177TierRangeTests": "20/20 PASS (local Node cryptographic model only)",
     "rc178OfflineSyncTests": "23/23 PASS (local in-memory Node model)",
     "rc179ProviderTests": "22/22 PASS (exact Git blob SHA matched local Node simulation)",
-    "combinedNodeModelTests": "92/92 PASS (RC174-RC179; no native/production E2E)"
+    "combinedNodeModelTests": "108/108 PASS RC174-RC180 (no native binaries or live E2E)",
+    "rc180NativeBoundaryTests": "16/16 PASS (fake MethodChannel/OS scheduler in Node)"
   }
 }

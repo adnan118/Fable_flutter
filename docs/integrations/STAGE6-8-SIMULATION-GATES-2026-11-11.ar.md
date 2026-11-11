@@ -16,10 +16,10 @@
 | 6.4 | NONE/LOCAL/DRM + encrypted Media/Range/session expiry | **SIM ACCEPTED — model only:** RC177 20/20 executed Node AES-256-GCM, authenticated bounded Range, expired sessions and strict DRM no-fallback; no Flutter/native/backend E2E |
 | 6.5 | Offline/SQLite/Drift/sync/identity/collision/background retry | **SIM ACCEPTED — model only:** RC178 23/23 Node cache/queue/ACK/version/idempotency/identity/single-flight/backoff and OS-best-effort mock tests; real Drift/WorkManager/BGTaskScheduler unexecuted |
 | 6.6 | Selected providers (Push, Passkeys, social, payments, support) | **SIM ACCEPTED — model only:** Flutter RC179 22/22 Node synthetic provider cases (consent, RP/challenge, nonce, backend financial settlement, support unknown outcome); no Firebase/APNs/Passkey/OAuth/payment SDK live execution |
-| 6.7 | Android/iOS platform boundaries and hardware-dependency failure modes | **PENDING**: simulate MethodChannel and missing-hardware failure; do NOT report native compiled/device PASS |
+| 6.7 | Android/iOS platform boundaries and hardware-dependency failure modes | **SIM ACCEPTED — model only:** RC180 16/16 local Node fake MethodChannel/OS scheduler fail-closed cases; byte-exact Git blob; real native signatures/builds not executed |
 | 6.8 | Wizard/generator 17-family selection regression and integrated acceptance | **PENDING**: deterministic combined tests, status ledger and release NO-GO |
 
-**Progress: 6/8 development-simulation gates accepted; 6.7–6.8 pending.** These are acceptance of *specified simulations* only. A mobile feature remains `complete:false` and `liveE2EVerified:false` until independently verified; no test runner should upgrade those flags from source strings.
+**Progress: 7/8 development-simulation gates accepted; 6.8 pending.** These are acceptance of *specified simulations* only. A mobile feature remains `complete:false` and `liveE2EVerified:false` until independently verified; no test runner should upgrade those flags from source strings.
 
 ## Invariants
 
@@ -42,3 +42,5 @@
 - [RC178 Offline/Sync model simulation](./RC178-STAGE6-OFFLINE-SYNC-SIMULATION.ar.md)
 
 - [RC179 Optional provider simulations](./RC179-STAGE6-OPTIONAL-PROVIDERS-SIMULATION.ar.md)
+
+- [RC180 Native platform boundary simulator](./RC180-STAGE6-NATIVE-BOUNDARY-SIMULATION.ar.md)
