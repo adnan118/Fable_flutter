@@ -199,4 +199,75 @@ void main() {
     expect(logins,0);expect(signs,0);
   });
 
+  test('RC166 duplicate OpenAPI operations for same public policy route are rejected',() async {
+    var calls=0,signatures=0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_native,(call) async {
+      signatures++;
+      return _proof();
+    });
+    final duplicate=FableContract(
+      contractHash:_testContractHash,
+      projectName:'rc166-duplicate-operation',
+      selectionMode:'explicit',
+      featureIds:const <String>{'auth'},
+      operations:<String,FableOperation>{
+        ..._policyCatalog.operations,
+        'AuthController_duplicateSessionPolicy':const FableOperation(
+          'AuthController_duplicateSessionPolicy','GET','/auth/session-policy',
+          _testContractHash,requiresAuth:false,enforceAuth:true),
+      },
+    );
+    final dio=Dio();
+    dio.interceptors.add(InterceptorsWrapper(onRequest:(options,handler) {
+      calls++;
+      return handler.resolve(Response<dynamic>(
+        requestOptions:options,statusCode:200,data:<String,dynamic>{}));
+    }));
+    final client=FableApiClient(baseUri:Uri.parse('https://api.example.test'),
+      contract:duplicate,session:_OfflineSession(),
+      dpopProofSigner:FableNativeDpopProofSigner(
+        serverOrigin:Uri.parse('https://api.example.test')),client:dio);
+    addTearDown(client.dispose);
+    await expectLater(client.request('auth.login',authorized:false),
+      throwsA(isA<FableApiException>()));
+    expect(calls,0);
+    expect(signatures,0);
+  });
+
+  test('RC166 signed policy route marked private cannot satisfy public preflight',() async {
+    var requests=0,signatures=0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_native,(call) async {
+      signatures++;return _proof();
+    });
+    final denied=FableContract(
+      contractHash:_testContractHash,
+      projectName:'rc166-private-operation',
+      selectionMode:'explicit',
+      featureIds:const <String>{'auth'},
+      operations:<String,FableOperation>{
+        ..._policyCatalog.operations,
+        'AuthController_sessionPolicy':const FableOperation(
+          'AuthController_sessionPolicy','GET','/auth/session-policy',
+          _testContractHash,requiresAuth:true,enforceAuth:true),
+      },
+    );
+    final dio=Dio();
+    dio.interceptors.add(InterceptorsWrapper(onRequest:(options,handler) {
+      requests++;
+      return handler.resolve(Response<dynamic>(
+        requestOptions:options,statusCode:200,data:<String,dynamic>{}));
+    }));
+    final client=FableApiClient(baseUri:Uri.parse('https://api.example.test'),
+      contract:denied,session:_OfflineSession(),
+      dpopProofSigner:FableNativeDpopProofSigner(
+        serverOrigin:Uri.parse('https://api.example.test')),client:dio);
+    addTearDown(client.dispose);
+    await expectLater(client.request('auth.login',authorized:false),
+      throwsA(isA<FableApiException>()));
+    expect(requests,0);
+    expect(signatures,0);
+  });
+
 }
