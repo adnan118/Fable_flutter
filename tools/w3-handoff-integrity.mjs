@@ -43,6 +43,7 @@ export function compareW3CurrentHandoff(backend,frontend,{
   if(!manifest || manifest.kind!=='fable.client-contract' ||
       !['all','flutter'].includes(manifest.client) ||
       manifest.project?.id!==bc?.project?.id ||
+      manifest.project?.name!==bc?.project?.name ||
       manifest.contractHash!==bc?.contractHash ||
       manifest.operationCount!==bc?.operations?.length ||
       manifest.featureCount!==bc?.features?.length)
