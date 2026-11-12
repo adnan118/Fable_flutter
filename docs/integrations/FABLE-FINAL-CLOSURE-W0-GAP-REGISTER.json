@@ -1,0 +1,998 @@
+{
+  "schemaVersion": 1,
+  "kind": "fable.final-project-closure-gap-register",
+  "date": "2026-11-12",
+  "authoritativeSources": {
+    "masterRoadmap": "https://github.com/adnan118/Fable/issues/56",
+    "flutterWorkstream": "https://github.com/adnan118/Fable_flutter/issues/98",
+    "flutterLedgerPath": "docs/integrations/FABLE-FLUTTER-PARITY-MASTER.json",
+    "flutterLedgerGitBlob": "41c8d52a2e68debde9305eac4caef37286432816",
+    "flutterMainAtAudit": "d35062e7fa0f6f2e22fb29a6be50ec580ba1110c",
+    "backendMainAtAudit": "d1042d4d2a2b06f6f04a1433d48c83d0444e5f8a"
+  },
+  "acceptancePolicy": {
+    "developerAndAgentEquivalent": true,
+    "noUntrackedWork": true,
+    "sourceMappedIsNotFunctionalCompletion": true,
+    "simulatedIsNotLiveE2E": true,
+    "ownerRunsUnverifiableRealEnvironmentTests": true,
+    "productionHumanApprovalSeparate": true,
+    "fableFlutterDpopDefault": "required",
+    "otherBackendFableDpop": "forbidden",
+    "generatedOperationsMayBeInvented": false,
+    "noUnmergedWorkOnceAvailableChecksPass": true
+  },
+  "familyCount": 17,
+  "familyRows": [
+    {
+      "id": "auth",
+      "backendCapabilities": [
+        "auth",
+        "auth-assurance",
+        "account-lifecycle",
+        "account-integrity"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "mapped_partial",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart",
+        "packages/features/fable_auth/lib/src/sessions_page.dart",
+        "packages/features/fable_auth/lib/src/change_password_page.dart",
+        "packages/fable_core/lib/src/fable_auth_otp_login.dart",
+        "packages/fable_core/lib/src/fable_auth_username.dart",
+        "packages/features/fable_social/lib/src/social_account_settings_page.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-AUTH-01",
+          "description": "RC97: Auth source scope classified (31 mobile source reviewed, 7 Web cookie client SDK, 2 Admin dashboard client SDK); Web/Admin host UI integration and live E2E remain open in owning applications, not Flutter mobile. Auth backend provider/OTP/device/DB E2E is still 0/40; Other Backend adapter and Wizard mapping remain independent.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-AUTH-02",
+          "description": "اختبار الحظر/rate limit وأزرار «هذا أنا/تغيير كلمة المرور» وربط إشعارات الأجهزة وطرق المصادقة حسب Backend",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-AUTH-03",
+          "description": "المصادقة على جهازين وعمليات الاسترداد وRefresh/OTP/Step-up فعلياً",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "profile",
+      "backendCapabilities": [
+        "managed-accounts",
+        "users",
+        "account-lifecycle"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "mapped_partial",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_profile/lib/src/fable_account_page.dart",
+        "packages/features/fable_profile/lib/src/managed_accounts_repository.dart",
+        "packages/fable_core/lib/src/fable_managed_entity_scope.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-PROFILE-01",
+          "description": "فحص 18 عملية Managed Accounts إحداها عامة وكل أدوار OWNER/MANAGER/VIEWER وأشكال البيانات",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-PROFILE-02",
+          "description": "تمرير الكيان إلى كل Repository نطاقي مربوط بعقد وصلاحيات ورفض العضوية الملغاة؛ لا تمرير عالمي للترويسات",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-PROFILE-03",
+          "description": "ملف المستخدم الخاص بكل مشروع/الحسابات الفرعية والملكية والتعافي E2E",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "notifications",
+      "backendCapabilities": [
+        "notifications",
+        "push-notifications",
+        "notification-templates"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_notifications/lib/src/inbox_page.dart",
+        "packages/features/fable_notifications/lib/src/inbox_repository.dart",
+        "packages/features/fable_push_notifications/lib/src/push_device_registration.dart",
+        "packages/features/fable_notifications/lib/src/notification_navigation.dart",
+        "packages/features/fable_notifications/test/notification_identity_navigation_rc108_test.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-NOTIFICATIONS-01",
+          "description": "welcome/privacy/device/failed-limit events والتحقق من Outbox/FCM على بيئة حية",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-NOTIFICATIONS-02",
+          "description": "تسجيل وإبطال FCM عند تبديل الحساب والجهاز وسيناريو Foreground/Background/deep-link",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-NOTIFICATIONS-03",
+          "description": "اللغة/توقيت النشر/انتهاء الإشعار والعدد الصحيح وعدم التكرار",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-NOTIFICATIONS-04",
+          "description": "RC108: فحص هوية تنقل الإشعارات قبل وبعد await مع محاكاة تغيّر الهوية؛ لم يُثبت E2E حقيقي على Firebase/APNs أو Backend/DB",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-NOTIFICATIONS-05",
+          "description": "RC109: مزامنة تسجيل وإلغاء FCM Token وتبديل Auth تمت محاكاتها فقط؛ تحقق FCM/APNs/Backend session revocation والأجهزة الفعلية ما زال P6",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "media",
+      "backendCapabilities": [
+        "media"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_media/lib/src/media_upload_repository.dart",
+        "packages/features/fable_media/lib/src/media_read_repository.dart",
+        "packages/features/fable_media/lib/src/resumable_upload_card.dart",
+        "packages/features/fable_media/lib/src/protected_media_playback_repository.dart",
+        "packages/features/fable_media/lib/src/domain/media_byte_source.dart",
+        "packages/features/fable_media/lib/src/application/read_media_range_use_case.dart",
+        "packages/features/fable_media/lib/src/data/fable_media_byte_source.dart",
+        "packages/features/fable_media/lib/src/presentation/media_range_controller.dart",
+        "packages/features/fable_media/lib/src/domain/media_session_bound_source.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-MEDIA-01",
+          "description": "تغطية 16 عملية Media ومنها playback/refresh/end وليس الرفع فقط",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-02",
+          "description": "Resume/abort/retries وchunk/part مع R2 والتحقق من MIME وحجم الحصص وصلاحية التوكن",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-03",
+          "description": "عرض الوسائط المحمية على Android/iOS وإبطال روابط المشاهدة",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-04",
+          "description": "RC110: ربط العمليات السبع للرفع بإصدار الجلسة ومحاكاة تبديل A→B أثناء PREPARE/STATUS/CHUNK/R2/COMPLETE، مع بقاء E2E حي غير مثبت",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-05",
+          "description": "RC111: Widget دورة حياة تبديل الحساب/الملف محمية بمحاكاة؛ Playback/Refresh/End مراجعة مصدر Backend فقط دون ربط Flutter أو E2E حي.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-06",
+          "description": "RC112: مشروع Fable فقط: تهيئة playback/refresh/end من OpenAPI الموثّق مع رموز ذاكرة قصيرة وإبطال السباقات بمحاكاة؛ لا يوجد native player/DRM أو Other Backend playback أو E2E P6 حي.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-07",
+          "description": "RC113: جلب Content Range محمي 206 عبر نفس Fable Bearer وMedia Token مع منع stale عند A→B وCancel/End/Refresh؛ ما يزال Native Player/DRM وBackend/R2/Device E2E P6 غير معتمد.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-08",
+          "description": "RC114: أضيفت حدود Typed Domain/Application/Data/Presentation وفحص CI للطبقات الجديدة، لكن واجهات Media القديمة ما زالت تستخدم Map/dynamic ومنطق workflow داخل Widget؛ إعادة هيكلتها وE2E حي غير مكتمل.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-09",
+          "description": "RC115: فحص طبقات عام لكل ميزات Flutter الجديدة وحارس feature sync، مع استمرار ترحيل Media القديم وTyped DTO/DI النهائي وP6 الحي.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MEDIA-10",
+          "description": "RC117 Track B: typed invalidation/session boundary purges UI bytes; native player controls and physical-device/Backend/R2 P6 remain incomplete.",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "localization",
+      "backendCapabilities": [
+        "languages"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_localization/lib/src/languages_page.dart",
+        "packages/fable_core/lib/src/fable_locale_preference.dart",
+        "lib/src/generated/language_policy.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-LOCALIZATION-01",
+          "description": "ربط نصوص الواجهة والمحتوى الديناميكي لكل feature وليس شاشة اللغات فقط",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-LOCALIZATION-02",
+          "description": "RTL/ARB/AI Translation واختيار المصادر والكاش والمزامنة وأخطاء غياب الترجمة",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-LOCALIZATION-03",
+          "description": "اختبار كل لغة مدرجة في Wizard مع إعادة التشغيل وOffline",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "support",
+      "backendCapabilities": [],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_support/lib/src/support_repository.dart",
+        "packages/features/fable_support/lib/src/support_widgets.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-SUPPORT-01",
+          "description": "لا يوجد Manifest باسم support ضمن قدرات Fable الحالية؛ لا نخترع مسار دعم",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-SUPPORT-02",
+          "description": "فحص توفر عقود التذاكر/المحادثات في مشروع Fable المحدد ثم بناء UX بكامل lifecycle",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-SUPPORT-03",
+          "description": "الصلاحيات والمرفقات والاستجابات والربط المباشر مع العميل",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "social",
+      "backendCapabilities": [
+        "auth"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_social/lib/src/social_auth_repository.dart",
+        "packages/features/fable_social/lib/src/social_widgets.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-SOCIAL-01",
+          "description": "Google/Apple SDK على الأجهزة الحقيقية مع nonce/state ونفس البريد وتوحيد الحساب",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-SOCIAL-02",
+          "description": "Link/Unlink والحالات المتزامنة وتأكيد MFA/OTP وبيانات الجهاز",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-SOCIAL-03",
+          "description": "سياسة إظهار الطرق من عقد الباك والـWizard لكل provider",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "biometrics",
+      "backendCapabilities": [
+        "passkeys"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_biometrics/lib/src/biometrics_repository.dart",
+        "packages/features/fable_biometrics/lib/src/biometrics_widgets.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-BIOMETRICS-01",
+          "description": "6 عمليات Passkey: registration options/verify, authentication options/verify, remove وweb-only القرار",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-BIOMETRICS-02",
+          "description": "تحقق platform biometric/passkey user verification وبيئات iOS/Android",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-BIOMETRICS-03",
+          "description": "تمييز بصمة فتح محلي عن WebAuthn حقيقي وعدم اختلاق دعم Backend",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "realtime",
+      "backendCapabilities": [
+        "realtime-communications",
+        "shared-signals",
+        "domain-events"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_realtime/lib/src/public_change_sse.dart",
+        "packages/features/fable_realtime/lib/src/verified_change_coordinator.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-REALTIME-01",
+          "description": "لا نعتبر SSE لتغييرات عامة معادلاً لكل RTC/LiveKit أو Websocket",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-REALTIME-02",
+          "description": "صلاحيات الاشتراك وإبطال الاتصال عند Logout/Entity switch",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-REALTIME-03",
+          "description": "Replay/reconnect/backoff/resume والتطابق مع كل event source",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "deeplinks",
+      "backendCapabilities": [],
+      "sourceStatus": "client_source",
+      "externalStatus": "client_only",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_deeplinks/lib/src/deep_link_dispatcher.dart",
+        "packages/features/fable_deeplinks/lib/src/deep_link_policy.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-DEEPLINKS-01",
+          "description": "ربط جميع المسارات الفعلية ومصادقة target والـauth deferral",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-DEEPLINKS-02",
+          "description": "Android App Links وiOS Universal Links مع ملفات التحقق الرسمية",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-DEEPLINKS-03",
+          "description": "منع open redirects وروابط إشعارات غير موثقة",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "messaging",
+      "backendCapabilities": [
+        "phone-messages",
+        "mail"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_messaging/lib/src/messaging_repository.dart",
+        "packages/features/fable_messaging/lib/src/messaging_widgets.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-MESSAGING-01",
+          "description": "Webhook WhatsApp الوارد في Fable لا يشكل عقد مراسلة عميل للصادر",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MESSAGING-02",
+          "description": "لا يوجد عقد واضح لمسارات list/send/read/delete لرسائل تطبيق العميل",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-MESSAGING-03",
+          "description": "النصوص والمرفقات والمستلمين والإشعارات تحتاج عقد مشروع فعلي",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "location",
+      "backendCapabilities": [
+        "location-platform",
+        "geo-jurisdiction"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_location/lib/src/location_repository.dart",
+        "packages/features/fable_location/lib/src/location_widgets.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-LOCATION-01",
+          "description": "مقارنة 15 عملية location-platform: geocode/nearby/matrix/route/map-match/geofence/index",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-LOCATION-02",
+          "description": "الصلاحيات والموقع الدقيق والخصوصية والتحقق من الأذونات عند استئناف التطبيق",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-LOCATION-03",
+          "description": "Offline location fallback/خرائط أصلية ومقدمو الخرائط وE2E",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "payments",
+      "backendCapabilities": [
+        "financial-platform",
+        "commercial-access",
+        "supported-currencies"
+      ],
+      "sourceStatus": "repository_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_payments/lib/src/payments_repository.dart",
+        "packages/features/fable_payments/lib/src/payments_widgets.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-PAYMENTS-01",
+          "description": "قراءة حالة الدفع ليست Checkout/Refund/Capture/Settlement؛ تدقيق 46 عملية مالية حسب الدور",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-PAYMENTS-02",
+          "description": "idempotency وUNCERTAIN وقيمة المال/العملة وإشعار الدفع النهائي من الخادم",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-PAYMENTS-03",
+          "description": "المدفوعات المخزنية Apple/Google وواجهات الإدارة ليست تلقائياً واجهات مستهلك",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "offline",
+      "backendCapabilities": [],
+      "sourceStatus": "client_source",
+      "externalStatus": "client_only",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_offline/lib/src/offline_reaction_queue.dart",
+        "packages/features/fable_offline/lib/src/offline_queue_panel.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-OFFLINE-01",
+          "description": "SQLite+Drift والسياسة اختياريان بقرار Wizard، وليس كل GET أو كتابة جاهزة للعمل Offline",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-OFFLINE-02",
+          "description": "خطط GET cache/POST PATCH DELETE replay/conflict لكل Feature حسب العقد",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-OFFLINE-03",
+          "description": "حماية أسرار ومفاتيح المستخدم وإبطال الطوابير عند التبديل وتغير الأسعار والمخزون",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "analytics",
+      "backendCapabilities": [
+        "observability-platform",
+        "system-monitoring"
+      ],
+      "sourceStatus": "repository_only",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_analytics/lib/src/analytics_repository.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-ANALYTICS-01",
+          "description": "لا نفرض أن مراقبة النظام تمثل API تحليلات مستخدم",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-ANALYTICS-02",
+          "description": "سياسة الموافقة/privacy وتخزين الأحداث وحذفها والـaggregation",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-ANALYTICS-03",
+          "description": "لوحة المشرف ليست شاشة موبايل بدون أدوار وعقود",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "content",
+      "backendCapabilities": [
+        "content-pages"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "not_proven",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_content/lib/src/published_content_repository.dart",
+        "packages/features/fable_content/lib/src/published_content_index.dart",
+        "packages/features/fable_content/lib/src/structured_content_text.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-CONTENT-01",
+          "description": "19 عملية Content؛ القراءات/الموافقات العامة لا تعني نقل محرّر Admin ودورات النسخ كلها",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-CONTENT-02",
+          "description": "البلوكات الـ17 وملحقاتها وإصدارات سياسات الخصوصية ووقت النفاذ",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-CONTENT-03",
+          "description": "Backend Issue #12 موقوف CI ويحتاج MySQL/worker حي قبل الاعتماد",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    },
+    {
+      "id": "access_control",
+      "backendCapabilities": [
+        "access-control",
+        "feature-flags"
+      ],
+      "sourceStatus": "source_and_selected_ui",
+      "externalStatus": "mapped_partial",
+      "wizardStatus": "DECISIONS_PRESENT_PER_OPERATION_PARITY_NOT_PROVEN",
+      "operationCoverage": "NOT_EXHAUSTIVELY_VERIFIED_FOR_REAL_PROJECT",
+      "complete": false,
+      "liveE2EVerified": false,
+      "existingFrontendSources": [
+        "packages/features/fable_access_control/lib/src/access_bootstrap.dart",
+        "packages/features/fable_access_control/lib/src/access_repository.dart",
+        "packages/features/fable_access_control/lib/src/authorized_action.dart"
+      ],
+      "gaps": [
+        {
+          "id": "FAM-ACCESS_CONTROL-01",
+          "description": "6 عمليات access-control: /permissions/me موجود، إدارة الأدوار/الإسناد ليست واجهة مستخدم عادي",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-ACCESS_CONTROL-02",
+          "description": "تحديث صلاحيات ومعرفة دور واجهات متعددة الأدوار وتغيير الكيان",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        },
+        {
+          "id": "FAM-ACCESS_CONTROL-03",
+          "description": "توافق السياسة مع الاختيار والـWizard وإبطال grant عند 403 والتغييرات الفورية",
+          "status": "OPEN",
+          "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
+        }
+      ],
+      "nextAction": "MAP_ALL_SELECTED_OPERATIONS_TO_WORKING_SCREEN_STATE_REPOSITORY_AND_TEST",
+      "functionalAcceptanceEvidence": [],
+      "userRealEnvironmentEvidence": []
+    }
+  ],
+  "crossCuttingOpen": [
+    {
+      "id": "WIZ-FRONT-BINDINGS",
+      "category": "WIZARD",
+      "status": "CONFIRMED_OPEN",
+      "owner": "flutter",
+      "source": "tools/flutter-setup-wizard.mjs",
+      "detail": "Verified import still returns requires-feature-binding-review; arbitrary feature repository generation not guaranteed",
+      "gate": "W5"
+    },
+    {
+      "id": "WIZ-FRONT-GUIDED-AGENT",
+      "category": "WIZARD",
+      "status": "UNVERIFIED",
+      "owner": "flutter",
+      "source": "tools/flutter-setup-wizard.mjs",
+      "detail": "Guided vs Agent final generated project byte/semantic parity for all choices has not been exhaustively demonstrated",
+      "gate": "W4"
+    },
+    {
+      "id": "WIZ-BACK-GUIDED-AGENT",
+      "category": "WIZARD",
+      "status": "UNVERIFIED",
+      "owner": "backend",
+      "source": "Fable-Backend-RC66/lib/wizard.mjs",
+      "detail": "Backend guided and headless Agent project-build parity across presets and capabilities has not been exhaustively demonstrated",
+      "gate": "W1"
+    },
+    {
+      "id": "GEN-BACKEND-OUTPUT",
+      "category": "GENERATION",
+      "status": "UNVERIFIED",
+      "owner": "backend",
+      "source": "Fable-Backend-RC66/lib/capability-generator.mjs",
+      "detail": "End-to-end generated project, migrations, auth, routes and selected capability reproducibility need real generated-project tests",
+      "gate": "W2"
+    },
+    {
+      "id": "HANDOFF-FINGERPRINT",
+      "category": "CONTRACT",
+      "status": "NEEDS_FINAL_MATRIX_TEST",
+      "owner": "both",
+      "source": "Fable-Backend-RC66/lib/client-contract-export.mjs",
+      "detail": "Exact project ID+contract hash+origin pins and DTO/permissions/error version drift checked in combined generated project",
+      "gate": "W3"
+    },
+    {
+      "id": "OTHER-BACKEND-ISOLATION",
+      "category": "SECURITY",
+      "status": "NEEDS_GENERATED_SCENARIOS",
+      "owner": "flutter",
+      "source": "packages/fable_core/lib/src/fable_native_dpop_proof_signer.dart",
+      "detail": "Fable DPoP off in Other Backend in source; verify fully generated Other Backend project and injected signer rejection",
+      "gate": "W4"
+    },
+    {
+      "id": "TOOLCHAIN-BACKEND",
+      "category": "REAL_TEST",
+      "status": "NEEDS_OWNER_EXECUTION",
+      "owner": "user",
+      "source": "Fable-Backend-RC66/pnpm-lock.yaml",
+      "detail": "Node24/pnpm12 real frozen install, security registry audit, SBOM, full tests and Prisma smoke",
+      "gate": "W7"
+    },
+    {
+      "id": "TOOLCHAIN-FLUTTER",
+      "category": "REAL_TEST",
+      "status": "NEEDS_OWNER_EXECUTION",
+      "owner": "user",
+      "source": "Fable_flutter Flutter SDK",
+      "detail": "flutter analyze/test, Android/Kotlin and iOS/Swift build, actual DPoP hardware login/re-login and all 17 features",
+      "gate": "W7"
+    },
+    {
+      "id": "REAL-BACKEND-PROVIDERS",
+      "category": "REAL_TEST",
+      "status": "NEEDS_OWNER_EXECUTION",
+      "owner": "user",
+      "source": "Backend production readiness reports RC182–RC190",
+      "detail": "Payment provider settlement, licensed DRM, MySQL/Redis/WAF/R2/S3, durable outbox, restore/KMS, paging/rollback operational evidence",
+      "gate": "W7"
+    },
+    {
+      "id": "HUMAN-PRODUCTION-APPROVAL",
+      "category": "RELEASE",
+      "status": "NEEDS_INDEPENDENT_APPROVAL",
+      "owner": "user",
+      "source": "Fable-Backend-RC66/lib/go-live-assurance.mjs",
+      "detail": "Real identities and independent signed authorized release approvals remain mandatory for production",
+      "gate": "W8"
+    }
+  ],
+  "generatedProjectMatrix": [
+    {
+      "id": "WIZ-FABLE-DEVELOPER-MINIMAL",
+      "backend": "fable",
+      "initiator": "developer",
+      "profile": "minimal",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-FABLE-DEVELOPER-STANDARD",
+      "backend": "fable",
+      "initiator": "developer",
+      "profile": "standard",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-FABLE-DEVELOPER-COMPLEX",
+      "backend": "fable",
+      "initiator": "developer",
+      "profile": "complex",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-FABLE-AGENT-MINIMAL",
+      "backend": "fable",
+      "initiator": "agent",
+      "profile": "minimal",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-FABLE-AGENT-STANDARD",
+      "backend": "fable",
+      "initiator": "agent",
+      "profile": "standard",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-FABLE-AGENT-COMPLEX",
+      "backend": "fable",
+      "initiator": "agent",
+      "profile": "complex",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-OTHER-DEVELOPER-MINIMAL",
+      "backend": "other",
+      "initiator": "developer",
+      "profile": "minimal",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-OTHER-DEVELOPER-STANDARD",
+      "backend": "other",
+      "initiator": "developer",
+      "profile": "standard",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-OTHER-DEVELOPER-COMPLEX",
+      "backend": "other",
+      "initiator": "developer",
+      "profile": "complex",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-OTHER-AGENT-MINIMAL",
+      "backend": "other",
+      "initiator": "agent",
+      "profile": "minimal",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-OTHER-AGENT-STANDARD",
+      "backend": "other",
+      "initiator": "agent",
+      "profile": "standard",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    },
+    {
+      "id": "WIZ-OTHER-AGENT-COMPLEX",
+      "backend": "other",
+      "initiator": "agent",
+      "profile": "complex",
+      "status": "PENDING",
+      "generatedProjectPath": null,
+      "buildEvidence": null,
+      "contractEvidence": null,
+      "securityEvidence": null
+    }
+  ]
+}

@@ -18,6 +18,7 @@
     "wizard:architecture:check": "node tools/enforce-feature-architecture-rc115.mjs",
     "wizard:feature:generate": "node tools/generate-typed-feature-rc116.mjs",
     "test:stage6:simulation": "node --test test/rc174-stage6-source-preflight.test.mjs test/rc175-stage6-dpop-auth-simulator.test.mjs test/rc176-stage6-media-race-simulation.test.mjs test/rc176-stage6-media-source-contract-audit.test.mjs test/rc177-stage6-media-tier-simulator.test.mjs test/rc178-stage6-offline-sync-simulator.test.mjs test/rc179-stage6-provider-simulator.test.mjs test/rc180-stage6-native-boundaries-simulator.test.mjs test/rc181-stage6-integrated-simulation.test.mjs",
-    "test:stage7:mobile-source": "node --test test/rc188-fable-only-dpop-default-source.test.mjs test/rc188-stage7-mobile-readiness-preflight.test.mjs"
+    "test:stage7:mobile-source": "node --test test/rc188-fable-only-dpop-default-source.test.mjs test/rc188-stage7-mobile-readiness-preflight.test.mjs",
+    "test:closure:w0": "node --test test/rc192-w0-final-closure-baseline.test.mjs"
   }
 }
