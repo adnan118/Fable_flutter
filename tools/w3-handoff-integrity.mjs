@@ -29,7 +29,10 @@ export function compareW3CurrentHandoff(backend,frontend,{
   const bc=backend['contract.json'],fc=frontend['contract.json'];
   const manifest=backend['manifest.json'];
   if(!bc || bc.kind!=='fable.client-contract' ||
+      bc.schemaVersion!==2 ||
       !bc.project || typeof bc.project.id!=='string' || !bc.project.id ||
+      typeof bc.project.name!=='string'||!bc.project.name ||
+      !Array.isArray(bc.operations)||!Array.isArray(bc.features)||
       !hex64(bc.contractHash))fail('invalid_backend_contract');
   else {
     const {contractHash,...withoutHash}=bc;
