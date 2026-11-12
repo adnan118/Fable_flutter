@@ -1325,5 +1325,23 @@
     "combinedNodeModelTests": "126/126 PASS (RC174-RC181, temp Node workspace)",
     "rc180NativeBoundaryTests": "16/16 PASS (fake MethodChannel/OS scheduler in Node)",
     "rc181IntegratedTests": "18/18 PASS (local model composition; exact Git blob matched)"
+  },
+  "stage7DevelopmentSimulation": {
+    "gate": "7.6",
+    "status": "DEVELOPMENT_SOURCE_SIMULATION_ACCEPTED_ONLY",
+    "rc188BackendDefault": "Flutter DPoP=required by default in Fable Backend and generated Auth templates; nonprod explicit opt-out only",
+    "rc188FlutterDefault": "Fable Android/iOS native DPoP enabled by default; release demands exact independently validated 64-hex contract and HTTPS origin pins, hardware-only",
+    "otherBackendDpopFromFable": false,
+    "webNativeDpop": false,
+    "sourceCheckResults": "15/15 connector source assertions PASS; 9+12 Node tests written, 4 Dart tests authored but NOT executed",
+    "all17FamiliesLiveE2EVerified": false,
+    "productionReady": false,
+    "deploymentAuthorized": false,
+    "blockers": [
+      "Full Flutter SDK Dart tests/analyze and Android/iOS device native build not executed",
+      "Real Fable contract SHA and HTTPS origin not supplied or verified for a release build",
+      "Existing unbound Fable sessions need controlled migration and actual device login/refresh validation",
+      "Other Backend uses separate contract and auth, with Fable DPoP prohibited"
+    ]
   }
 }

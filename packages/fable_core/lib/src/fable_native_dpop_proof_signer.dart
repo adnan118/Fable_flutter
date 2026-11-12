@@ -73,36 +73,73 @@ final class FableNativeDpopProofSigner implements FableDpopProofSigner {
 }
 
 /**
- * RC166 opt-in is intentionally compile-time pinned to BOTH a real backend
- * contract hash and its HTTPS origin. This prevents fixture imports or an
- * Other Backend from silently enabling sender-constrained authentication.
+ * RC188: Fable mobile DPoP is enabled by default; no paid provider or
+ * external API key is needed. The native P-256 private key stays hardware-held.
  *
- * Production rollout must be coordinated with Backend RC165, real native
- * private key availability, server schema migration and forced re-login.
+ * A release build MUST have independently pinned the exact Fable contract SHA
+ * and HTTPS Backend origin (supplied by the trusted project build workflow).
+ * Missing, stale or fixture pins FAIL CLOSED: never downgrade to Bearer.
+ * Only non-release development/fixture tests may run without the signer.
+ * Other Backend and browser-only clients are not silently enrolled.
  */
 FableDpopProofSigner? resolveFableDpopProofSigner(
   Uri baseUri,
   OperationCatalog catalog,
   FableDpopProofSigner? explicitlyProvided,
 ) {
-  if (explicitlyProvided != null) return explicitlyProvided;
+  // Other Backend NEVER receives Fable's DPoP signer, even when an adapter,
+  // user-supplied injection or global build flag tries to enable it.
+  if (catalog is! FableContract) {
+    if (explicitlyProvided != null) {
+      throw ArgumentError('Fable DPoP is forbidden for Other Backend');
+    }
+    return null;
+  }
+  // Fable Web uses an independent cookie/CSRF transport.
+  if (kIsWeb) {
+    if (explicitlyProvided != null) {
+      throw ArgumentError('Native DPoP cannot be injected into Web');
+    }
+    return null;
+  }
+
+  // Explicit mock signers remain usable in non-release Flutter unit tests.
+  if (explicitlyProvided != null && !kReleaseMode) return explicitlyProvided;
+
   const enabled = bool.fromEnvironment('FABLE_DPOP_NATIVE_ENABLED',
-    defaultValue: false);
-  if (!enabled || catalog is! FableContract) return null;
+    defaultValue: true);
+  if (!enabled) {
+    if (kReleaseMode) {
+      throw StateError('Fable DPoP cannot be disabled in a release build');
+    }
+    return null; // Explicit local test/dev exception ONLY.
+  }
 
   const expectedHash = String.fromEnvironment(
     'FABLE_DPOP_BACKEND_CONTRACT_HASH');
   const expectedOrigin = String.fromEnvironment(
     'FABLE_DPOP_BACKEND_ORIGIN');
-  if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(expectedHash) ||
-      expectedHash != catalog.contractHash ||
-      catalog.selectionMode != 'explicit' ||
-      !catalog.isFeatureAvailable('auth') ||
-      catalog.projectName == 'fable-test' ||
-      catalog.projectName == 'test-project' ||
-      expectedOrigin.isEmpty ||
-      baseUri.origin != expectedOrigin) {
-    throw StateError('DPoP requires a verified non-fixture Fable project pin');
+  final correctlyPinned =
+      RegExp(r'^[a-f0-9]{64}$').hasMatch(expectedHash) &&
+      expectedHash == catalog.contractHash &&
+      catalog.selectionMode == 'explicit' &&
+      catalog.isFeatureAvailable('auth') &&
+      catalog.projectName != 'fable-test' &&
+      catalog.projectName != 'test-project' &&
+      expectedOrigin.isNotEmpty &&
+      baseUri.origin == expectedOrigin &&
+      baseUri.scheme == 'https';
+
+  if (!correctlyPinned) {
+    if (kReleaseMode) {
+      throw StateError('DPoP requires a verified non-fixture Fable project pin');
+    }
+    return null; // Unpinned development fixtures cannot sign unknown hosts.
   }
-  return FableNativeDpopProofSigner(serverOrigin: baseUri);
+  // Release may only use the verified hardware-backed platform signer.
+  if (kReleaseMode && explicitlyProvided != null &&
+      explicitlyProvided is! FableNativeDpopProofSigner) {
+    throw StateError('Fable release requires native hardware DPoP signing');
+  }
+  return explicitlyProvided ?? FableNativeDpopProofSigner(serverOrigin: baseUri);
 }
