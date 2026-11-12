@@ -23,6 +23,8 @@
     "test:w0:manifest": "node --test tools/project-generation-manifest.test.mjs tools/verify-project-manifest.test.mjs",
     "test:closure:w03": "node --test test/rc198-w03-closure-gap-audit.test.mjs",
     "closure:audit": "node tools/closure-gap-audit-cli.mjs --json",
-    "closure:check": "node tools/closure-gap-audit-cli.mjs --strict"
+    "closure:check": "node tools/closure-gap-audit-cli.mjs --strict",
+    "test:w3:current-handoff": "node --test test/rc210-w3-current-handoff.test.mjs",
+    "w3:handoff:verify": "node tools/verify-current-w3-handoff.mjs"
   }
 }
