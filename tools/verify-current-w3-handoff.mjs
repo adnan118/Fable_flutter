@@ -74,7 +74,15 @@ function verifyBackendGitCheckpoint(root,expected) {
     cwd:repo,encoding:'utf8',timeout:5000}).trim();
   const dirty=execFileSync('git',['status','--porcelain','--untracked-files=no'],{
     cwd:repo,encoding:'utf8',timeout:5000}).trim();
-  return {actual,verified:actual===expected && SHA.test(actual) && !dirty};
+  const branch=execFileSync('git',['symbolic-ref','--short','HEAD'],{
+    cwd:repo,encoding:'utf8',timeout:5000}).trim();
+  const top=execFileSync('git',['rev-parse','--show-toplevel'],{
+    cwd:repo,encoding:'utf8',timeout:5000}).trim();
+  const origin=execFileSync('git',['remote','get-url','origin'],{
+    cwd:repo,encoding:'utf8',timeout:5000}).trim();
+  const authorized=/^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)adnan118\/Fable(?:\.git)?$/i.test(origin);
+  return {actual,verified:actual===expected && SHA.test(actual) &&
+    !dirty && branch==='main' && resolve(top)===resolve(repo) && authorized};
 }
 export function runW3CurrentHandoff(options) {
   const backend=readBackendExport(options.backendExportRoot);
