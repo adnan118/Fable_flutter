@@ -18,7 +18,7 @@ function fixture(){
     permissions:[],errors:[],success:[],messages:[]};
   contract.contractHash=hash(contract);
   const handoff={schemaVersion:1,kind:'fable.flutter-handoff',client:'flutter',
-    backend:{project:contract.project,contractHash:contract.contractHash},
+    backend:{project:structuredClone(contract.project),contractHash:contract.contractHash},
     selection:{},featureCatalog:[]};
   handoff.manifestHash=sha(handoff);
   const mobile={schemaVersion:1,kind:'fable.mobile-core-operations',
@@ -30,7 +30,7 @@ function fixture(){
     'openapi.json':{openapi:'3.1.0',paths:{}},
     'mobile-core-operations.json':mobile,
     'manifest.json':{kind:'fable.client-contract',schemaVersion:2,
-      client:'all',project:contract.project,contractHash:contract.contractHash,
+      client:'all',project:structuredClone(contract.project),contractHash:contract.contractHash,
       operationCount:0,featureCount:0},
   };
   const frontend=Object.fromEntries(W3_REQUIRED_DOCUMENTS.map(k=>[k,structuredClone(doc[k])]));
