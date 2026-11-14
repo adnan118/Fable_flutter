@@ -105,8 +105,14 @@ class FablePublishedContentRepository {
     if(localeQueryParameter!=null&&!RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{0,49}$').hasMatch(localeQueryParameter!))throw ArgumentError('Invalid locale query parameter');
     final result=await gateway.execute(readOperationId,path:{slugPathParameter:slug},
       query:locale==null||localeQueryParameter==null?null:{localeQueryParameter!:locale});
-    // Decoder must return a typed published document; never render raw admin data.
-    return decoder(result.data);
+    // A valid-shaped document for a different slug must never appear under
+    // the requested page (e.g. privacy policy vs. terms). This also protects
+    // explicitly imported Other Backend decoders from mismatched responses.
+    final document=decoder(result.data);
+    if(document.slug!=slug) {
+      throw const FormatException('Published content slug does not match request');
+    }
+    return document;
   }
   Future<void> accept(FablePublishedDocument content)async{
     if(content.id.isEmpty||content.versionId.isEmpty)throw ArgumentError('Invalid version');
