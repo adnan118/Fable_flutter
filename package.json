@@ -31,7 +31,7 @@
     "wizard:w4:matrix": "node tools/run-w4-wizard-matrix.mjs",
     "test:w5:source-flows": "node --test test/rc213-w5-operation-flow-audit.test.mjs test/selected-feature-integration-rc90.test.mjs",
     "wizard:w5:audit": "node tools/run-w5-feature-flow-audit.mjs --json",
-    "test:w6:auth": "flutter test packages/fable_core/test/auth_gateway_identity_regression_test.dart packages/features/fable_auth/test/mandatory_password_change_page_test.dart",
+    "test:w6:auth": "flutter test packages/fable_core/test/auth_gateway_identity_regression_test.dart packages/fable_core/test/rc222-secure-session-integrity_test.dart packages/features/fable_auth/test/mandatory_password_change_page_test.dart",
     "test:w6:auth:source": "node --test test/rc214-w6-auth-race-source.test.mjs",
     "test:w6:notifications": "flutter test packages/features/fable_notifications/test/notification_identity_navigation_rc108_test.dart packages/features/fable_notifications/test/inbox_refresh_signal_test.dart",
     "test:w6:notifications:source": "node --test test/rc215-w6-notification-races-source.test.mjs",
