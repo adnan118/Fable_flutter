@@ -204,7 +204,7 @@ function classify(step,r,{profileExportsProvided=0,closure=null}={}){
      profileExportsProvided!==3)
     return {state:'BLOCKED',reason:'SIX_FABLE_PATHS_NEED_REAL_PROFILE_EXPORTS'};
   if(step.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT'&&
-     (!r||r.exitCode!==0)&&!step.realProjectInputsProvided)
+     !step.realProjectInputsProvided)
     return {state:'BLOCKED',reason:'REAL_SELECTED_PROJECT_AND_OPERATION_EVIDENCE_REQUIRED'};
   if(step.id==='W0_HISTORICAL_82_ITEM_AUDIT'&&
      closure?.counts?.outstanding>0&&r.exitCode===2&&!r.signal&&!r.error)
@@ -279,6 +279,14 @@ export function runFableOneCommand(root,{
   };
   const runs=[];
   for(const step of plan.plan){
+    // A user-authored SHA string is not a verified source checkpoint.
+    // The W3 project source check requires both independent Git main pins
+    // to match local clean, correct-origin main checkouts.
+    if(step.id==='W3_REAL_BACKEND_FLUTTER_HANDOFF' &&
+       !step.blockReason &&
+       (!repos.flutter.independentPinVerified||
+        !repos.backend.independentPinVerified))
+      step.blockReason='INDEPENDENT_MAIN_SOURCE_CHECKPOINT_MISMATCH';
     if(step.blockReason)continue;
     logger('Fable '+step.stage+' '+step.id+' ...');
     try{runs.push({id:step.id,...runner(step)});}
