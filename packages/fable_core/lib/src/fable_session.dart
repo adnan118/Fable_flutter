@@ -25,6 +25,10 @@ class FableSecureSession {
     return value;
   }
   static final Map<String, int> _identityEpochs = <String, int>{};
+  // A failed multi-key write may leave partially updated secrets. Block
+  // access in-process and persist a nonsecret write-in-progress marker so
+  // a later app launch cannot accidentally use a mixed account token pair.
+  static final Set<String> _unsafeSessionNamespaces = <String>{};
   static final StreamController<String> _denials =
       StreamController<String>.broadcast(sync: true);
   Stream<void> get authorizationDenials => _denials.stream
@@ -43,6 +47,25 @@ class FableSecureSession {
   int get identityRevision => _identityEpochs[_prefix] ?? 0;
   void _advanceIdentity() {
     _identityEpochs[_prefix] = identityRevision + 1;
+  }
+  void _invalidateAfterSecureStorageFailure() {
+    _unsafeSessionNamespaces.add(_prefix);
+    _advanceIdentity();
+    _publishIdentity(false);
+  }
+  Future<void> _startCredentialMutation() async {
+    await _storage.write(key:_integrityKey,value:'updating');
+  }
+  Future<void> _finishCredentialMutation() async {
+    await _storage.write(key:_integrityKey,value:'ready');
+    _unsafeSessionNamespaces.remove(_prefix);
+  }
+  Future<bool> _credentialsReadable() async {
+    if (_unsafeSessionNamespaces.contains(_prefix)) return false;
+    final state=await _storage.read(key:_integrityKey);
+    // A missing marker is supported for pre-RC222 installed sessions; after
+    // our first successful write every future session has a ready marker.
+    return state==null || state=='ready';
   }
   Future<void> _serializedWrite(Future<void> Function() operation) async {
     final previous = _pendingWrites[_prefix];
@@ -67,6 +90,7 @@ class FableSecureSession {
   String get _idKey => 'fable.installation.id';
   String get _accessKey => '$_prefix.session.access';
   String get _refreshKey => '$_prefix.session.refresh';
+  String get _integrityKey => '$_prefix.session.integrity';
   Future<String> installationId() async {
     final previous = _installationIdInFlight;
     if (previous != null) return previous;
@@ -86,16 +110,18 @@ class FableSecureSession {
   // A login/refresh writes more than one secure-storage key. Readers must
   // wait for the namespace write queue to drain, never observe a half-written
   // access/refresh pair during account switching.
-  Future<String?> get accessToken async {
-    final pending = _pendingWrites[_prefix];
-    if (pending != null) await pending;
-    return _storage.read(key:_accessKey);
+  Future<String?> _readCommittedCredential(String key) async {
+    String? value;
+    // Serialize even a read: merely awaiting the current pending write can
+    // race with a new mutation starting between the integrity and key read.
+    await _serializedWrite(() async {
+      if (!await _credentialsReadable()) return;
+      value=await _storage.read(key:key);
+    });
+    return value;
   }
-  Future<String?> get refreshToken async {
-    final pending = _pendingWrites[_prefix];
-    if (pending != null) await pending;
-    return _storage.read(key:_refreshKey);
-  }
+  Future<String?> get accessToken => _readCommittedCredential(_accessKey);
+  Future<String?> get refreshToken => _readCommittedCredential(_refreshKey);
   /// Commit refreshed credentials only when they still belong to the same
   /// signed-in identity. The check is INSIDE the namespace write lock.
   Future<bool> saveTokensIfIdentity({required int expectedIdentity,
@@ -103,12 +129,20 @@ class FableSecureSession {
       String? expectedRefreshToken}) async {
     var committed = false;
     await _serializedWrite(() async {
-      if (identityRevision != expectedIdentity) return;
+      if (identityRevision != expectedIdentity ||
+          !await _credentialsReadable()) return;
       if (expectedRefreshToken != null &&
           await _storage.read(key:_refreshKey) != expectedRefreshToken) return;
-      await _storage.write(key:_accessKey,value:accessToken);
-      if (refreshToken != null) await _storage.write(key:_refreshKey,value:refreshToken);
-      committed = true;
+      try {
+        await _startCredentialMutation();
+        await _storage.write(key:_accessKey,value:accessToken);
+        if (refreshToken != null) await _storage.write(key:_refreshKey,value:refreshToken);
+        await _finishCredentialMutation();
+        committed = true;
+      } catch (_) {
+        _invalidateAfterSecureStorageFailure();
+        rethrow;
+      }
     });
     return committed;
   }
@@ -125,12 +159,21 @@ class FableSecureSession {
     var committed = false;
     await _serializedWrite(() async {
       if (identityRevision != expectedIdentity) return;
-      _advanceIdentity();
-      await _storage.write(key:_accessKey,value:accessToken);
-      if (refreshToken == null) await _storage.delete(key:_refreshKey);
-      else await _storage.write(key:_refreshKey,value:refreshToken);
-      committed = true;
-      _publishIdentity(true);
+      try {
+        await _startCredentialMutation();
+        await _storage.write(key:_accessKey,value:accessToken);
+        if (refreshToken == null) await _storage.delete(key:_refreshKey);
+        else await _storage.write(key:_refreshKey,value:refreshToken);
+        await _finishCredentialMutation();
+        // A new identity becomes active only AFTER both secure keys and the
+        // durable integrity marker have been successfully committed.
+        _advanceIdentity();
+        committed = true;
+        _publishIdentity(true);
+      } catch (_) {
+        _invalidateAfterSecureStorageFailure();
+        rethrow;
+      }
     });
     return committed;
   }
@@ -151,11 +194,18 @@ class FableSecureSession {
           await _storage.read(key:_accessKey) != expectedAccessToken) return;
       if (expectedRefreshToken != null &&
           await _storage.read(key:_refreshKey) != expectedRefreshToken) return;
-      _advanceIdentity();
-      await _storage.delete(key:_accessKey);
-      await _storage.delete(key:_refreshKey);
-      cleared = true;
-      _publishIdentity(false);
+      try {
+        await _startCredentialMutation();
+        await _storage.delete(key:_accessKey);
+        await _storage.delete(key:_refreshKey);
+        await _finishCredentialMutation();
+        _advanceIdentity();
+        cleared = true;
+        _publishIdentity(false);
+      } catch (_) {
+        _invalidateAfterSecureStorageFailure();
+        rethrow;
+      }
     });
     return cleared;
   }

@@ -244,6 +244,7 @@ export function buildOneCommandPlan({
     ['tools/closure-gap-audit-cli.mjs','--strict','--json'],flutterRoot);
   add('W6_W7_NATIVE_AUTH_NOTIFICATIONS_WIDGET','W6-W7','flutter',
     ['test','packages/fable_core/test/auth_gateway_identity_regression_test.dart',
+      'packages/fable_core/test/rc222-secure-session-integrity_test.dart',
       'packages/features/fable_auth/test/mandatory_password_change_page_test.dart',
       'packages/features/fable_notifications/test/notification_identity_navigation_rc108_test.dart',
       'packages/features/fable_notifications/test/inbox_refresh_signal_test.dart'],
