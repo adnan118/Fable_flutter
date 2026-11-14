@@ -269,7 +269,7 @@ function requirePruningPin(snapshot,prune){
   if(prune && (!snapshot.backendAuthority||!snapshot.projectBound))
     throw Error('Pruning requires a pinned Fable Backend contract and explicit project identity');
 }
-async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={}){
+export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={}){
   requirePruningPin(snapshot,prune);
   const hasFeatures=snapshot.backendAuthority && snapshot.decisionSnapshot?.decisions?.frontendFeatures;
   const sync=hasFeatures?await import('./sync-project-features.mjs'):null;
