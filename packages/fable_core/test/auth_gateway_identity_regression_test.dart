@@ -90,6 +90,35 @@ void main() {
     expect(session.refresh, List<String>.filled(64, 's').join());
   });
 
+  test('RC214 old logout cannot report server sign-out success for a newly switched identity', () async {
+    final session = _Session();
+    final arrived=Completer<void>(), resume=Completer<void>();
+    final contract=FableContract(
+      contractHash:List<String>.filled(64,'a').join(),
+      projectName:'rc214',selectionMode:'explicit',featureIds:const <String>{},
+      operations:const {
+        'auth.logout':FableOperation('auth.logout','POST','/auth/logout',
+          'hash',requiresAuth:true,enforceAuth:true),
+      },
+    );
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://fable.example.test'),
+      contract:contract,secureSession:session,
+      client:_intercept((req)async{
+        arrived.complete();
+        await resume.future;
+        return _response(req,200,{'data':{'revoked':true}});
+      }));
+    addTearDown(gateway.dispose);
+    final pending=gateway.logout();
+    await arrived.future;
+    await session.replaceTokens(accessToken:'new-account',
+      refreshToken:List<String>.filled(64,'s').join());
+    resume.complete();
+    expect(await pending,false);
+    expect(session.token,'new-account');
+    expect(session.refresh,List<String>.filled(64,'s').join());
+  });
+
   test('A rejected old Fable refresh cannot sign out a newly logged-in account', () async {
     final session = _Session();
     final refreshArrived = Completer<void>();
