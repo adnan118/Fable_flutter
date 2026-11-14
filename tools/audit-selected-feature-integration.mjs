@@ -8,11 +8,12 @@
  * unknown contract requirements from verified missing API operations.
  */
 import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
-import {resolve,join,dirname,relative,isAbsolute} from 'node:path';
+import {resolve,join,dirname} from 'node:path';
 import {createHash} from 'node:crypto';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {FEATURE_IDS,FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
 import {auditBackendFeatureParity} from './audit-backend-feature-parity.mjs';
+import {hasSafeFeatureEvidence,readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
 
 const MASTER='docs/integrations/FABLE-FLUTTER-PARITY-MASTER.json';
 const CONFIG='assets/config/backend.json';
@@ -30,20 +31,10 @@ const evidenceKeys=['requestDto','responseDto','errors','permissions',
   'frontendFile','testFile'];
 const read=(p)=>JSON.parse(readFileSync(p,'utf8'));
 const present=(v)=>typeof v==='string'&&v.trim().length>0;
-const safePath=(root,name)=>{
-  if(!present(name)||name.startsWith('/')||name.includes('\\')||
-    name.split('/').some(s=>s==='..'||s==='.')||
-    !/^[a-zA-Z0-9/_\-.]+$/.test(name))return null;
-  const full=resolve(root,name);
-  const relativePath=relative(root,full);
-  if(!relativePath||relativePath==='..'||relativePath.startsWith('..\\')||
-    relativePath.startsWith('../')||isAbsolute(relativePath))return null;
-  return full;
-};
-function checkedFile(root,name){
-  const full=safePath(root,name);
-  return full!==null&&existsSync(full);
-}
+const checkedFile=(root,name)=>hasSafeFeatureEvidence(root,name);
+const sourceEvidence=(root,name)=>checkedFile(root,name)
+  ?readSafeFeatureEvidence(root,name):'';
+
 const gap=(code,detail,action,operationId=null)=>({
   code,detail,action,...(operationId?{operationId}:{})
 });
@@ -147,7 +138,7 @@ function externalEvidence(root,backend){
 /// must share one backend identity namespace and invalidate access snapshots.
 export function managedAccessContextBindingGaps(root) {
   root=resolve(root);
-  const source=(name)=>checkedFile(root,name)?readFileSync(safePath(root,name),'utf8'):'';
+  const source=(name)=>sourceEvidence(root,name);
   const app=source('lib/src/app.dart');
   const session=source('packages/features/fable_access_control/lib/src/access_session.dart');
   const bootstrap=source('packages/features/fable_access_control/lib/src/access_bootstrap.dart');
@@ -203,10 +194,8 @@ export function managedScopedOperationEvidenceGaps(root,backendKind,required) {
      route==='/admin'||route.startsWith('/admin/')||
      route==='/managed-entities/public'||route.startsWith('/managed-entities/public/'))
     return ['MANAGED_SCOPE_OPERATION_FORBIDDEN'];
-  const source=checkedFile(root,required.frontendFile)
-    ?readFileSync(safePath(root,required.frontendFile),'utf8'):'';
-  const tests=checkedFile(root,required.testFile)
-    ?readFileSync(safePath(root,required.testFile),'utf8'):'';
+  const source=sourceEvidence(root,required.frontendFile);
+  const tests=sourceEvidence(root,required.testFile);
   const misses=[];
   if(!source.includes('FableManagedScopedOperation(') ||
      !source.includes('executeBoundInStore(') ||
