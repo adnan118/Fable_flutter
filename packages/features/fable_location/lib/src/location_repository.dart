@@ -53,8 +53,10 @@ class FableGeofenceDecision {
   final double? distanceMeters;
   final Map<String, dynamic> raw;
   factory FableGeofenceDecision.fromFable(Object? value) {
+    final distance=value is Map ? value['distanceMeters'] : null;
     if (value is! Map || value['inside'] is! bool ||
-        (value['distanceMeters'] != null && value['distanceMeters'] is! num)) {
+        (distance != null && (distance is! num ||
+          !distance.toDouble().isFinite || distance < 0))) {
       throw const FormatException('Invalid geofence decision');
     }
     final raw = FableImmutablePayload.object(value);
@@ -98,8 +100,10 @@ class FableLocationOperations {
       if (!fableIds.containsKey(entry.key)) throw const FormatException('Unknown location operation role');
       final op = catalog.require(entry.value);
       if (op.method != (_getRoles.contains(entry.key) ? 'GET' : 'POST') ||
-          !op.requiresAuth || op.credentialHeader != null ||
-          op.path.contains('{') || op.path.contains('}') || op.path.contains('?')) {
+          !op.requiresAuth || !op.enforceAuth ||
+          op.credentialHeader != null ||
+          op.path.contains('{') || op.path.contains('}') ||
+          op.path.contains('?') || op.path.contains('#')) {
         throw const FormatException('Unsafe location operation binding');
       }
       accepted[entry.key] = op.id;
