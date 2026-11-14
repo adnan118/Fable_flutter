@@ -326,6 +326,30 @@ function auditHistorical(root){
       read('FABLE-FINAL-CLOSURE-W0-GAP-REGISTER.json'));
   }catch{return null;}
 }
+/**
+ * Preserve independent reports without following .fable/reports symlinks.
+ * Nothing in this routine deletes a previous report or source file.
+ */
+export function saveOneCommandReport(root,report,{
+  exists=existsSync,lstat=lstatSync,mkdir=mkdirSync,write=writeFileSync,
+  stamp=()=>new Date().toISOString().replace(/[:.]/g,'-'),
+  unique=()=>process.pid+'-'+Math.random().toString(16).slice(2),
+}={}){
+  const base=resolve(root);
+  for(const folder of [base,join(base,'.fable'),join(base,'.fable','reports')]){
+    if(exists(folder)){
+      const info=lstat(folder);
+      if(info.isSymbolicLink()||!info.isDirectory())
+        throw Error('RC218_UNSAFE_REPORT_DIRECTORY: '+folder);
+    }else mkdir(folder,{recursive:false,mode:0o700});
+  }
+  const path=join(base,'.fable','reports',
+    'fable-'+stamp()+'-'+unique()+'.json');
+  write(path,JSON.stringify(report,null,2)+'\n',
+    {flag:'wx',mode:0o600});
+  return path;
+}
+
 export function runFableOneCommand(root,{
   runner=localRunner,logger=console.log,backendRoot=undefined,
   inputOverride=undefined,flutterAvailable=true,
@@ -363,13 +387,7 @@ export function runFableOneCommand(root,{
     closure:auditHistorical(root),backendCheckout:repos.backend,
     flutterCheckout:repos.flutter,
   });
-  const dir=join(root,'.fable','reports');
-  mkdirSync(dir,{recursive:true});
-  const name='rc217-'+new Date().toISOString().replace(/[:.]/g,'-')+
-    '-'+process.pid+'.json';
-  const reportPath=join(dir,name);
-  writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n',
-    {flag:'wx',mode:0o600});
+  const reportPath=saveOneCommandReport(root,report);
   logger('Fable checks: '+JSON.stringify(report.counts));
   logger('Historical outstanding: '+String(report.historical.outstanding));
   logger('Release: NO_GO until independent real E2E and owner approval');
