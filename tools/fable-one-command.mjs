@@ -149,17 +149,19 @@ function backgroundInputs(input,flutterRoot,backendRoot){
 export function buildOneCommandPlan({
   root,backendRoot=null,packageScripts={},inputs={},
   flutterAvailable=true,exists=existsSync,
+  safeTestRead=readSafeFeatureEvidence,
+  gitTestDiscovery=discoverTrackedNodeTests,
 }={}){
   const flutterRoot=resolve(root??'.');
   const backend=backendRoot?resolve(backendRoot):null;
   const args=backgroundInputs(inputs,flutterRoot,backend);
   const nodeTests=discoverExistingNodeTests(packageScripts,
     file=>exists(join(flutterRoot,file)));
-  const tracked=discoverTrackedNodeTests(flutterRoot);
+  const tracked=gitTestDiscovery(flutterRoot);
   const safePaths=[];
   const invalidPaths=[...nodeTests.unsupported,...tracked.rejected];
   for(const path of new Set([...nodeTests.paths,...tracked.files])){
-    try {readSafeFeatureEvidence(flutterRoot,path);safePaths.push(path);}
+    try {safeTestRead(flutterRoot,path);safePaths.push(path);}
     catch {invalidPaths.push('UNSAFE_NODE_TEST_FILE:'+path);}
   }
   safePaths.sort();
