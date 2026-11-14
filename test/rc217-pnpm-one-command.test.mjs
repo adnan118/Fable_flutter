@@ -23,7 +23,10 @@ const tests={scripts:{
 }};
 function plan({inputs={},scripts={},available=false,exist=()=>true}={}){
  return buildOneCommandPlan({...base,packageScripts:scripts,
-   inputs,flutterAvailable:available,exists:exist});
+   inputs,flutterAvailable:available,exists:exist,
+   safeTestRead:()=>'',gitTestDiscovery:()=>({
+     files:[],rejected:[],gitInventoryVerified:false,
+   })});
 }
 const evaluated=(p,runs,closure=CLOSURE)=>evaluateOneCommandPlan(p,runs,{
  closure,backendCheckout:{localMainVerified:true,independentPinVerified:false},
@@ -66,7 +69,8 @@ test('RC217 all independent Fable exports and W3 pins are optional, not invented
 test('RC217 no Backend checkout is blocked but Flutter Node tests remain runnable',()=>{
  const p=buildOneCommandPlan({root:'/tmp/flutter',
    packageScripts:{'test:source':'node --test test/example.test.mjs'},
-   exists:()=>true});
+   exists:()=>true,safeTestRead:()=>'',
+   gitTestDiscovery:()=>({files:[],rejected:[],gitInventoryVerified:false})});
  assert.ok(p.plan.find(x=>x.id==='BACKEND_W1_W2_FAST').blockReason);
  assert.equal(p.plan.find(x=>x.id==='NODE_ALL_EXISTING_TEST_SCRIPTS')
   .blockReason,null);
@@ -111,14 +115,14 @@ test('RC217 nonzero test exit never counts as success',()=>{
  assert.equal(r.checks[0].state,'FAILED');
  assert.equal(r.counts.failed,1);
 });
-test('RC217 missing flutter is BLOCKED while real Node tests may still pass',()=>{
+test('RC218 missing flutter is BLOCKED and incomplete Git test inventory stays PARTIAL',()=>{
  const p=plan({scripts:tests.scripts});
  const r=evaluated(p,[
   {id:'NODE_ALL_EXISTING_TEST_SCRIPTS',exitCode:0,signal:null,error:null},
   {id:'W7_FLUTTER_ANALYZE',exitCode:null,signal:null,error:'ENOENT'},
  ]);
  assert.equal(r.checks.find(x=>x.id==='NODE_ALL_EXISTING_TEST_SCRIPTS')
-  .state,'LOCAL_CHECK_PASS');
+  .state,'PARTIAL');
  assert.equal(r.checks.find(x=>x.id==='W7_FLUTTER_ANALYZE').state,'BLOCKED');
 });
 test('RC217 passing all artificial local runs still cannot waive real devices/approval',()=>{

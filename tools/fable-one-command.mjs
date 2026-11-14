@@ -5,7 +5,7 @@
  * Missing real inputs remain BLOCKED, never silently PASS.
  */
 import {execFileSync,spawnSync} from 'node:child_process';
-import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {existsSync,lstatSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {basename,dirname,isAbsolute,join,resolve,sep} from 'node:path';
 import {auditClosureRegister} from './closure-gap-audit.mjs';
 import {readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
@@ -40,6 +40,37 @@ export function discoverExistingNodeTests(scripts,hasFile=()=>true){
     }
   }
   return {paths:[...paths].sort(),unsupported:[...new Set(unsupported)].sort()};
+}
+
+/**
+ * Read the version-controlled Node test inventory instead of trusting only
+ * package.json. RC217 skipped many older source tests without scripts.
+ * Git's NUL-delimited tracked paths avoid shell parsing and untracked code.
+ */
+export function discoverTrackedNodeTests(root,{
+  runGit=execFileSync,
+  safeRead=readSafeFeatureEvidence,
+}={}){
+  let names;
+  try {
+    names=runGit('git',['ls-files','--cached','-z','--','test','tools'],{
+      cwd:root,encoding:'utf8',timeout:8000,maxBuffer:8*1024*1024,
+      stdio:['ignore','pipe','ignore'],
+    }).split('\0').filter(Boolean);
+  }catch{
+    return {files:[],rejected:[],gitInventoryVerified:false};
+  }
+  const files=[],rejected=[];
+  for(const name of [...new Set(names)].sort()){
+    if(!name.endsWith('.test.mjs'))continue;
+    if(!(name.startsWith('test/')||name.startsWith('tools/'))||
+       !validFile(name)){
+      rejected.push(name);continue;
+    }
+    try {safeRead(root,name);files.push(name);}
+    catch {rejected.push(name);}
+  }
+  return {files,rejected,gitInventoryVerified:true};
 }
 
 export function detectBackendRoot(flutterRoot,exist=existsSync){
@@ -77,6 +108,22 @@ function gitInfo(root){
       clean:dirty.length===0,origin};
   }catch{return {head:null,main:false,clean:false,origin:null};}
 }
+/**
+ * Find the actual Git checkout root, whether the generator resides inside
+ * Fable/Fable-Backend-RC66 or a differently named checked-out project.
+ * dirname(generator) is not necessarily the Git repository root.
+ */
+export function resolveBackendCheckoutRoot(generatorRoot,{git=execFileSync}={}){
+  if(!generatorRoot)return null;
+  try{
+    const top=git('git',['rev-parse','--show-toplevel'],{
+      cwd:generatorRoot,encoding:'utf8',timeout:7000,
+      maxBuffer:102400,stdio:['ignore','pipe','ignore'],
+    }).trim();
+    return top?resolve(top):null;
+  }catch{return null;}
+}
+
 function sourceFingerprint(root,expectedRepo,independentSha=null) {
   const git=gitInfo(root);
   const allowed=git.origin&&new RegExp(
@@ -118,19 +165,30 @@ function backgroundInputs(input,flutterRoot,backendRoot){
 export function buildOneCommandPlan({
   root,backendRoot=null,packageScripts={},inputs={},
   flutterAvailable=true,exists=existsSync,
+  safeTestRead=readSafeFeatureEvidence,
+  gitTestDiscovery=discoverTrackedNodeTests,
 }={}){
   const flutterRoot=resolve(root??'.');
   const backend=backendRoot?resolve(backendRoot):null;
   const args=backgroundInputs(inputs,flutterRoot,backend);
+  const backendCheckout=resolveBackendCheckoutRoot(backend);
   const nodeTests=discoverExistingNodeTests(packageScripts,
     file=>exists(join(flutterRoot,file)));
+  const tracked=gitTestDiscovery(flutterRoot);
+  const safePaths=[];
+  const invalidPaths=[...nodeTests.unsupported,...tracked.rejected];
+  for(const path of new Set([...nodeTests.paths,...tracked.files])){
+    try {safeTestRead(flutterRoot,path);safePaths.push(path);}
+    catch {invalidPaths.push('UNSAFE_NODE_TEST_FILE:'+path);}
+  }
+  safePaths.sort();
   const plan=[];
   const add=(id,stage,program,argv,cwd,reason=null,timeout=TIMEOUT.node)=>
     plan.push({id,stage,program,args:argv,root:cwd,
       blockReason:reason,timeoutMs:timeout});
   add('NODE_ALL_EXISTING_TEST_SCRIPTS','W0-W7','node',
-    ['--test',...nodeTests.paths],flutterRoot,
-    nodeTests.paths.length?null:'NO_NODE_TEST_FILES_FOUND');
+    ['--test','--test-concurrency=4',...safePaths],flutterRoot,
+    safePaths.length?null:'NO_SAFE_NODE_TEST_FILES_FOUND');
   add('BACKEND_W1_W2_FAST','W1-W2','node',
     ['tools/fable-w1-w2-one-shot.mjs','--fast','--json'],backend,
     backend?null:'PRIVATE_BACKEND_CHECKOUT_NOT_FOUND',TIMEOUT.backendFast);
@@ -145,9 +203,9 @@ export function buildOneCommandPlan({
     ['tools/verify-current-w3-handoff.mjs',
       '--backend-export',args.backendExport??'',
       '--flutter-root',args.generated??flutterRoot,
-      '--backend-repo',backend?dirname(backend):'',
+      '--backend-repo',backendCheckout??'',
       '--expected-backend-sha',args.backendPin??''],flutterRoot,
-    backend&&args.backendExport&&args.generated&&args.backendPin&&args.flutterPin?
+    backendCheckout&&args.backendExport&&args.generated&&args.backendPin&&args.flutterPin?
       null:'INDEPENDENT_W3_EXPORT_FLUTTER_PROJECT_AND_BOTH_GIT_PINS_REQUIRED');
   const fableComplete=PROFILES.every(p=>args.profiles[p]);
   const profileArgs=PROFILES.flatMap(p=>{
@@ -179,24 +237,55 @@ export function buildOneCommandPlan({
   add('W7_FULL_FLUTTER_TEST','W7','flutter',['test'],flutterRoot,
     flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
   return {schemaVersion:1,batch:'RC217-ONE-COMMAND',
-    plan,filesDiscovered:nodeTests.paths.length,
-    unsupportedTestCommands:nodeTests.unsupported,
+    plan,backendCheckoutRoot:backendCheckout,
+    filesDiscovered:safePaths.length,
+    unregisteredNodeTests:tracked.files.filter(path=>!nodeTests.paths.includes(path)).length,
+    gitTestInventoryVerified:tracked.gitInventoryVerified,
+    unsupportedTestCommands:[...new Set(invalidPaths)].sort(),
     profileExportsProvided:PROFILES.filter(p=>args.profiles[p]).length,
     independentInputsProvided:Boolean(args.backendPin&&args.flutterPin)};
 }
-function localRunner(step){
-  const start=Date.now();
-  const run=spawnSync(step.program==='flutter'?'flutter':process.execPath,
-    step.args,{cwd:step.root,encoding:'utf8',windowsHide:true,
-      stdio:['ignore','pipe','pipe'],timeout:step.timeoutMs,
-      maxBuffer:4*1024*1024});
-  return {exitCode:run.status,signal:run.signal??null,
-    error:run.error?.code??null,durationMs:Date.now()-start};
+/**
+ * Flutter on Windows is distributed as flutter.bat, not an executable.
+ * Node's no-shell child spawning cannot directly launch .bat files.
+ * Only the fixed, allowlisted Flutter argv defined by this module may pass
+ * through cmd.exe; NO user-provided commands, shell metacharacters or paths.
+ */
+export function flutterChildSpec(step,{platform=process.platform}={}){
+  if(step.program!=='flutter')
+    return {command:process.execPath,args:step.args};
+  if(platform!=='win32')return {command:'flutter',args:step.args};
+  if(!Array.isArray(step.args)||step.args.length===0||
+     step.args.some(x=>typeof x!=='string'||!x||
+       [...x].some(ch=>!(/[a-zA-Z0-9_.-]/.test(ch)||ch==='/'))))
+    throw Error('RC218_UNSAFE_WINDOWS_FLUTTER_COMMAND');
+  return {command:'cmd.exe',args:['/d','/s','/c',
+    'flutter '+step.args.join(' ')]};
 }
-function classify(step,r,{profileExportsProvided=0,closure=null}={}){
+export function localRunner(step,{
+  spawn=spawnSync,platform=process.platform,now=Date.now,
+}={}){
+  const start=now();
+  const spec=flutterChildSpec(step,{platform});
+  const run=spawn(spec.command,spec.args,{
+    cwd:step.root,encoding:'utf8',windowsHide:true,
+    stdio:['ignore','pipe','pipe'],timeout:step.timeoutMs,
+    maxBuffer:16*1024*1024});
+  // No raw command output is surfaced in reports (may contain secrets).
+  return {exitCode:run.status,signal:run.signal??null,
+    error:run.error?.code??null,durationMs:now()-start};
+}
+function classify(step,r,{
+  profileExportsProvided=0,closure=null,
+  testInventoryVerified=true,skippedTestScripts=0,
+}={}){
   if(step.blockReason)return {state:'BLOCKED',reason:step.blockReason};
   if(!r)return {state:'NOT_RUN',reason:'COMMAND_NOT_EXECUTED'};
   if(r.error==='ENOENT')return {state:'BLOCKED',reason:'TOOL_NOT_INSTALLED'};
+  if(step.id==='NODE_ALL_EXISTING_TEST_SCRIPTS'&&
+     r.exitCode===0&&!r.signal&&!r.error&&
+     (!testInventoryVerified||skippedTestScripts>0))
+    return {state:'PARTIAL',reason:'GIT_TEST_INVENTORY_UNVERIFIED_OR_UNSAFE_TESTS_SKIPPED'};
   // W4 still executes the Other-Backend paths if no Fable exports exist.
   // Its missing six real Fable profiles are a prerequisite, not a failed
   // implementation test, and never count as 12/12 PASS.
@@ -220,7 +309,9 @@ export function evaluateOneCommandPlan(plan,runs=[],{
   const results=plan.plan.map(step=>{
     const run=byId.get(step.id);
     const classified=classify(step,run,{
-      profileExportsProvided:plan.profileExportsProvided,closure});
+      profileExportsProvided:plan.profileExportsProvided,closure,
+      testInventoryVerified:plan.gitTestInventoryVerified,
+      skippedTestScripts:plan.unsupportedTestCommands.length});
     const conditionalIncomplete=step.id==='W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS'&&
       plan.profileExportsProvided!==3;
     return {id:step.id,stage:step.stage,state:classified.state,
@@ -232,11 +323,14 @@ export function evaluateOneCommandPlan(plan,runs=[],{
   const counts={passed:results.filter(x=>x.state==='LOCAL_CHECK_PASS').length,
     failed:results.filter(x=>x.state==='FAILED').length,
     blocked:results.filter(x=>x.state==='BLOCKED').length,
+    partial:results.filter(x=>x.state==='PARTIAL').length,
     notRun:results.filter(x=>x.state==='NOT_RUN').length};
   return {schemaVersion:1,batch:plan.batch,
     selectedManager:'pnpm',oneCommand:'pnpm fable:all',
     latestSource:{backend:backendCheckout,flutter:flutterCheckout},
     testsDiscovered:plan.filesDiscovered,
+    previouslyUnregisteredNodeTests:plan.unregisteredNodeTests??0,
+    completeGitTestInventoryVerified:Boolean(plan.gitTestInventoryVerified),
     sourceTestScriptIssues:plan.unsupportedTestCommands,
     counts,checks:results,
     historical:{families:closure?.counts?.families??null,
@@ -260,6 +354,30 @@ function auditHistorical(root){
       read('FABLE-FINAL-CLOSURE-W0-GAP-REGISTER.json'));
   }catch{return null;}
 }
+/**
+ * Preserve independent reports without following .fable/reports symlinks.
+ * Nothing in this routine deletes a previous report or source file.
+ */
+export function saveOneCommandReport(root,report,{
+  exists=existsSync,lstat=lstatSync,mkdir=mkdirSync,write=writeFileSync,
+  stamp=()=>new Date().toISOString().replace(/[:.]/g,'-'),
+  unique=()=>process.pid+'-'+Math.random().toString(16).slice(2),
+}={}){
+  const base=resolve(root);
+  for(const folder of [base,join(base,'.fable'),join(base,'.fable','reports')]){
+    if(exists(folder)){
+      const info=lstat(folder);
+      if(info.isSymbolicLink()||!info.isDirectory())
+        throw Error('RC218_UNSAFE_REPORT_DIRECTORY: '+folder);
+    }else mkdir(folder,{recursive:false,mode:0o700});
+  }
+  const path=join(base,'.fable','reports',
+    'fable-'+stamp()+'-'+unique()+'.json');
+  write(path,JSON.stringify(report,null,2)+'\n',
+    {flag:'wx',mode:0o600});
+  return path;
+}
+
 export function runFableOneCommand(root,{
   runner=localRunner,logger=console.log,backendRoot=undefined,
   inputOverride=undefined,flutterAvailable=true,
@@ -274,7 +392,7 @@ export function runFableOneCommand(root,{
     packageScripts:pkg.scripts,inputs,flutterAvailable});
   const repos={
     flutter:sourceFingerprint(root,'fable_flutter',inputs.expectedFlutterSha),
-    backend:sourceFingerprint(backend?dirname(backend):null,
+    backend:sourceFingerprint(plan.backendCheckoutRoot,
       'fable',inputs.expectedBackendSha),
   };
   const runs=[];
@@ -297,13 +415,7 @@ export function runFableOneCommand(root,{
     closure:auditHistorical(root),backendCheckout:repos.backend,
     flutterCheckout:repos.flutter,
   });
-  const dir=join(root,'.fable','reports');
-  mkdirSync(dir,{recursive:true});
-  const name='rc217-'+new Date().toISOString().replace(/[:.]/g,'-')+
-    '-'+process.pid+'.json';
-  const reportPath=join(dir,name);
-  writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n',
-    {flag:'wx',mode:0o600});
+  const reportPath=saveOneCommandReport(root,report);
   logger('Fable checks: '+JSON.stringify(report.counts));
   logger('Historical outstanding: '+String(report.historical.outstanding));
   logger('Release: NO_GO until independent real E2E and owner approval');
