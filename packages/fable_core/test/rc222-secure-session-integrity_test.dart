@@ -9,11 +9,18 @@ class _ControlledStorage implements FlutterSecureStorage {
   final values=<String,String>{};
   String? failWriteKey;
   String? failDeleteKey;
+  String? pauseWriteKey;
+  Completer<void>? writeReached;
+  Completer<void>? releaseWrite;
   final operations=<String>[];
 
   Future<void> _write(String key,String value) async {
     operations.add('write:'+key);
     if(key==failWriteKey)throw StateError('test-write-failure');
+    if(key==pauseWriteKey){
+      if(writeReached!=null && !writeReached!.isCompleted)writeReached!.complete();
+      await releaseWrite?.future;
+    }
     values[key]=value;
   }
   Future<void> _delete(String key) async {
@@ -50,6 +57,28 @@ void main() {
     expect(storage.values['rc222.login.success.session.integrity'],'ready');
     expect(storage.operations.last,'write:rc222.login.success.session.integrity');
     expect(events.last.authenticated,true);
+  });
+
+  test('RC222 account epoch and credential read wait until both native keys commit',()async{
+    final storage=_ControlledStorage();
+    final session=FableSecureSession(storage:storage,namespace:'rc222.locked.read');
+    storage.pauseWriteKey='rc222.locked.read.session.refresh';
+    storage.writeReached=Completer<void>();
+    storage.releaseWrite=Completer<void>();
+    final prior=session.identityRevision;
+    final pending=session.replaceTokensIfIdentity(expectedIdentity:prior,
+      accessToken:'new-access',refreshToken:'new-refresh');
+    await storage.writeReached!.future;
+    expect(session.identityRevision,prior,
+      reason:'No identity may be announced while refresh secure storage is pending');
+    // This reader must wait behind the namespace lock, never see
+    // new access paired with an older refresh while commit is incomplete.
+    final accessRead=session.accessToken;
+    storage.releaseWrite!.complete();
+    expect(await pending,true);
+    expect(await accessRead,'new-access');
+    expect(await session.refreshToken,'new-refresh');
+    expect(session.identityRevision,prior+1);
   });
 
   test('RC222 failed refresh key write blocks mixed access/refresh secrets',()async{
