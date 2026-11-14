@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fable_core/fable_core.dart';
 import 'package:fable_social/fable_social.dart';
@@ -9,9 +10,11 @@ class _Gateway implements BackendApiGateway {
   final calls=<String>[];
   final bodies=<Object?>[];
   Object? Function(String)? respond;
+  Future<void> Function(String)? beforeResponse;
   @override Future<Response<dynamic>> execute(String operationId,{Map<String,dynamic>? path,
     Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,String? ifMatch}) async {
     calls.add(operationId); bodies.add(body);
+    if(beforeResponse!=null)await beforeResponse!(operationId);
     return Response(requestOptions:RequestOptions(path:'/'),data:respond?.call(operationId));
   }
   @override void dispose() {}
@@ -20,7 +23,7 @@ class _Credentials implements FableSocialCredentialProvider {
   FableSocialCredential? credential;
   @override Future<FableSocialCredential?> obtain(FableSocialChallenge challenge) async => credential;
 }
-FableContract contract({bool insecure=false}) {
+FableContract contract({bool insecure=false,bool unenforced=false}) {
   final ops=<String,FableOperation>{};
   for(final entry in FableSocialOperations.fableIds.entries) {
     ops[entry.value]=FableOperation(entry.value,entry.key=='unlink'?'DELETE':'POST',
@@ -29,7 +32,7 @@ FableContract contract({bool insecure=false}) {
       entry.key=='appleLink'?'/auth/social/apple/link':
       '/auth/social/${entry.key}',digest,
       requiresAuth:const {'googleLink','appleLink','unlink'}.contains(entry.key) ||
-        (insecure && entry.key=='challenge'),enforceAuth:true);
+        (insecure && entry.key=='challenge'),enforceAuth:!unenforced);
   }
   return FableContract(contractHash:digest,operations:ops,featureIds:const {'auth'},
     projectName:'test',selectionMode:'explicit');
@@ -41,12 +44,60 @@ class _AuthenticatedSession extends FableSecureSession {
   @override Future<String?> get refreshToken async=>null;
 }
 
+class _DelayedAuthSession extends _AuthenticatedSession {
+  _DelayedAuthSession({required super.namespace,required this.pending});
+  final Future<String?> pending;
+  @override Future<String?> get accessToken=>pending;
+}
+
 void main() {
   test('Fable social bindings use only declared method, public status and paths',(){
     final bound=FableSocialOperations.fable(contract());
     expect(bound.require('challenge'),'auth.social.challenge');
     expect(bound.supports('appleLink'),true);
     expect(()=>FableSocialOperations.fable(contract(insecure:true)),throwsFormatException);
+  });
+  test('RC228 Fable social contracts refuse auth without runtime enforcement',(){
+    expect(()=>FableSocialOperations.fable(contract(unenforced:true)),
+      throwsFormatException);
+    expect(FableSocialOperations.fable(contract()).require('google'),
+      'auth.social.google');
+  });
+  test('RC228 a delayed challenge response cannot revive expired OAuth nonce',() async {
+    final api=_Gateway()
+      ..respond=(_)=>{'provider':'google','state':seq('s',32),
+        'nonce':seq('n',32),'expiresInMs':1000}
+      ..beforeResponse=(id)async{
+        if(id=='auth.social.challenge')await Future<void>.delayed(
+          const Duration(milliseconds:1100));
+      };
+    final provider=_Credentials()..credential=FableSocialCredential(
+      provider:FableSocialProvider.google,nonce:seq('n',32),
+      identityToken:seq('t',32));
+    final repository=FableSocialRepository(gateway:api,
+      operations:FableSocialOperations.fable(contract()),
+      session:FableSecureSession(namespace:'test.social.rc228.expiry'),
+      credentials:provider,adapter:const FableSocialBackendAdapter());
+    await expectLater(repository.signIn(FableSocialProvider.google),throwsStateError);
+    expect(api.calls,['auth.social.challenge'],
+      reason:'Expired social challenge must never post a credential');
+  });
+  test('RC228 account switch during secure token lookup cannot start social link',()async{
+    final pending=Completer<String?>();
+    final session=_DelayedAuthSession(namespace:'test.social.rc228.switch',
+      pending:pending.future);
+    final api=_Gateway();
+    final provider=_Credentials();
+    final repository=FableSocialRepository(gateway:api,
+      operations:FableSocialOperations.fable(contract()),
+      session:session,credentials:provider,adapter:const FableSocialBackendAdapter());
+    final request=repository.link(FableSocialProvider.google,
+      securityChallengeId:'550e8400-e29b-41d4-a716-446655440013');
+    await Future<void>.delayed(Duration.zero);
+    session.identityRevision++;
+    pending.complete('old-access');
+    expect(await request,isNull);
+    expect(api.calls,isEmpty);
   });
   test('provider nonce mismatch denied before posting tokens',() async {
     final api=_Gateway()..respond=(id)=>{'provider':'google','state':seq('s',32),
