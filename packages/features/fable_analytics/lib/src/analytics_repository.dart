@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 /// Privacy-first, opt-in client analytics. Not a substitute for an authorized
@@ -32,33 +33,67 @@ abstract interface class FableAnalyticsSink {
 }
 
 class FableAnalyticsTracker {
-  FableAnalyticsTracker({required FableAnalyticsSink sink, bool consent = false})
-      : _sink = sink, _consent = consent;
-  final FableAnalyticsSink _sink;
-  bool _consent;
-  final Queue<FableAnalyticsEvent> _queue = Queue();
-  bool _sending = false;
-  bool get hasConsent => _consent;
-  int get pendingCount => _queue.length;
-  void setConsent(bool value) {
-    _consent = value;
-    if (!value) _queue.clear(); // revoke immediately; never persisted
+  FableAnalyticsTracker({
+    required FableAnalyticsSink sink,
+    bool consent = false,
+    Stream<void>? identityInvalidations,
+  }) : _sink = sink, _consent = consent {
+    // Consent belongs to a user/session. A different identity must opt in
+    // separately, even if the host reuses the same tracker instance.
+    _identitySubscription = identityInvalidations?.listen((_) => setConsent(false));
   }
+  final FableAnalyticsSink _sink;
+  StreamSubscription<void>? _identitySubscription;
+  bool _consent;
+  bool _sending = false;
+  bool _disposed = false;
+  int _consentRevision = 0;
+  final Queue<FableAnalyticsEvent> _queue = Queue();
+
+  bool get hasConsent => !_disposed && _consent;
+  int get pendingCount => _queue.length;
+
+  void setConsent(bool value) {
+    if (_disposed) {
+      if (value) throw StateError('Disposed analytics tracker cannot resume');
+      return;
+    }
+    if (_consent != value) _consentRevision++;
+    _consent = value;
+    if (!value) _queue.clear(); // Revoke all unsent events immediately.
+  }
+
   void record(FableAnalyticsEvent event) {
-    if (!_consent) return;
+    if (!hasConsent) return;
     if (_queue.length >= 100) _queue.removeFirst();
     _queue.addLast(event);
   }
+
   Future<void> flush() async {
-    if (!_consent || _sending || _queue.isEmpty) return;
+    if (!hasConsent || _sending || _queue.isEmpty) return;
     _sending = true;
+    final revision = _consentRevision;
     final batch = List<FableAnalyticsEvent>.unmodifiable(_queue);
     try {
+      // This sink call may already be in flight when consent is withdrawn;
+      // only the sink/provider can cancel a sent request. We never allow its
+      // completion to delete events recorded under a NEW consent revision.
       await _sink.send(batch);
-      if (_consent) {
+      if (hasConsent && revision == _consentRevision) {
         for (final delivered in batch) { _queue.remove(delivered); }
       }
-    } finally { _sending = false; }
+    } finally {
+      _sending = false;
+    }
   }
-  void dispose() { _consent = false; _queue.clear(); }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _consent = false;
+    _consentRevision++;
+    _queue.clear();
+    unawaited(_identitySubscription?.cancel());
+    _identitySubscription = null;
+  }
 }
