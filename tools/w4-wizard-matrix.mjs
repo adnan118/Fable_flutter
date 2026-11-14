@@ -99,7 +99,9 @@ function copyStarter(source,destination){
       const rel=relative(root,path);
       if(rel==='' || rel==='.')return true;
       const segments=rel.split(sep);
-      if(segments.some(s=>COPY_EXCLUDES.has(s)))return false;
+      if(segments.some(s=>COPY_EXCLUDES.has(s)||
+          /^\\.env(?:\\.|$)/.test(s)||
+          /\\.(?:keystore|jks|p12|p8|pem|key)$/i.test(s)))return false;
       if(lstatSync(path).isSymbolicLink())
         throw Error('Flutter starter contains a symbolic link: '+rel);
       copied++;
