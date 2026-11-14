@@ -320,3 +320,57 @@ test('Fable selection must separately approve importing its published decisions'
     assert.equal(existsSync(join(f.root,'assets/config/backend.json')),false);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+test('RC211 guided Other Backend switch archives previously imported Fable contracts only after approval',async()=>{
+  const f=fixture(),shown=[];
+  try{
+    const prior=importBackendDecisions(f.dir,{
+      expectedProjectId:f.contract.project.id,expectedContractHash:f.contract.contractHash,
+    });
+    saveFrontendSetup(f.root,prior,{apply:true,sourceDir:f.dir});
+    const result=await runGuidedFlutterSetup({
+      root:f.root,
+      ask:async prompt=>{
+        if(prompt.includes('هل الباك المستخدم'))return 'لا';
+        if(prompt.includes('نوع عقد الباك الآخر'))return 'openapi';
+        if(prompt.startsWith('Project ID'))return f.contract.project.id;
+        if(prompt.includes('اكتب «اعتمد»'))return 'APPROVE';
+        return '';
+      },
+      show:line=>shown.push(line),
+    });
+    assert.equal(result.applied,true);
+    assert.match(shown.join('\n'),/will be archived, not deleted/);
+    assert.equal(read(join(f.root,'assets/config/backend.json')).backend.kind,'other');
+    assert.equal(read(join(f.root,'assets/config/backend.json')).contractImported,false);
+    assert.equal(existsSync(join(f.root,'assets/contracts/contract.json')),false);
+    assert.match(result.retiredFableContracts,/retired-fable-contracts/);
+    assert.equal(read(join(f.root,result.retiredFableContracts,'contracts/contract.json')).contractHash,
+      f.contract.contractHash);
+    assert.equal(read(join(f.root,result.retiredFableContracts,'prior-setup/assets/config/backend.json')).backend.kind,'fable');
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('RC211 rejecting Other Backend switch preserves active Fable contracts and setup unchanged',async()=>{
+  const f=fixture();
+  try{
+    const prior=importBackendDecisions(f.dir);
+    saveFrontendSetup(f.root,prior,{apply:true,sourceDir:f.dir});
+    const bytes=readFileSync(join(f.root,'assets/contracts/contract.json'));
+    const backend=readFileSync(join(f.root,'assets/config/backend.json'));
+    const result=await runGuidedFlutterSetup({
+      root:f.root,
+      ask:async prompt=>{
+        if(prompt.includes('هل الباك المستخدم'))return 'لا';
+        if(prompt.includes('نوع عقد الباك الآخر'))return 'custom';
+        if(prompt.startsWith('Project ID'))return f.contract.project.id;
+        if(prompt.includes('اكتب «اعتمد»'))return 'لا';
+        return '';
+      },show:()=>{},
+    });
+    assert.equal(result.cancelled,true);
+    assert.deepEqual(readFileSync(join(f.root,'assets/contracts/contract.json')),bytes);
+    assert.deepEqual(readFileSync(join(f.root,'assets/config/backend.json')),backend);
+    assert.equal(existsSync(join(f.root,'.fable/retired-fable-contracts')),false);
+  }finally{rmSync(f.root,{recursive:true,force:true});}
+});

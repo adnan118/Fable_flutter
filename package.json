@@ -25,6 +25,7 @@
     "closure:audit": "node tools/closure-gap-audit-cli.mjs --json",
     "closure:check": "node tools/closure-gap-audit-cli.mjs --strict",
     "test:w3:current-handoff": "node --test test/rc210-w3-current-handoff.test.mjs",
-    "w3:handoff:verify": "node tools/verify-current-w3-handoff.mjs"
+    "w3:handoff:verify": "node tools/verify-current-w3-handoff.mjs",
+    "test:w4:retirement": "node --test test/rc211-w4-contract-retirement.test.mjs test/flutter-setup-wizard.test.mjs"
   }
 }

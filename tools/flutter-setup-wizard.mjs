@@ -14,6 +14,7 @@ import {validateSessionPolicyForWizard} from './read-session-policy.mjs';
 import {classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 import {readFrontendOwnedDecisions,saveFrontendOwnedDecisions} from './frontend-owned-decisions.mjs';
 import {auditSelectedFeatureIntegration,formatIntegrationGapReport} from './audit-selected-feature-integration.mjs';
+import {planOtherBackendContractRetirement,applyOtherBackendWithArchivedFable} from './retire-fable-contracts-for-other-backend.mjs';
 
 const CONTRACT_FILES=['contract.json','flutter-handoff.json','openapi.json','mobile-core-operations.json'];
 const OUTPUT_PATH='assets/config/frontend-setup.json';
@@ -326,7 +327,7 @@ export function reconcileManualWithBackend(manual,verified) {
       instructions:'Manual choices were checked against the verified Fable Backend; build and runtime authorization remain backend-owned.'}};
 }
 
-export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={}){
+function saveFrontendSetupUnretired(root,snapshot,{apply=false,sourceDir=null}={}){
   const project=resolve(root);
   if(snapshot?.kind!=='fable.flutter-frontend-setup')throw Error('Refusing unsupported frontend setup');
   const frontendOwned=readFrontendOwnedDecisions(project,snapshot.projectId);
@@ -383,6 +384,16 @@ export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={})
     reportSelectedFeatureGapsAfterApply(project,summary); // manual / Other Backend
   return summary;
 }
+// Every explicit Other Backend apply protects previous Fable source; a
+// rejected manual configuration is rolled back with the active contract.
+export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={}){
+  if(apply && snapshot?.kind==='fable.flutter-frontend-setup' &&
+     snapshot.backendAuthority!==true){
+    return applyOtherBackendWithArchivedFable(root,()=>saveFrontendSetupUnretired(
+      root,snapshot,{apply,sourceDir}));
+  }
+  return saveFrontendSetupUnretired(root,snapshot,{apply,sourceDir});
+}
 async function interactiveManual(question=null,{backendAdapter='custom'}={}){
   const cli=question?null:createInterface({input:process.stdin,output:process.stdout});
   try{
@@ -433,11 +444,17 @@ export async function runGuidedFlutterSetup({
     const adapter=String(await ask('نوع عقد الباك الآخر (openapi/custom) [openapi]: ')).trim().toLowerCase()||'openapi';
     if(!['openapi','custom'].includes(adapter))throw Error('External adapter must be openapi or custom');
     const manual=manualFrontendDecisions(await interactiveManual(ask,{backendAdapter:adapter}));
+    // Preview the reversible retirement before the developer approves. No
+    // old Fable contract may stay active after selecting Other Backend.
+    const retirement=planOtherBackendContractRetirement(project);
     show([
       '── External Backend (not Fable) ──',
       'Adapter: '+adapter,
       'Project: '+manual.projectId,
       'Backend API/authorization/roles/features: NOT VERIFIED, unavailable until external contract binding',
+      retirement.required
+        ? 'Existing Fable contracts will be archived, not deleted, only after APPROVE.'
+        : 'No active Fable contract bundle needs retirement.',
       'No Fable routes, login methods, UI or Backend privileges will be selected.',
       'Frontend-only choices: '+JSON.stringify(manual.decisionSnapshot.decisions.project.capabilities),
       'Proposed: '+JSON.stringify(manual.decisionSnapshot.decisions,null,2),
