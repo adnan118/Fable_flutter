@@ -194,6 +194,29 @@ test('RC213 W5 rejects a manual needsBackend:false override for server-owned aut
   needsBackend:false,operations:[]}}}});
  assert.ok(r.features[0].issues.includes('W5_SERVER_FEATURE_BACKEND_SCOPE_REQUIRED'));
 });
+test('RC213 W5 covers separately selected custom project feature, not just the core 17 IDs',t=>{
+ const f=fixture(t);
+ f.write('.fable/project-features.json',{features:['custom_orders']});
+ const r=auditW5FeatureFlows(f.root);
+ assert.equal(r.counts.selected,2);
+ assert.equal(r.sourceTracePassed,false);
+ assert.ok(r.features.some(x=>x.id==='custom_orders'&&x.status==='BLOCKED'));
+});
+test('RC213 W5 refuses a symlinked custom feature selection manifest before reading it',t=>{
+ const f=fixture(t);
+ f.write('outside-project-features.json',{features:['custom_orders']});
+ symlinkSync(join(f.root,'outside-project-features.json'),
+   join(f.root,'.fable/project-features.json'));
+ assert.throws(()=>auditW5FeatureFlows(f.root),/W5_EVIDENCE_SYMLINK/);
+});
+test('RC213 W5 rejects scope entries for features that were never selected',()=>{
+ const r=pure({requirements:{features:{
+  notifications:{needsBackend:true,operations:[{operationId:ID,method:'GET',path:'/notes'}]},
+  unknown_feature:{needsBackend:true,operations:[]},
+ }}});
+ assert.equal(r.sourceTracePassed,false);
+ assert.ok(r.issues.includes('W5_REQUIREMENTS_INCLUDE_UNSELECTED_FEATURES'));
+});
 test('RC213 W5 CLI never accepts half of an independent Fable pin',()=>{
  assert.throws(()=>parseW5Args(['--expected-project-id','x']),/Both independent/);
  assert.throws(()=>parseW5Args(['--expected-project-id','x',
