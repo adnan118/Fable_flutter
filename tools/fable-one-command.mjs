@@ -5,7 +5,7 @@
  * Missing real inputs remain BLOCKED, never silently PASS.
  */
 import {execFileSync,spawnSync} from 'node:child_process';
-import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {existsSync,lstatSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {basename,dirname,isAbsolute,join,resolve,sep} from 'node:path';
 import {auditClosureRegister} from './closure-gap-audit.mjs';
 import {readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
@@ -40,6 +40,37 @@ export function discoverExistingNodeTests(scripts,hasFile=()=>true){
     }
   }
   return {paths:[...paths].sort(),unsupported:[...new Set(unsupported)].sort()};
+}
+
+/**
+ * Read the version-controlled Node test inventory instead of trusting only
+ * package.json. RC217 skipped many older source tests without scripts.
+ * Git's NUL-delimited tracked paths avoid shell parsing and untracked code.
+ */
+export function discoverTrackedNodeTests(root,{
+  runGit=execFileSync,
+  safeRead=readSafeFeatureEvidence,
+}={}){
+  let names;
+  try {
+    names=runGit('git',['ls-files','--cached','-z','--','test','tools'],{
+      cwd:root,encoding:'utf8',timeout:8000,maxBuffer:8*1024*1024,
+      stdio:['ignore','pipe','ignore'],
+    }).split('\\0').filter(Boolean);
+  }catch{
+    return {files:[],rejected:[],gitInventoryVerified:false};
+  }
+  const files=[],rejected=[];
+  for(const name of [...new Set(names)].sort()){
+    if(!name.endsWith('.test.mjs'))continue;
+    if(!/^(?:test|tools)\\/[a-zA-Z0-9_.\\/-]+\\.test\\.mjs$/.test(name)||
+       !validFile(name)){
+      rejected.push(name);continue;
+    }
+    try {safeRead(root,name);files.push(name);}
+    catch {rejected.push(name);}
+  }
+  return {files,rejected,gitInventoryVerified:true};
 }
 
 export function detectBackendRoot(flutterRoot,exist=existsSync){
@@ -124,13 +155,21 @@ export function buildOneCommandPlan({
   const args=backgroundInputs(inputs,flutterRoot,backend);
   const nodeTests=discoverExistingNodeTests(packageScripts,
     file=>exists(join(flutterRoot,file)));
+  const tracked=discoverTrackedNodeTests(flutterRoot);
+  const safePaths=[];
+  const invalidPaths=[...nodeTests.unsupported,...tracked.rejected];
+  for(const path of new Set([...nodeTests.paths,...tracked.files])){
+    try {readSafeFeatureEvidence(flutterRoot,path);safePaths.push(path);}
+    catch {invalidPaths.push('UNSAFE_NODE_TEST_FILE:'+path);}
+  }
+  safePaths.sort();
   const plan=[];
   const add=(id,stage,program,argv,cwd,reason=null,timeout=TIMEOUT.node)=>
     plan.push({id,stage,program,args:argv,root:cwd,
       blockReason:reason,timeoutMs:timeout});
   add('NODE_ALL_EXISTING_TEST_SCRIPTS','W0-W7','node',
-    ['--test',...nodeTests.paths],flutterRoot,
-    nodeTests.paths.length?null:'NO_NODE_TEST_FILES_FOUND');
+    ['--test','--test-concurrency=4',...safePaths],flutterRoot,
+    safePaths.length?null:'NO_SAFE_NODE_TEST_FILES_FOUND');
   add('BACKEND_W1_W2_FAST','W1-W2','node',
     ['tools/fable-w1-w2-one-shot.mjs','--fast','--json'],backend,
     backend?null:'PRIVATE_BACKEND_CHECKOUT_NOT_FOUND',TIMEOUT.backendFast);
@@ -179,8 +218,10 @@ export function buildOneCommandPlan({
   add('W7_FULL_FLUTTER_TEST','W7','flutter',['test'],flutterRoot,
     flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
   return {schemaVersion:1,batch:'RC217-ONE-COMMAND',
-    plan,filesDiscovered:nodeTests.paths.length,
-    unsupportedTestCommands:nodeTests.unsupported,
+    plan,filesDiscovered:safePaths.length,
+    unregisteredNodeTests:tracked.files.filter(path=>!nodeTests.paths.includes(path)).length,
+    gitTestInventoryVerified:tracked.gitInventoryVerified,
+    unsupportedTestCommands:[...new Set(invalidPaths)].sort(),
     profileExportsProvided:PROFILES.filter(p=>args.profiles[p]).length,
     independentInputsProvided:Boolean(args.backendPin&&args.flutterPin)};
 }
@@ -237,6 +278,8 @@ export function evaluateOneCommandPlan(plan,runs=[],{
     selectedManager:'pnpm',oneCommand:'pnpm fable:all',
     latestSource:{backend:backendCheckout,flutter:flutterCheckout},
     testsDiscovered:plan.filesDiscovered,
+    previouslyUnregisteredNodeTests:plan.unregisteredNodeTests??0,
+    completeGitTestInventoryVerified:Boolean(plan.gitTestInventoryVerified),
     sourceTestScriptIssues:plan.unsupportedTestCommands,
     counts,checks:results,
     historical:{families:closure?.counts?.families??null,
