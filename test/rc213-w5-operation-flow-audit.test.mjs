@@ -43,11 +43,16 @@ function fakeRead(path){
 }
 function pure({selected=['notifications'],flows=[flow()],backendKind='other',
    contract=CATALOG,externalBindings=BINDINGS,readEvidence=fakeRead,
-   contractHash=HASH,projectId='w5-real-project',}={}){
+   contractHash=HASH,projectId='w5-real-project',requirements=null}={}){
+ const scoped=requirements??{features:Object.fromEntries(selected.map(id=>[
+  id,{needsBackend:id!=='deeplinks',operations:id==='deeplinks'?[]:
+    [{operationId:ID,method:'GET',path:'/notes'}]},
+ ]))};
  return inspectW5SourceFlowPlan({selected,backendKind,manifest:{
   schemaVersion:1,kind:'fable.w5-operation-flows',projectId,backendKind,
   contractHash,flows,
- },contract,externalBindings,readEvidence,projectId,contractHash});
+ },contract,externalBindings,readEvidence,projectId,contractHash,
+   requirements:scoped});
 }
 function fixture(t){
  const root=mkdtempSync(join(tmpdir(),'fable-w5-rc213-'));
@@ -70,6 +75,11 @@ function fixture(t){
  write('.fable/w5-operation-flows.json',{
   schemaVersion:1,kind:'fable.w5-operation-flows',projectId:'w5-real-project',
   backendKind:'other',contractHash:HASH,flows:[flow()]});
+ write('.fable/feature-integration-requirements.json',{
+  schemaVersion:1,kind:'fable.feature-integration-requirements',
+  features:{notifications:{needsBackend:true,
+    operations:[{operationId:ID,method:'GET',path:'/notes'}]}},
+ });
  for(const path of Object.keys(flow().stages).map(k=>flow().stages[k].path)
    .concat('lib/dto.dart'))write(path,fakeRead(path));
  return {root,write};
@@ -158,6 +168,31 @@ test('RC213 W5 with no per-operation ledger is blocked for the selected feature'
  const report=auditW5FeatureFlows(f.root);
  assert.equal(report.sourceTracePassed,false);
  assert.equal(report.counts.blocked,1);
+});
+test('RC213 W5 blocks a selected backend feature missing its full required-operation scope',()=>{
+ const r=pure({requirements:{features:{}}});
+ assert.equal(r.sourceTracePassed,false);
+ assert.ok(r.features[0].issues.includes('W5_PROJECT_OPERATION_SCOPE_NOT_DECLARED'));
+});
+test('RC213 W5 catches a declared second operation without a source implementation chain',()=>{
+ const r=pure({requirements:{features:{notifications:{needsBackend:true,
+  operations:[{operationId:ID,method:'GET',path:'/notes'},
+    {operationId:'external.notes.delete',method:'DELETE',path:'/notes/{id}'}],
+ }}}});
+ assert.equal(r.sourceTracePassed,false);
+ assert.ok(r.features[0].issues.includes('W5_REQUIRED_OPERATION_UNTRACED:external.notes.delete'));
+});
+test('RC213 W5 rejects extra Backend operation evidence outside the approved scope',()=>{
+ const f=flow();f.operationId='external.notes.delete';f.method='DELETE';f.path='/notes/{id}';
+ const r=pure({flows:[flow(),f]});
+ assert.equal(r.sourceTracePassed,false);
+ assert.ok(r.features[0].issues.some(x=>x.includes('W5_UNDECLARED_BACKEND_OPERATION:external.notes.delete')));
+});
+test('RC213 W5 rejects a manual needsBackend:false override for server-owned auth',()=>{
+ const f=flow('auth','client');
+ const r=pure({selected:['auth'],flows:[f],requirements:{features:{auth:{
+  needsBackend:false,operations:[]}}}});
+ assert.ok(r.features[0].issues.includes('W5_SERVER_FEATURE_BACKEND_SCOPE_REQUIRED'));
 });
 test('RC213 W5 CLI never accepts half of an independent Fable pin',()=>{
  assert.throws(()=>parseW5Args(['--expected-project-id','x']),/Both independent/);
