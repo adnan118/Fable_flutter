@@ -109,6 +109,39 @@ void main(){
     expect(find.text('My active devices & sessions'),findsNothing);
     expect(session.access,'saved-token');
   });
+  testWidgets('RC214 late rejected login must not display an error for another account',
+      (tester)async{
+    final session=_Session();
+    final reached=Completer<void>(),resume=Completer<void>();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://fable.test'),
+      contract:_contract(),secureSession:session,
+      client:_delayedNetwork((req)async{
+        if(req.path=='/auth/login'){
+          reached.complete();await resume.future;
+          // Malformed old login cannot write any new authenticated identity.
+          return _response(req,200,{'data':{'requiresTwoFactor':true}});
+        }
+        return _response(req,404,{});
+      }));
+    addTearDown(gateway.dispose);
+    await tester.pumpWidget(MaterialApp(home:FableLoginPage(
+      contract:_contract(),gateway:gateway)));
+    await tester.pumpAndSettle();
+    final fields=find.byType(TextFormField);
+    await tester.enterText(fields.at(0),'old-login@example.test');
+    await tester.enterText(fields.at(1),'old-password');
+    await tester.tap(find.widgetWithText(FilledButton,'Sign in'));
+    await tester.pump();
+    await reached.future;
+    expect(await session.replaceTokensIfIdentity(expectedIdentity:0,
+      accessToken:'new-account-token'),true);
+    resume.complete();
+    await tester.pumpAndSettle();
+    expect(session.access,'new-account-token');
+    expect(find.text('Sign-in failed. Check contract and backend connection.'),findsNothing);
+    expect(find.text('Session saved securely.'),findsNothing);
+  });
+
   testWidgets('RC214 stale saved-session verification unlocks the screen after identity switch',
       (tester)async{
     final session=_Session()..access='saved-old-token';
