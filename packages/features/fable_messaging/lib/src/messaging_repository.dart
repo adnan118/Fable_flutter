@@ -7,9 +7,12 @@ class FableMessageOperations {
   final String sendId;
   factory FableMessageOperations.fromContract(OperationCatalog contract, String sendId) {
     final op = contract.require(sendId);
-    if (op.method != 'POST' || !op.requiresAuth || op.credentialHeader != null ||
-        op.path.contains('{') || op.path.contains(':') || op.path.contains('?') ||
-        op.path.contains('/webhooks/') || op.id.contains('webhook')) {
+    final route=op.path.toLowerCase(), operationId=op.id.toLowerCase();
+    if (op.method != 'POST' || !op.requiresAuth || !op.enforceAuth ||
+        op.credentialHeader != null ||
+        route.contains('{') || route.contains(':') || route.contains('?') ||
+        route.contains('#') ||
+        route.contains('/webhooks/') || operationId.contains('webhook')) {
       throw const FormatException('Messaging requires an authenticated client send operation');
     }
     return FableMessageOperations._(op.id);
