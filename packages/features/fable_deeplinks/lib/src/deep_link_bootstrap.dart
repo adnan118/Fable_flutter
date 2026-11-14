@@ -29,6 +29,7 @@ class _FableDeepLinksBootstrapState extends State<FableDeepLinksBootstrap> {
       final policy = FableDeepLinkPolicy.fromJson(raw);
       if (!mounted || _closed) return;
       _policy = policy;
+      FableDeepLinkDispatcher.instance.installPolicy(policy);
       final links = AppLinks();
       // Subscribe first to avoid dropping links received while loading initial intent.
       _subscription = links.uriLinkStream.listen((link) => unawaited(_route(link)),
@@ -49,7 +50,13 @@ class _FableDeepLinksBootstrapState extends State<FableDeepLinksBootstrap> {
     catch (err) {debugPrint('Deep link route unavailable: $err');}
   }
   @override
-  void dispose() { _closed = true; unawaited(_subscription?.cancel()); super.dispose(); }
+  void dispose() {
+    _closed = true;
+    final policy=_policy;
+    if(policy!=null)FableDeepLinkDispatcher.instance.clearPolicy(policy);
+    unawaited(_subscription?.cancel());
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) => widget.child;
 }

@@ -6,6 +6,8 @@ void main() {
   test('late authorization for older links cannot open or replace newer link', () async {
     final router = FableDeepLinkDispatcher.instance;
     router.clearPending();
+    const policy=FableDeepLinkPolicy(host:'example.com',paths:['/test-link']);
+    router.installPolicy(policy);
     final older = Completer<bool>();
     final newer = Completer<bool>();
     final visited = <String>[];
@@ -16,6 +18,8 @@ void main() {
     router.authorization = (uri) => uri.path.endsWith('/old')
         ? older.future : newer.future;
     try {
+      expect(await router.dispatch(Uri.parse('https://evil.example.com/test-link/old')),
+        isFalse);
       final stale = router.dispatch(Uri.parse('https://example.com/test-link/old'));
       final current = router.dispatch(Uri.parse('https://example.com/test-link/new'));
       newer.complete(false);
@@ -28,6 +32,7 @@ void main() {
       expect(await router.resumeAfterLogin(), isTrue);
       expect(visited, ['/test-link/new']);
     } finally {
+      router.clearPolicy(policy);
       router.clearPending();
       router.authorization = null;
       router.unregister('/test-link');
