@@ -41,6 +41,8 @@ test('RC217 one pnpm command collects all prior direct Node test scripts exactly
 });
 test('RC217 single command includes both Backend W1/W2 fast and full real generation',()=>{
  const p=plan();
+ assert.ok(p.plan.some(x=>x.id==='BACKEND_ALL_TRACKED_NODE_TESTS'),
+  'Current Fable complete suite must remain part of one command');
  assert.deepEqual(p.plan.find(x=>x.id==='BACKEND_W1_W2_FAST').args,
   ['tools/fable-w1-w2-one-shot.mjs','--fast','--json']);
  assert.deepEqual(p.plan.find(x=>x.id==='BACKEND_W1_W2_FULL').args,
@@ -48,7 +50,7 @@ test('RC217 single command includes both Backend W1/W2 fast and full real genera
 });
 test('RC217 includes W0, W2, W3, W4, W5 and native W6–W7 checks in one run',()=>{
  const p=plan();
- assert.equal(p.plan.length,11);
+ assert.equal(p.plan.length,12);
  for(const part of ['W2_GENERATED_BACKEND_ARTIFACT_AUDIT',
    'W3_REAL_BACKEND_FLUTTER_HANDOFF',
    'W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS',
