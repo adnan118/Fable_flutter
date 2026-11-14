@@ -136,12 +136,13 @@ test('RC217 passing all artificial local runs still cannot waive real devices/ap
  assert.equal(r.independentReleaseApproved,false);
  assert.equal(r.realDeviceProviderAndHumanGates.length,5);
 });
-test('RC217 Backend sibling discovery uses only known sibling roots',()=>{
- const root='/my/projects/Fable_flutter';
+test('RC219 Backend sibling discovery works on Windows and POSIX roots',()=>{
+ const workspace=join(process.cwd(),'fable-source-fixture');
+ const root=join(workspace,'Fable_flutter');
+ const candidate=join(workspace,'Fable','Fable-Backend-RC66');
  const out=detectBackendRoot(root,path=>
-  path===join('/my/projects','Fable','Fable-Backend-RC66',
-   'tools/fable-w1-w2-one-shot.mjs'));
- assert.equal(out,join('/my/projects','Fable','Fable-Backend-RC66'));
+  path===join(candidate,'tools/fable-w1-w2-one-shot.mjs'));
+ assert.equal(out,candidate);
 });
 test('RC217 refuses extra command flags instead of requiring a confusing second invocation',()=>{
  assert.throws(()=>runSingleCommand(['--help']),/ONE_COMMAND_ONLY/);

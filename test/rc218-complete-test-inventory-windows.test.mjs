@@ -5,7 +5,7 @@ import {
   symlinkSync,writeFileSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 import {
   discoverTrackedNodeTests,buildOneCommandPlan,flutterChildSpec,
   localRunner,resolveBackendCheckoutRoot,saveOneCommandReport,
@@ -143,7 +143,7 @@ test('RC218 W3 uses actual private Git top-level instead of dirname guess',()=>{
       return '/workspace/private-Fable-repository\n';
     },
   });
-  assert.equal(top,'/workspace/private-Fable-repository');
+  assert.equal(top,resolve('/workspace/private-Fable-repository'));
 });
 test('RC218 safe report writer creates a new owner-only JSON without overwriting',t=>{
   const folder=mkdtempSync(join(tmpdir(),'fable-rc218-report-'));
