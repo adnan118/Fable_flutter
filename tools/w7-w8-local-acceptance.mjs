@@ -5,7 +5,7 @@
  */
 import {spawnSync,execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
-import {resolve,join} from 'node:path';
+import {resolve,join,basename} from 'node:path';
 import {auditClosureRegister} from './closure-gap-audit.mjs';
 
 const SHA=/^[a-f0-9]{40}$/;
@@ -30,6 +30,10 @@ export function buildLocalAcceptancePlan({
     throw Error('INVALID_NATIVE_TEST_OPTION');
   const flutter=resolve(flutterRoot);
   const backend=backendRoot?resolve(backendRoot):null;
+  // Fable's executable package is nested under the private repository.
+  // W1/W2 run from that package; W3's source-check requires Git repo root.
+  const backendCheckout=backend&&basename(backend)==='Fable-Backend-RC66'?
+    resolve(backend,'..'):backend;
   const generated=generatedFlutterRoot?resolve(generatedFlutterRoot):null;
   const exportRoot=backendExportRoot?resolve(backendExportRoot):null;
   const pinsValid=SHA.test(expectedBackendSha??'')&&
@@ -52,7 +56,7 @@ export function buildLocalAcceptancePlan({
       args:exportRoot&&backend&&SHA.test(expectedBackendSha??'')?[
         'tools/verify-current-w3-handoff.mjs',
         '--backend-export',exportRoot,
-        '--backend-repo',backend,'--flutter-root',generated??flutter,
+        '--backend-repo',backendCheckout,'--flutter-root',generated??flutter,
         '--expected-backend-sha',expectedBackendSha,'--json']:[],
       requires:exportRoot&&backend&&pinsValid?'': 'INDEPENDENT_BACKEND_EXPORT_AND_SOURCE_PINS_REQUIRED',
       sourceOnly:true,timeoutMs:240000},
@@ -99,7 +103,8 @@ export function buildLocalAcceptancePlan({
       sourceOnly:false,timeoutMs:1800000},
   ];
   return {schemaVersion:1,batch:'RC216-W0-W8',flutterRoot:flutter,
-    backendRoot:backend,generatedFlutterRoot:generated,
+    backendRoot:backend,backendCheckoutRoot:backendCheckout,
+    generatedFlutterRoot:generated,
     expectedBackendSha:SHA.test(expectedBackendSha??'')?expectedBackendSha:null,
     expectedFlutterSha:SHA.test(expectedFlutterSha??'')?expectedFlutterSha:null,
     steps,realGates:[...REAL_GATES],productionApproved:false};
@@ -141,7 +146,8 @@ export function evaluateLocalAcceptance(plan,{
   for(const step of plan.steps){
     const run=runMap.get(step.id);
     const missing=step.requires||
-      (step.gate==='W1'&&!checkout?.backendVerified)||
+      (step.gate==='W1'&&!checkout?.backendVerified?
+        'BACKEND_MAIN_SHA_NOT_VERIFIED':null)||
       (!checkout?.flutterVerified?'FLUTTER_MAIN_SHA_NOT_VERIFIED':null);
     const state=missing?'BLOCKED':
       !run?'NOT_RUN':
@@ -194,8 +200,8 @@ export function evaluateLocalAcceptance(plan,{
 export function runLocalAcceptance(plan,{runner=defaultRunner,gitChecker=checkLocalGitSource}={}){
   const flutterVerified=Boolean(plan.expectedFlutterSha&&
     gitChecker(plan.flutterRoot,plan.expectedFlutterSha,'flutter'));
-  const backendVerified=Boolean(plan.expectedBackendSha&&plan.backendRoot&&
-    gitChecker(plan.backendRoot,plan.expectedBackendSha,'backend'));
+  const backendVerified=Boolean(plan.expectedBackendSha&&plan.backendCheckoutRoot&&
+    gitChecker(plan.backendCheckoutRoot,plan.expectedBackendSha,'backend'));
   const checkout={flutterVerified,backendVerified};
   let inventory=null;
   try {
