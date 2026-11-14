@@ -24,6 +24,12 @@ test('RC221 final TAP totals are numeric and never copy test names',()=>{
    source:'NODE_TAP_FINAL_SUMMARY'});
  assert.equal(JSON.stringify(c).includes('simulated source test'),false);
 });
+test('RC221 Windows CRLF TAP source summaries parse identically',()=>{
+ const a=summarizeNodeTap(tap({tests:4,pass:3,skip:1}).replace(/\n/g,'\r\n'));
+ assert.equal(a.total,4);
+ assert.equal(a.skipped,1);
+});
+
 test('RC221 captures genuine reported test failure count without source logs',()=>{
  const c=summarizeNodeTap(tap({tests:5,pass:3,fail:2}));
  assert.equal(c.failed,2);
