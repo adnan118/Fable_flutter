@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
 import {verifyFableContract} from './verify-fable-contract.mjs';
 import {FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
+import {selectedFeatureIdsForAudit} from './audit-selected-feature-integration.mjs';
 
 const MANIFEST='.fable/w5-operation-flows.json';
 const REQUIREMENTS='.fable/feature-integration-requirements.json';
@@ -73,6 +74,8 @@ export function inspectW5SourceFlowPlan({
       operations:[],issues:['W5_EVIDENCE_MANIFEST_MISSING_OR_STALE'],
       liveE2EVerified:false,productionApproved:false};
   if(manifest.flows.length>2000)throw Error('W5_TOO_MANY_OPERATION_FLOWS');
+  if(requirements?.features && Object.keys(requirements.features).some(id=>!selected.includes(id)))
+    issues.push('W5_REQUIREMENTS_INCLUDE_UNSELECTED_FEATURES');
   const used=new Set(),byFeature=new Map();
   for(const entry of manifest.flows){
     const feature=entry?.feature,id=entry?.operationId;
@@ -224,11 +227,15 @@ export function auditW5FeatureFlows(root,{
   expectedProjectId=null,expectedContractHash=null,
 }={}){
   root=resolve(root);
-  if(!existsSync(join(root,SELECTION)))
-    throw Error('W5_EXPLICIT_FEATURE_SELECTION_REQUIRED');
-  const selection=safeJson(root,SELECTION);
-  const selected=selection?.features;
-  if(!Array.isArray(selected))throw Error('W5_INVALID_FEATURE_SELECTION_FILE');
+  // Validate every selection source before the legacy selection union is
+  // parsed; even a disabled custom/owned feature may not be a symlink.
+  for(const file of [
+    SELECTION,'.fable/project-features.json',
+    '.fable/frontend-owned-decisions.json',
+  ])if(existsSync(join(root,file)))safeJson(root,file);
+  const selection=selectedFeatureIdsForAudit(root);
+  if(!selection.explicit)throw Error('W5_EXPLICIT_FEATURE_SELECTION_REQUIRED');
+  const selected=selection.ids;
   const cfg=safeJson(root,BACKEND);
   const kind=cfg?.backend?.kind;
   if(!['fable','other'].includes(kind))throw Error('W5_BACKEND_NOT_SELECTED');
