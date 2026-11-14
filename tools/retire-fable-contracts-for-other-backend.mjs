@@ -129,7 +129,11 @@ export function applyOtherBackendWithArchivedFable(root,writeOtherBackend){
     // active replacement: a concurrent replacement needs manual review.
     try {
       restoreSnapshot(root,originals);
-      if(renamed && !existsSync(plan.active))renameSync(join(archive,'contracts'),plan.active);
+      if(renamed){
+        if(existsSync(plan.active))
+          throw Error('Active contracts were replaced during rollback; retained archived Fable source for manual recovery: '+archive);
+        renameSync(join(archive,'contracts'),plan.active);
+      }
       if(archive && existsSync(archive))rmSync(archive,{recursive:true,force:true});
     }catch(rollbackError){
       throw new AggregateError([error,rollbackError],
