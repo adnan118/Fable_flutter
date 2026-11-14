@@ -2,7 +2,7 @@
  * RC213 W5 — fail-closed, operation-level source chain. This is not proof
  * of executing a Flutter UI flow or of runtime authorization.
  */
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
@@ -19,7 +19,7 @@ const STAGES=['repository','state','ui','navigation','test'];
 const METHODS=new Set(['GET','HEAD','POST','PUT','PATCH','DELETE']);
 const MARKER=/^[\w.$/()'":\- ]{3,180}$/;
 const SHA=/^[a-f0-9]{64}$/;
-const read=rootPath=>JSON.parse(readFileSync(rootPath,'utf8'));
+const safeJson=(root,path)=>JSON.parse(readSafeFeatureEvidence(root,path));
 const sha=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const isObject=x=>x&&typeof x==='object'&&!Array.isArray(x);
 const problem=(code,feature,operationId=null)=>({code,feature,...(operationId?{operationId}:{})});
@@ -86,11 +86,13 @@ export function inspectW5SourceFlowPlan({
     used.add(key);
     if(!byFeature.has(feature))byFeature.set(feature,[]);
     const gaps=[];
-    const validMethod=typeof entry.method==='string'&&METHODS.has(entry.method);
-    if(!validMethod||typeof entry.path!=='string'||!entry.path.startsWith('/')||
-       entry.path.startsWith('//')||entry.path.includes('..')||
-       entry.path.includes('*'))
-      gaps.push('INVALID_OPERATION_METHOD_OR_PATH');
+    const validRoute=entry.mode==='client'
+      ? entry.method==='LOCAL' && typeof entry.path==='string' &&
+        entry.path.startsWith('local:') && !entry.path.includes('..')
+      : METHODS.has(entry.method) && typeof entry.path==='string' &&
+        entry.path.startsWith('/') && !entry.path.startsWith('//') &&
+        !entry.path.includes('..') && !entry.path.includes('*');
+    if(!validRoute)gaps.push('INVALID_OPERATION_METHOD_OR_PATH');
     if(!['backend','client'].includes(entry.mode))
       gaps.push('INVALID_FEATURE_FLOW_MODE');
     if(entry.mode==='client' && FEATURE_OWNERSHIP[feature]==='server')
@@ -172,6 +174,7 @@ export function inspectW5SourceFlowPlan({
   }
   const mapped=rows.filter(x=>x.sourceVerified).length;
   const resultIssues=[
+    ...(selected.length?[]:['W5_EMPTY_FEATURE_SELECTION']),
     ...issues,...features.filter(x=>x.status==='BLOCKED')
       .map(x=>x.id+': '+x.issues.join(',')),
   ];
@@ -189,19 +192,19 @@ export function auditW5FeatureFlows(root,{
   root=resolve(root);
   if(!existsSync(join(root,SELECTION)))
     throw Error('W5_EXPLICIT_FEATURE_SELECTION_REQUIRED');
-  const selection=read(join(root,SELECTION));
+  const selection=safeJson(root,SELECTION);
   const selected=selection?.features;
   if(!Array.isArray(selected))throw Error('W5_INVALID_FEATURE_SELECTION_FILE');
-  const cfg=read(join(root,BACKEND));
+  const cfg=safeJson(root,BACKEND);
   const kind=cfg?.backend?.kind;
   if(!['fable','other'].includes(kind))throw Error('W5_BACKEND_NOT_SELECTED');
-  const manifest=existsSync(join(root,MANIFEST))?read(join(root,MANIFEST)):null;
+  const manifest=existsSync(join(root,MANIFEST))?safeJson(root,MANIFEST):null;
   let contract,bindings=null,contractHash=null,projectId=manifest?.projectId??null;
   const sourceIssues=[];
   if(kind==='fable'){
     const p=join(root,FABLE_CONTRACT);
     if(!existsSync(p))throw Error('W5_FABLE_CONTRACT_MISSING');
-    contract=read(p);contractHash=contract.contractHash;
+    contract=safeJson(root,FABLE_CONTRACT);contractHash=contract.contractHash;
     if(!expectedProjectId||!expectedContractHash)sourceIssues.push('INDEPENDENT_FABLE_PINS_MISSING');
     else{
       const proof=verifyFableContract(root,{mode:'project',
@@ -212,8 +215,8 @@ export function auditW5FeatureFlows(root,{
     if(cfg.contractImported!==true||cfg.backend.status!=='ready')
       sourceIssues.push('FABLE_BACKEND_NOT_READY');
   }else{
-    contract=existsSync(join(root,OTHER_CONTRACT))?read(join(root,OTHER_CONTRACT)):null;
-    bindings=existsSync(join(root,OTHER_BINDINGS))?read(join(root,OTHER_BINDINGS)):null;
+    contract=existsSync(join(root,OTHER_CONTRACT))?safeJson(root,OTHER_CONTRACT):null;
+    bindings=existsSync(join(root,OTHER_BINDINGS))?safeJson(root,OTHER_BINDINGS):null;
     contractHash=contract?.sourceHash??null;
     if(cfg.contractImported!==true||cfg.backend.status!=='ready')
       sourceIssues.push('OTHER_BACKEND_NOT_READY');
