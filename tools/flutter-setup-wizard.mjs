@@ -14,6 +14,7 @@ import {validateSessionPolicyForWizard} from './read-session-policy.mjs';
 import {classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 import {readFrontendOwnedDecisions,saveFrontendOwnedDecisions} from './frontend-owned-decisions.mjs';
 import {auditSelectedFeatureIntegration,formatIntegrationGapReport} from './audit-selected-feature-integration.mjs';
+import {auditW5FeatureFlows} from './w5-feature-flow-audit.mjs';
 import {planOtherBackendContractRetirement,applyOtherBackendWithArchivedFable} from './retire-fable-contracts-for-other-backend.mjs';
 
 const CONTRACT_FILES=['contract.json','flutter-handoff.json','openapi.json','mobile-core-operations.json'];
@@ -263,6 +264,18 @@ function reportSelectedFeatureGapsAfterApply(project,summary) {
     summary.integrationGapAudit={error:String(error?.message??error),fullLiveE2E:false};
     console.warn('⚠ تدقيق ربط الخدمات لم يكتمل: '+String(error?.message??error)+
       ' — شغّل pnpm wizard:check بعد إصلاح العقد');
+  }
+  // This never authorizes a feature: real API -> repository -> state -> UI
+  // -> navigation -> test evidence remains an independent source gate.
+  try{
+    const w5=auditW5FeatureFlows(project);
+    summary.w5OperationFlowAudit={sourceTracePassed:w5.sourceTracePassed,
+      counts:w5.counts,sourceIssues:w5.sourceIssues??[],
+      liveE2EVerified:false,productionApproved:false};
+  }catch(error){
+    summary.w5OperationFlowAudit={sourceTracePassed:false,
+      error:String(error?.message??error),liveE2EVerified:false,
+      productionApproved:false};
   }
 }
 function requirePruningPin(snapshot,prune){
