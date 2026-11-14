@@ -8,7 +8,7 @@ Previously `tools/audit-selected-feature-integration.mjs` checked whether an evi
 ## Actual per-operation W5 evidence
 New `tools/w5-feature-flow-audit.mjs` reads the **project's** selected features, Backend kind, current Fable/External operation contract, explicit `.fable/feature-integration-requirements.json` and `.fable/w5-operation-flows.json` with safe path reads.
 
-For each selected feature it refuses:
+The selected feature set is derived from the existing W0 feature-selection union (built-in selections, separately registered custom features, and enabled Flutter-owned decisions). Unsafe symlinked selection manifests and requirements for unselected features are rejected.\n\nFor each selected feature it refuses:
 - Missing full declared Backend scope (including the **second/third operation** never mentioned in the UI trace); any extra undocumented Backend operation; server-owned Auth pretending to be client-only.
 - Missing/stale `operationId`, HTTP method/path or external feature role binding; a Fable operation absent from the current Fable contract; provider Webhook or unauthenticated external mutation being presented as a mobile API.
 - Missing operation-level source proof chain `repository -> state -> ui -> navigation -> test`. Every stage must have a real safe file and declared marker; the next file must contain the preceding stage's marker. Repositories must reference the actual operation ID and tests the UI marker or operation ID.
@@ -69,6 +69,6 @@ node tools/run-w5-feature-flow-audit.mjs --root /path/to/flutter-project \
 The source gate returns exit code 2 on missing flow evidence, unbound required operations, unsafe evidence paths or missing independent Fable contract pins. Running `npm run wizard:w5:audit` on the starter may reasonably return 2; that is the intended fail-closed result. This gate does not run a Flutter build or invent backend credentials.
 
 ## Verified in this turn
-**19/19 isolated V8 functional/source-wiring assertions PASS** against exact current GitHub branch source blobs, including real scope parity logic, method drift, missing state links, DTO proof, unbound external role, local-only Deeplinks, server Auth isolation, duplicates, empty selection and Wizard import, and syntax parses. **19 new Node regression tests authored**, including real-filesystem symlink cases; a complete local Flutter checkout was unavailable and therefore `node --test` and Dart analyzer/device E2E were **not executed** here. No GitHub Actions assumptions.
+**19/19 isolated V8 functional/source-wiring assertions PASS** against exact current GitHub branch source blobs, including real scope parity logic, method drift, missing state links, DTO proof, unbound external role, local-only Deeplinks, server Auth isolation, duplicates, empty selection and Wizard import, and syntax parses. **22 new Node regression tests authored**, including real-filesystem symlink cases; a complete local Flutter checkout was unavailable and therefore `node --test` and Dart analyzer/device E2E were **not executed** here. No GitHub Actions assumptions.
 
 **Remaining:** actual W5 flows for all selected operations/features, real Backend/Flutter contract and 12 W4 project examples, 17 feature families' live E2E, W6–W8 release/provider/device conditions and 82 tracked W0 gap/evidence items. No false production GO.
