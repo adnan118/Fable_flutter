@@ -165,6 +165,7 @@ export function buildOneCommandPlan({
       ...(args.projectId&&args.hash?
         ['--expected-project-id',args.projectId,'--expected-contract-hash',args.hash]:[]),
       '--json'],flutterRoot,null,TIMEOUT.node);
+  plan.at(-1).realProjectInputsProvided=Boolean(args.generated&&args.projectId&&args.hash);
   add('W0_HISTORICAL_82_ITEM_AUDIT','W0-W8','node',
     ['tools/closure-gap-audit-cli.mjs','--strict','--json'],flutterRoot);
   add('W6_W7_NATIVE_AUTH_NOTIFICATIONS_WIDGET','W6-W7','flutter',
@@ -192,10 +193,22 @@ function localRunner(step){
   return {exitCode:run.status,signal:run.signal??null,
     error:run.error?.code??null,durationMs:Date.now()-start};
 }
-function classify(step,r){
+function classify(step,r,{profileExportsProvided=0,closure=null}={}){
   if(step.blockReason)return {state:'BLOCKED',reason:step.blockReason};
   if(!r)return {state:'NOT_RUN',reason:'COMMAND_NOT_EXECUTED'};
   if(r.error==='ENOENT')return {state:'BLOCKED',reason:'TOOL_NOT_INSTALLED'};
+  // W4 still executes the Other-Backend paths if no Fable exports exist.
+  // Its missing six real Fable profiles are a prerequisite, not a failed
+  // implementation test, and never count as 12/12 PASS.
+  if(step.id==='W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS'&&
+     profileExportsProvided!==3)
+    return {state:'BLOCKED',reason:'SIX_FABLE_PATHS_NEED_REAL_PROFILE_EXPORTS'};
+  if(step.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT'&&
+     (!r||r.exitCode!==0)&&!step.realProjectInputsProvided)
+    return {state:'BLOCKED',reason:'REAL_SELECTED_PROJECT_AND_OPERATION_EVIDENCE_REQUIRED'};
+  if(step.id==='W0_HISTORICAL_82_ITEM_AUDIT'&&
+     closure?.counts?.outstanding>0&&r.exitCode===2&&!r.signal&&!r.error)
+    return {state:'BLOCKED',reason:'AUTHORITATIVE_HISTORICAL_ACCEPTANCE_GAPS_OPEN'};
   return r.exitCode===0&&!r.signal&&!r.error?
     {state:'LOCAL_CHECK_PASS',reason:null}:
     {state:'FAILED',reason:'PROCESS_NONZERO_OR_INTERRUPTED'};
@@ -205,7 +218,9 @@ export function evaluateOneCommandPlan(plan,runs=[],{
 }={}){
   const byId=new Map(runs.map(x=>[x.id,x]));
   const results=plan.plan.map(step=>{
-    const run=byId.get(step.id),classified=classify(step,run);
+    const run=byId.get(step.id);
+    const classified=classify(step,run,{
+      profileExportsProvided:plan.profileExportsProvided,closure});
     const conditionalIncomplete=step.id==='W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS'&&
       plan.profileExportsProvided!==3;
     return {id:step.id,stage:step.stage,state:classified.state,
