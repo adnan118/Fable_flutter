@@ -36,6 +36,7 @@
     "test:w6:notifications": "flutter test packages/features/fable_notifications/test/notification_identity_navigation_rc108_test.dart packages/features/fable_notifications/test/inbox_refresh_signal_test.dart",
     "test:w6:notifications:source": "node --test test/rc215-w6-notification-races-source.test.mjs",
     "fable:closeout": "node tools/run-w7-w8-local-acceptance.mjs",
-    "test:closeout": "node --test test/rc216-local-closeout.test.mjs test/rc215-w6-notification-races-source.test.mjs test/rc214-w6-auth-race-source.test.mjs"
+    "test:closeout": "node --test test/rc216-local-closeout.test.mjs test/rc215-w6-notification-races-source.test.mjs test/rc214-w6-auth-race-source.test.mjs",
+    "fable:all": "node tools/run-fable-all.mjs"
   }
 }
