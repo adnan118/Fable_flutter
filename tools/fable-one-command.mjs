@@ -247,7 +247,8 @@ export function buildOneCommandPlan({
       'packages/fable_core/test/rc222-secure-session-integrity_test.dart',
       'packages/features/fable_auth/test/mandatory_password_change_page_test.dart',
       'packages/features/fable_notifications/test/notification_identity_navigation_rc108_test.dart',
-      'packages/features/fable_notifications/test/inbox_refresh_signal_test.dart'],
+      'packages/features/fable_notifications/test/inbox_refresh_signal_test.dart',
+      'packages/features/fable_payments/test/payments_contract_test.dart'],
     flutterRoot,flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
   add('W7_FLUTTER_ANALYZE','W7','flutter',['analyze'],flutterRoot,
     flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
