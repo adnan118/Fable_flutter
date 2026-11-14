@@ -9,7 +9,8 @@ class FablePaymentOperations {
   final String readId;
   factory FablePaymentOperations.fromContract(OperationCatalog catalog,String readId) {
     final op = catalog.require(readId);
-    if (op.method != 'GET' || !op.requiresAuth || op.credentialHeader != null ||
+    if (op.method != 'GET' || !op.requiresAuth || !op.enforceAuth ||
+        op.credentialHeader != null ||
         !op.path.contains('{id}') ||
         op.path.contains('/admin/') || op.path.contains('?')) {
       throw const FormatException('Payments require authenticated individual read operation');
@@ -46,6 +47,12 @@ class FablePaymentReadRepository {
       throw ArgumentError('Invalid payment ID');
     }
     final response = await gateway.execute(operations.readId,path:{'id':id});
-    return decode(response.data);
+    final payment=decode(response.data);
+    // Payment state is account-sensitive data: a valid-shaped response for
+    // another payment ID must never be shown under the requested one.
+    if (payment.id.toLowerCase()!=id.toLowerCase()) {
+      throw const FormatException('Payment response ID mismatch');
+    }
+    return payment;
   }
 }
