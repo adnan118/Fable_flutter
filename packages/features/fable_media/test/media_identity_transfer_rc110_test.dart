@@ -141,6 +141,19 @@ void main(){
     });
   });
 
+  test('RC229 invalid server progress never starts a media chunk',()async{
+    await _withFile((file)async{
+      gateway.percentOverride=double.nan;
+      var saved=false;
+      await expectLater(repository.start(file,kind:'IMAGE',
+        mimeType:'image/jpeg',saveCheckpoint:(_)async{saved=true;}),
+        throwsFormatException);
+      expect(saved,false);
+      expect(gateway.calls.where((id)=>id=='media.upload.chunk'),isEmpty);
+      expect(gateway.calls.where((id)=>id=='media.upload.complete'),isEmpty);
+    });
+  });
+
   test('RC110 Other Backend requires a verified session epoch and active session',(){
     expect(()=>MediaUploadRepository(
       gateway:gateway,catalog:_contract(),
