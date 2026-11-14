@@ -202,13 +202,20 @@ class _FablePublishedContentPageState extends State<FablePublishedContentPage>
  }
  @override void didUpdateWidget(covariant FablePublishedContentPage old){
   super.didUpdateWidget(old);
-  if(!identical(old.refreshSignals,widget.refreshSignals)||
-     !identical(old.identitySignals,widget.identitySignals)){
+  final identitySourceChanged=
+      !identical(old.identitySignals,widget.identitySignals);
+  final refreshSourceChanged=
+      !identical(old.refreshSignals,widget.refreshSignals);
+  if(refreshSourceChanged||identitySourceChanged){
    unawaited(_refreshSubscription?.cancel());
    unawaited(_identitySubscription?.cancel());
    _subscribe();
   }
-  if(old.slug!=widget.slug||old.locale!=widget.locale||
+  // Replacing the identity stream is itself a security-context change, even
+  // if a generated route keeps the same repository instance. Drop displayed
+  // content and previous-account acceptance immediately; invalidate both
+  // outstanding reads and in-flight acceptance callbacks before reloading.
+  if(identitySourceChanged||old.slug!=widget.slug||old.locale!=widget.locale||
      !identical(old.repository,widget.repository)){
    _requestEpoch++;
    _loading=false;_refreshQueued=false;_document=null;
