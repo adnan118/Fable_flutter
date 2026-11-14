@@ -101,6 +101,44 @@ void main(){
     expect(called,isEmpty);
   });
 
+  test('RC215 delayed security password-route result is not accepted after account switch',()async{
+    var identity=73;
+    final pendingRoute=Completer<bool>();
+    final routed=<String>[];
+    navigation.identityRevision=()=>identity;
+    navigation.navigateVerifiedAppRoute=(route)async{
+      routed.add(route);
+      return pendingRoute.future;
+    };
+    final pending=navigation.openVerifiedInternalRoute('/account/reset-password');
+    await Future<void>.delayed(Duration.zero);
+    identity=74;
+    pendingRoute.complete(true);
+    expect(await pending,false);
+    expect(routed,['/account/reset-password']);
+  });
+
+  test('RC215 clearing notification navigation invalidates a pending password route',()async{
+    var identity=81;
+    final completed=Completer<bool>();
+    navigation.identityRevision=()=>identity;
+    navigation.navigateVerifiedAppRoute=(_)=>completed.future;
+    final pending=navigation.openVerifiedInternalRoute('/account/reset-password');
+    await Future<void>.delayed(Duration.zero);
+    navigation.clearPending();
+    completed.complete(true);
+    expect(await pending,false);
+  });
+
+  test('RC215 verified same-session password recovery route remains allowed',()async{
+    var identity=91;
+    navigation.identityRevision=()=>identity;
+    navigation.navigateVerifiedAppRoute=(route)async=>
+      route=='/account/reset-password';
+    expect(await navigation.openVerifiedInternalRoute('/account/reset-password'),true);
+    expect(await navigation.openVerifiedInternalRoute('//evil.test/password'),false);
+  });
+
   test('RC108 reset detaches the prior account epoch provider',()async{
     navigation.identityRevision=()=>99;
     navigation.reset();
