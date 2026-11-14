@@ -23,7 +23,7 @@ void main() {
     for (final entry in FableLocationOperations.fableIds.entries)
       entry.value: FableOperation(entry.value,
         const {'clientContract', 'providers', 'capabilities'}.contains(entry.key) ? 'GET' : 'POST',
-        '/geo/${entry.key}', digest, requiresAuth: true),
+        '/geo/${entry.key}', digest, requiresAuth: true,enforceAuth:true),
   };
   FableContract contract() => FableContract(contractHash: digest, operations: ops,
     featureIds: const {'location-platform'}, projectName: 'test', selectionMode: 'explicit');
@@ -38,6 +38,41 @@ void main() {
       'location.geocode': const FableOperation('location.geocode','POST','/geo',digest,requiresAuth:false),
     }, featureIds: const {}, projectName:'test',selectionMode:'explicit');
     expect(() => FableLocationOperations.fable(catalog), throwsA(isA<StateError>()));
+  });
+  test('RC227 declared auth alone cannot bind location API operations',(){
+    final weakOps=<String,FableOperation>{
+      for(final entry in FableLocationOperations.fableIds.entries)
+        entry.value:FableOperation(entry.value,
+          const {'clientContract','providers','capabilities'}.contains(entry.key)?'GET':'POST',
+          '/geo/${entry.key}',digest,requiresAuth:true,enforceAuth:false),
+    };
+    final weak=FableContract(contractHash:digest,operations:weakOps,
+      featureIds:const {'location-platform'},projectName:'weak',selectionMode:'explicit');
+    expect(()=>FableLocationOperations.fable(weak),throwsFormatException);
+    expect(FableLocationOperations.fable(contract()).supports('route'),true);
+  });
+  test('RC227 geofence refuses negative or nonfinite distances',(){
+    for(final distance in <num>[-1,double.nan,double.infinity,double.negativeInfinity]){
+      expect(()=>FableGeofenceDecision.fromFable({
+        'inside':false,'distanceMeters':distance,
+      }),throwsFormatException);
+    }
+    expect(FableGeofenceDecision.fromFable({'inside':true,'distanceMeters':0})
+      .distanceMeters,0);
+    expect(FableGeofenceDecision.fromFable({'inside':false})
+      .distanceMeters,isNull);
+  });
+  test('RC227 location operation fragments are not valid client bindings',(){
+    final poisoned=<String,FableOperation>{
+      for(final entry in FableLocationOperations.fableIds.entries)
+        entry.value:FableOperation(entry.value,
+          const {'clientContract','providers','capabilities'}.contains(entry.key)?'GET':'POST',
+          '/geo/${entry.key}#private',digest,requiresAuth:true,enforceAuth:true),
+    };
+    final c=FableContract(contractHash:digest,operations:poisoned,
+      featureIds:const {'location-platform'},projectName:'invalid',
+      selectionMode:'explicit');
+    expect(()=>FableLocationOperations.fable(c),throwsFormatException);
   });
   test('provider response retains unknown fields and attribution immutably', () {
     final response = FableLocationResponse.fromFable({
