@@ -132,7 +132,8 @@ class FableSocialOperations {
       if (!fableIds.containsKey(binding.key)) throw const FormatException('Unknown social operation role');
       final op = catalog.require(binding.value);
       final expected = binding.key == 'unlink' ? 'DELETE' : 'POST';
-      if (op.method != expected || op.requiresAuth != _authorized.contains(binding.key) ||
+      if (op.method != expected || !op.enforceAuth ||
+          op.requiresAuth != _authorized.contains(binding.key) ||
           op.credentialHeader != null || op.path.contains('?') || op.path.contains('#') ||
           (!op.path.startsWith('/')) ||
           (binding.key != 'unlink' && (op.path.contains('{') || op.path.contains(':'))) ||
@@ -179,15 +180,27 @@ class FableSocialRepository {
   Future<FableSocialAuthResult?> _run(FableSocialProvider provider,
       {required bool link, String? securityChallengeId}) async {
     final identity = session.identityRevision;
-    if (link && await session.accessToken == null) throw StateError('Sign in before linking social identity');
+    if (link) {
+      final token = await session.accessToken;
+      // Do not begin a link request for the account that signed out during
+      // the asynchronous secure-storage read.
+      if (session.identityRevision != identity) return null;
+      if (token == null) throw StateError('Sign in before linking social identity');
+    }
+    // The server challenge may have been issued before the challenge response
+    // arrived. Count that network delay as part of the challenge's TTL.
+    // Stopwatch is monotonic; wall-clock changes must not revive credentials.
+    final challengeClock=Stopwatch()..start();
     final challengeResponse = await gateway.execute(operations.require('challenge'),
       body: adapter.challengeRequest(provider));
     if (session.identityRevision != identity) return null;
     final challenge = adapter.parseChallenge(challengeResponse.data, provider);
-    final started = DateTime.now().toUtc();
+    if (challengeClock.elapsedMilliseconds >= challenge.expiresInMs) {
+      throw StateError('Social challenge expired');
+    }
     final credential = await credentials.obtain(challenge);
     if (credential == null || session.identityRevision != identity) return null;
-    if (DateTime.now().toUtc().difference(started).inMilliseconds >= challenge.expiresInMs) {
+    if (challengeClock.elapsedMilliseconds >= challenge.expiresInMs) {
       throw StateError('Social challenge expired');
     }
     if (credential.provider != provider || credential.nonce != challenge.nonce) {
