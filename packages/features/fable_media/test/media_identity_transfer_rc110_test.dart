@@ -40,6 +40,7 @@ FableContract _contract(){
 class _FakeMediaGateway implements BackendApiGateway {
   final calls=<String>[];
   int size=8,bytes=0;
+  num? percentOverride;
   String strategy='LOCAL_RESUMABLE';
   Future<void> Function(String id)? waitBeforeReply;
   void Function(String id)? onDispatch;
@@ -48,7 +49,7 @@ class _FakeMediaGateway implements BackendApiGateway {
     'upload':{'strategy':strategy,
       'chunkSizeBytes':strategy=='LOCAL_RESUMABLE'?4:5*1024*1024},
     'progress':{'uploadedBytes':bytes,'totalBytes':size,
-      'percentage':size==0?0:bytes*100/size},
+      'percentage':percentOverride ?? (size==0?0:bytes*100/size)},
     'nextOffsetBytes':bytes,
     'parts':<Object>[],
   };
@@ -122,6 +123,35 @@ void main(){
     repository=MediaUploadRepository(gateway:gateway,catalog:_contract(),
       bindings:const MediaUploadBindings.fable(),
       identityRevision:()=>epoch,isSessionCurrent:()=>authenticated);
+  });
+
+  test('RC229 media prepare rejects NaN/Infinity/negative/over-100 progress',()async{
+    await _withFile((file)async{
+      for(final invalid in <num>[
+        double.nan,double.infinity,double.negativeInfinity,-1,101,
+      ]){
+        gateway.percentOverride=invalid;
+        await expectLater(repository.prepare(file,kind:'IMAGE',
+          mimeType:'image/jpeg'),throwsFormatException,
+          reason:'Malformed server-confirmed media progress must be denied');
+      }
+      gateway.percentOverride=0;
+      final safe=await repository.prepare(file,kind:'IMAGE',mimeType:'image/jpeg');
+      expect((safe['progress'] as Map)['percentage'],0);
+    });
+  });
+
+  test('RC229 invalid server progress never starts a media chunk',()async{
+    await _withFile((file)async{
+      gateway.percentOverride=double.nan;
+      var saved=false;
+      await expectLater(repository.start(file,kind:'IMAGE',
+        mimeType:'image/jpeg',saveCheckpoint:(_)async{saved=true;}),
+        throwsFormatException);
+      expect(saved,false);
+      expect(gateway.calls.where((id)=>id=='media.upload.chunk'),isEmpty);
+      expect(gateway.calls.where((id)=>id=='media.upload.complete'),isEmpty);
+    });
   });
 
   test('RC110 Other Backend requires a verified session epoch and active session',(){

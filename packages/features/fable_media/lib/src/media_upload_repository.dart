@@ -292,7 +292,10 @@ class MediaUploadRepository {
     final bytes=_integer(progress['uploadedBytes'],'uploadedBytes');
     final total=_integer(progress['totalBytes'],'totalBytes');
     final pct=progress['percentage'];
-    if (total!=expectedSize || bytes<0 || bytes>total || pct is! num || pct<0 || pct>100) {
+    // NaN satisfies neither < 0 nor > 100. Reject all non-finite values
+    // before exposing server-confirmed progress to the upload UI.
+    if (total!=expectedSize || bytes<0 || bytes>total ||
+        pct is! num || !pct.toDouble().isFinite || pct<0 || pct>100) {
       throw const FormatException('Inconsistent backend progress');
     }
     return MediaUploadProgress(bytes,total,pct);
