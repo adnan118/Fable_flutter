@@ -288,10 +288,10 @@ export function flutterChildSpec(step,{platform=process.platform}={}){
  */
 export function summarizeNodeTap(stdout) {
   if(typeof stdout!=='string'||stdout.length>16*1024*1024)return null;
-  const totalPattern=/^# tests ([0-9]{1,8})$/gm;
-  const passPattern=/^# pass ([0-9]{1,8})$/gm;
-  const failPattern=/^# fail ([0-9]{1,8})$/gm;
-  const skippedPattern=/^# skipped ([0-9]{1,8})$/gm;
+  const totalPattern=/^# tests ([0-9]{1,8})\r?$/gm;
+  const passPattern=/^# pass ([0-9]{1,8})\r?$/gm;
+  const failPattern=/^# fail ([0-9]{1,8})\r?$/gm;
+  const skippedPattern=/^# skipped ([0-9]{1,8})\r?$/gm;
   const last=re=>[...stdout.matchAll(re)].at(-1)?.[1];
   const total=last(totalPattern),passed=last(passPattern),failed=last(failPattern),
     skipped=last(skippedPattern);
@@ -483,6 +483,7 @@ export function runFableOneCommand(root,{
   });
   const reportPath=saveOneCommandReport(root,report);
   logger('Fable checks: '+JSON.stringify(report.counts));
+  logger('Observed Node test assertions: '+JSON.stringify(report.observedNodeTestCounts));
   logger('Historical outstanding: '+String(report.historical.outstanding));
   logger('Release: NO_GO until independent real E2E and owner approval');
   logger('Report: '+reportPath);
