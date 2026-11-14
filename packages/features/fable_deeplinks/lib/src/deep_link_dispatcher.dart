@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import 'deep_link_policy.dart';
 
 /// Register a destination once in the project router, not in every button/widget.
 /// The backend and the destination remain responsible for authentication and access.
@@ -8,7 +9,67 @@ class FableDeepLinkDispatcher {
   static final instance = FableDeepLinkDispatcher._();
   final navigatorKey = GlobalKey<NavigatorState>();
   final Map<String, Future<bool> Function(Uri)> _destinations = {};
+  static final _safePrefix=RegExp(r'^/(?:[A-Za-z0-9_.~-]+(?:/[A-Za-z0-9_.~-]+)*)?
+  Uri? _pending;
+  int _generation = 0; // Invalidate older asynchronous authorization decisions.
+
+  void register(String prefix, Future<bool> Function(Uri) navigate) {
+    if (!_safePrefix.hasMatch(prefix) || prefix.split('/').contains('.') ||
+        prefix.split('/').contains('..')) {
+      throw ArgumentError.value(prefix, 'prefix', 'Use absolute safe path prefix');
+    }
+    _destinations[prefix] = navigate;
+  }
+
+  void unregister(String prefix) => _destinations.remove(prefix);
+
+  Future<bool> dispatch(Uri link) async {
+    // أي رابط خارجي يحتاج نطاقاً ومساراً معتمدين، حتى إن استُدعي الموجّه مباشرة.
+    if(_trustedPolicy?.accepts(link)!=true)return false;
+    final generation = ++_generation;
+    _pending = null; // A newly requested destination supersedes any prior deferral.
+    final keys = _destinations.keys.where((prefix) =>
+      prefix == '/' || link.path == prefix || link.path.startsWith('$prefix/')).toList()
+      ..sort((a,b)=>b.length.compareTo(a.length));
+    if (keys.isEmpty) return false; // Unknown route: never open arbitrary pages.
+    // Never allow a result for an older link to navigate or overwrite a newer
+    // deferred link (for example when switching accounts during an Auth prompt).
+    final allowed = authorization == null || await authorization!(link);
+    if (generation != _generation) return false;
+    if (!allowed) {
+      _pending = link; // Re-check authorization before any post-login navigation.
+      return false;
+    }
+    _pending = null;
+    return _destinations[keys.first]!(link);
+  }
+
+  Future<bool> resumeAfterLogin() async {
+    final saved = _pending;
+    if (saved == null) return false;
+    return dispatch(saved);
+  }
+  void clearPending() { _generation++; _pending = null; }
+}
+);
+  FableDeepLinkPolicy? _policySource;
+  FableDeepLinkPolicy? _trustedPolicy;
   Future<bool> Function(Uri)? authorization;
+
+  /// Trusted native-link policy is installed only after verified app config.
+  /// A direct caller cannot bypass origin/path validation in the bootstrap.
+  void installPolicy(FableDeepLinkPolicy policy) {
+    clearPending();
+    _policySource=policy;
+    _trustedPolicy=FableDeepLinkPolicy(
+      host:policy.host,paths:List<String>.unmodifiable(policy.paths));
+  }
+  void clearPolicy(FableDeepLinkPolicy policy) {
+    if(!identical(_policySource,policy))return;
+    clearPending();
+    _policySource=null;
+    _trustedPolicy=null;
+  }
   Uri? _pending;
   int _generation = 0; // Invalidate older asynchronous authorization decisions.
 
