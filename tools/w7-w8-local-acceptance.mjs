@@ -143,10 +143,14 @@ export function evaluateLocalAcceptance(plan,{
 }={}){
   const sourceChecks=[];
   const runMap=new Map(runs.map(x=>[x.id,x]));
+  const requiresBackend=new Set([
+    'W1_W2_REAL_GENERATION','W3_REAL_EXPORT_FLUTTER_IMPORT',
+    'W4_TWELVE_REAL_WIZARD_PROJECTS','W5_COMPLETE_SELECTED_SOURCE_CHAIN',
+  ]);
   for(const step of plan.steps){
     const run=runMap.get(step.id);
     const missing=step.requires||
-      (step.gate==='W1'&&!checkout?.backendVerified?
+      (requiresBackend.has(step.id)&&!checkout?.backendVerified?
         'BACKEND_MAIN_SHA_NOT_VERIFIED':null)||
       (!checkout?.flutterVerified?'FLUTTER_MAIN_SHA_NOT_VERIFIED':null);
     const state=missing?'BLOCKED':
@@ -214,7 +218,9 @@ export function runLocalAcceptance(plan,{runner=defaultRunner,gitChecker=checkLo
   const runs=[];
   for(const step of plan.steps){
     if(step.requires||!flutterVerified||
-       (step.id==='W1_W2_REAL_GENERATION'&&!backendVerified))continue;
+       (new Set(['W1_W2_REAL_GENERATION','W3_REAL_EXPORT_FLUTTER_IMPORT',
+         'W4_TWELVE_REAL_WIZARD_PROJECTS','W5_COMPLETE_SELECTED_SOURCE_CHAIN'])
+         .has(step.id)&&!backendVerified))continue;
     try{runs.push({id:step.id,...runner(step)});}
     catch(error){runs.push({id:step.id,exitCode:null,
       signal:null,error:error?.code??'RUNNER_ERROR',durationMs:null});}
