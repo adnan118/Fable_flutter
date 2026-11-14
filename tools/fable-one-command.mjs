@@ -108,6 +108,22 @@ function gitInfo(root){
       clean:dirty.length===0,origin};
   }catch{return {head:null,main:false,clean:false,origin:null};}
 }
+/**
+ * Find the actual Git checkout root, whether the generator resides inside
+ * Fable/Fable-Backend-RC66 or a differently named checked-out project.
+ * dirname(generator) is not necessarily the Git repository root.
+ */
+export function resolveBackendCheckoutRoot(generatorRoot,{git=execFileSync}={}){
+  if(!generatorRoot)return null;
+  try{
+    const top=git('git',['rev-parse','--show-toplevel'],{
+      cwd:generatorRoot,encoding:'utf8',timeout:7000,
+      maxBuffer:102400,stdio:['ignore','pipe','ignore'],
+    }).trim();
+    return top?resolve(top):null;
+  }catch{return null;}
+}
+
 function sourceFingerprint(root,expectedRepo,independentSha=null) {
   const git=gitInfo(root);
   const allowed=git.origin&&new RegExp(
@@ -155,6 +171,7 @@ export function buildOneCommandPlan({
   const flutterRoot=resolve(root??'.');
   const backend=backendRoot?resolve(backendRoot):null;
   const args=backgroundInputs(inputs,flutterRoot,backend);
+  const backendCheckout=resolveBackendCheckoutRoot(backend);
   const nodeTests=discoverExistingNodeTests(packageScripts,
     file=>exists(join(flutterRoot,file)));
   const tracked=gitTestDiscovery(flutterRoot);
@@ -186,9 +203,9 @@ export function buildOneCommandPlan({
     ['tools/verify-current-w3-handoff.mjs',
       '--backend-export',args.backendExport??'',
       '--flutter-root',args.generated??flutterRoot,
-      '--backend-repo',backend?dirname(backend):'',
+      '--backend-repo',backendCheckout??'',
       '--expected-backend-sha',args.backendPin??''],flutterRoot,
-    backend&&args.backendExport&&args.generated&&args.backendPin&&args.flutterPin?
+    backendCheckout&&args.backendExport&&args.generated&&args.backendPin&&args.flutterPin?
       null:'INDEPENDENT_W3_EXPORT_FLUTTER_PROJECT_AND_BOTH_GIT_PINS_REQUIRED');
   const fableComplete=PROFILES.every(p=>args.profiles[p]);
   const profileArgs=PROFILES.flatMap(p=>{
@@ -220,7 +237,8 @@ export function buildOneCommandPlan({
   add('W7_FULL_FLUTTER_TEST','W7','flutter',['test'],flutterRoot,
     flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
   return {schemaVersion:1,batch:'RC217-ONE-COMMAND',
-    plan,filesDiscovered:safePaths.length,
+    plan,backendCheckoutRoot:backendCheckout,
+    filesDiscovered:safePaths.length,
     unregisteredNodeTests:tracked.files.filter(path=>!nodeTests.paths.includes(path)).length,
     gitTestInventoryVerified:tracked.gitInventoryVerified,
     unsupportedTestCommands:[...new Set(invalidPaths)].sort(),
@@ -364,7 +382,7 @@ export function runFableOneCommand(root,{
     packageScripts:pkg.scripts,inputs,flutterAvailable});
   const repos={
     flutter:sourceFingerprint(root,'fable_flutter',inputs.expectedFlutterSha),
-    backend:sourceFingerprint(backend?dirname(backend):null,
+    backend:sourceFingerprint(plan.backendCheckoutRoot,
       'fable',inputs.expectedBackendSha),
   };
   const runs=[];
