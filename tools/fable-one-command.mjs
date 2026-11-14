@@ -252,7 +252,8 @@ export function buildOneCommandPlan({
       'packages/features/fable_profile/test/external_profile_repository_test.dart',
       'packages/features/fable_support/test/support_list_identity_rc225_test.dart',
       'packages/features/fable_messaging/test/messaging_contract_test.dart',
-      'packages/features/fable_location/test/location_repository_test.dart'],
+      'packages/features/fable_location/test/location_repository_test.dart',
+      'packages/features/fable_social/test/social_auth_repository_test.dart'],
     flutterRoot,flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
   add('W7_FLUTTER_ANALYZE','W7','flutter',['analyze'],flutterRoot,
     flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED',TIMEOUT.flutter);
