@@ -76,12 +76,20 @@ class PublicRevisionSse {
 class PublicSseRevalidator {
   PublicSseRevalidator(this.sync);
   final PublicChangeSync sync;
-  String? _lastSeen;
-  Future<void> onHint(String revision)async{
-    if(revision==_lastSeen)return;
-    _lastSeen=revision;
-    try{await sync.onResume();}catch(_){
-      // Keep periodic/foreground recovery enabled even when an SSE hint fails.
-    }
+  String? _lastApplied;
+  Future<void> _queue=Future<void>.value();
+  Future<void> onHint(String revision){
+    // لا نعتمد إشارة فشلت شبكتها؛ ونسلسل الإشارات كي لا تُحجب آخر نسخة.
+    final attempt=_queue.then((_)async{
+      if(revision==_lastApplied)return;
+      try{
+        await sync.onResume();
+        _lastApplied=revision;
+      }catch(_){
+        // A later identical hint must retry rather than being discarded forever.
+      }
+    });
+    _queue=attempt;
+    return attempt;
   }
 }
