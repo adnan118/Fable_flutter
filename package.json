@@ -28,6 +28,8 @@
     "w3:handoff:verify": "node tools/verify-current-w3-handoff.mjs",
     "test:w4:retirement": "node --test test/rc211-w4-contract-retirement.test.mjs test/flutter-setup-wizard.test.mjs",
     "test:w4:matrix": "node --test test/rc212-w4-wizard-matrix.test.mjs",
-    "wizard:w4:matrix": "node tools/run-w4-wizard-matrix.mjs"
+    "wizard:w4:matrix": "node tools/run-w4-wizard-matrix.mjs",
+    "test:w5:source-flows": "node --test test/rc213-w5-operation-flow-audit.test.mjs test/selected-feature-integration-rc90.test.mjs",
+    "wizard:w5:audit": "node tools/run-w5-feature-flow-audit.mjs --json"
   }
 }
