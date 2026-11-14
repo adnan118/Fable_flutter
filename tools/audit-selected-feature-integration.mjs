@@ -73,6 +73,11 @@ function selectedFeatures(root) {
   }
   return {ids:all.filter(id=>seen.has(id)),explicit};
 }
+// W5 uses the *same* union of selected built-in, custom and Flutter-owned
+// feature choices as this established W0/W5 selected-feature gap audit.
+export function selectedFeatureIdsForAudit(root){
+  return selectedFeatures(resolve(root));
+}
 function backendConfig(root){
   const path=join(root,CONFIG);
   if(!existsSync(path))return {kind:'unselected',ready:false,adapter:null};
