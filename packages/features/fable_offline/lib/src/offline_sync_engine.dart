@@ -66,6 +66,10 @@ final class FableOfflineSyncEngine {
   final Map<String,FableOfflineWriteGrant> _writeGrants;
   final Set<String> _cacheReads;
   bool _busy=false;
+  // Logout can happen while the network is accepting an old user's write.
+  // A completion from that request must not mutate the local outbox after
+  // the authenticated scope has been explicitly revoked.
+  int _logoutRevision=0;
 
   static final _rng=Random.secure();
   static final _unsafeOperation=RegExp(
@@ -108,8 +112,12 @@ final class FableOfflineSyncEngine {
     required String cacheKey,bool allowStale=false})async{
     if(!_cacheReads.contains(operationId))throw ArgumentError('Read not allowed');
     await _requireScope();
-    return store.getCache(scope:scope,key:'$operationId:$cacheKey',
+    final value=await store.getCache(scope:scope,key:'$operationId:$cacheKey',
       allowStale:allowStale);
+    // A storage read may have started under account A and completed after
+    // account B signed in. Never return A's cached data in that situation.
+    await _requireScope();
+    return value;
   }
   Future<String> enqueueApprovedWrite({required String operationId,
     required String resourceId,required Map<String,dynamic> body,
@@ -133,14 +141,17 @@ final class FableOfflineSyncEngine {
     if(_busy)return 0;
     _busy=true;
     var count=0;
+    final runRevision=_logoutRevision;
     try{
       if(!(await context.networkAvailable()))return 0;
       await _requireScope();
       final rows=await store.pending(scope:scope);
       for(final row in rows){
+        if(runRevision!=_logoutRevision)break;
         if(!(await context.networkAvailable()))break;
         // Recheck identity before every operation: never replay across logout.
         if(await context.verifiedScope()!=scope)break;
+        if(runRevision!=_logoutRevision)break;
         if(!_writeGrants.containsKey(row.operationId)){
           await store.markReview(scope,row.id,'OPERATION_NO_LONGER_APPROVED');
           break;
@@ -151,6 +162,10 @@ final class FableOfflineSyncEngine {
         }catch(_){
           ack=const FableSyncAck(FableSyncDisposition.retryLater);
         }
+        // The network reply may arrive after logout/scope switch. Do not
+        // acknowledge, reschedule or mark-review an old user's outbox row.
+        if(runRevision!=_logoutRevision||
+           await context.verifiedScope()!=scope)break;
         switch(ack.disposition){
           case FableSyncDisposition.acknowledged:
             if(ack.serverVersion==null||ack.serverVersion!.isEmpty){
@@ -185,6 +200,16 @@ final class FableOfflineSyncEngine {
       return count;
     }finally{_busy=false;}
   }
-  Future<int> get pendingCount=>store.pendingCount(scope);
-  Future<void> clearOnConfirmedLogout()async=>store.clearScope(scope);
+  Future<int> get pendingCount async {
+    await _requireScope();
+    final count=await store.pendingCount(scope);
+    await _requireScope();
+    return count;
+  }
+
+  Future<void> clearOnConfirmedLogout()async{
+    // Revoke in-flight flushes synchronously before touching storage.
+    _logoutRevision++;
+    await store.clearScope(scope);
+  }
 }
