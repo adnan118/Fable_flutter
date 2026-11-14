@@ -23,7 +23,10 @@ const tests={scripts:{
 }};
 function plan({inputs={},scripts={},available=false,exist=()=>true}={}){
  return buildOneCommandPlan({...base,packageScripts:scripts,
-   inputs,flutterAvailable:available,exists:exist});
+   inputs,flutterAvailable:available,exists:exist,
+   safeTestRead:()=>'',gitTestDiscovery:()=>({
+     files:[],rejected:[],gitInventoryVerified:false,
+   })});
 }
 const evaluated=(p,runs,closure=CLOSURE)=>evaluateOneCommandPlan(p,runs,{
  closure,backendCheckout:{localMainVerified:true,independentPinVerified:false},
@@ -66,7 +69,8 @@ test('RC217 all independent Fable exports and W3 pins are optional, not invented
 test('RC217 no Backend checkout is blocked but Flutter Node tests remain runnable',()=>{
  const p=buildOneCommandPlan({root:'/tmp/flutter',
    packageScripts:{'test:source':'node --test test/example.test.mjs'},
-   exists:()=>true});
+   exists:()=>true,safeTestRead:()=>'',
+   gitTestDiscovery:()=>({files:[],rejected:[],gitInventoryVerified:false})});
  assert.ok(p.plan.find(x=>x.id==='BACKEND_W1_W2_FAST').blockReason);
  assert.equal(p.plan.find(x=>x.id==='NODE_ALL_EXISTING_TEST_SCRIPTS')
   .blockReason,null);
