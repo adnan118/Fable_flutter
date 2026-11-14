@@ -281,6 +281,28 @@ export function flutterChildSpec(step,{platform=process.platform}={}){
   return {command:'cmd.exe',args:['/d','/s','/c',
     'flutter '+step.args.join(' ')]};
 }
+/**
+ * Extract only numeric final TAP totals from a Node test process.
+ * Do not persist raw stdout/stderr, names, request headers or trace values.
+ * These are observed process metrics, not an independently proven E2E pass.
+ */
+export function summarizeNodeTap(stdout) {
+  if(typeof stdout!=='string'||stdout.length>16*1024*1024)return null;
+  const totalPattern=/^# tests ([0-9]{1,8})\r?$/gm;
+  const passPattern=/^# pass ([0-9]{1,8})\r?$/gm;
+  const failPattern=/^# fail ([0-9]{1,8})\r?$/gm;
+  const skippedPattern=/^# skipped ([0-9]{1,8})\r?$/gm;
+  const last=re=>[...stdout.matchAll(re)].at(-1)?.[1];
+  const total=last(totalPattern),passed=last(passPattern),failed=last(failPattern),
+    skipped=last(skippedPattern);
+  if(total===undefined||passed===undefined||failed===undefined||
+     skipped===undefined)return null;
+  const values=[total,passed,failed,skipped].map(Number);
+  if(values.some(x=>!Number.isSafeInteger(x)||x<0||x>10000000)||
+     values[1]+values[2]+values[3]>values[0])return null;
+  return {total:values[0],passed:values[1],failed:values[2],
+    skipped:values[3],source:'NODE_TAP_FINAL_SUMMARY'};
+}
 export function localRunner(step,{
   spawn=spawnSync,platform=process.platform,now=Date.now,
 }={}){
@@ -290,9 +312,14 @@ export function localRunner(step,{
     cwd:step.root,encoding:'utf8',windowsHide:true,
     stdio:['ignore','pipe','pipe'],timeout:step.timeoutMs,
     maxBuffer:16*1024*1024});
-  // No raw command output is surfaced in reports (may contain secrets).
+  // No raw stdout/stderr is persisted; only bounded test totals
+  // extracted from the final Node TAP summary.
+  const testCounts=step.program!=='flutter'&&
+    step.args?.includes('--test')?
+      summarizeNodeTap(run.stdout):null;
   return {exitCode:run.status,signal:run.signal??null,
-    error:run.error?.code??null,durationMs:now()-start};
+    error:run.error?.code??null,durationMs:now()-start,
+    ...(testCounts?{testCounts}:{})};
 }
 function classify(step,r,{
   profileExportsProvided=0,closure=null,
@@ -302,6 +329,8 @@ function classify(step,r,{
   if(step.blockReason)return {state:'BLOCKED',reason:step.blockReason};
   if(!r)return {state:'NOT_RUN',reason:'COMMAND_NOT_EXECUTED'};
   if(r.error==='ENOENT')return {state:'BLOCKED',reason:'TOOL_NOT_INSTALLED'};
+  if(r.testCounts?.failed>0)
+    return {state:'FAILED',reason:'NODE_TEST_FAILURES_IN_TAP_REPORT'};
   if(step.id==='NODE_ALL_EXISTING_TEST_SCRIPTS'&&
      r.exitCode===0&&!r.signal&&!r.error&&
      (!testInventoryVerified||skippedTestScripts>0))
@@ -343,6 +372,7 @@ export function evaluateOneCommandPlan(plan,runs=[],{
     return {id:step.id,stage:step.stage,state:classified.state,
       reason:classified.reason,exitCode:run?.exitCode??null,
       durationMs:run?.durationMs??null,
+      ...(run?.testCounts?{testCounts:run.testCounts}:{}),
       ...(conditionalIncomplete?{fullWizardMatrixAccepted:false}:{}),
     };
   });
@@ -362,6 +392,13 @@ export function evaluateOneCommandPlan(plan,runs=[],{
     completeGitTestInventoryVerified:Boolean(plan.gitTestInventoryVerified),
     sourceTestScriptIssues:plan.unsupportedTestCommands,
     counts,checks:results,
+    observedNodeTestCounts:{
+      total:results.filter(x=>x.testCounts).reduce((sum,x)=>sum+x.testCounts.total,0),
+      passed:results.filter(x=>x.testCounts).reduce((sum,x)=>sum+x.testCounts.passed,0),
+      failed:results.filter(x=>x.testCounts).reduce((sum,x)=>sum+x.testCounts.failed,0),
+      skipped:results.filter(x=>x.testCounts).reduce((sum,x)=>sum+x.testCounts.skipped,0),
+      processGroupsWithTapSummary:results.filter(x=>x.testCounts).length,
+    },
     historical:{families:closure?.counts?.families??null,
       sourceGapItems:closure?.counts?.sourceGapItems??null,
       crossCuttingItems:closure?.counts?.crossCuttingItems??null,
@@ -446,6 +483,7 @@ export function runFableOneCommand(root,{
   });
   const reportPath=saveOneCommandReport(root,report);
   logger('Fable checks: '+JSON.stringify(report.counts));
+  logger('Observed Node test assertions: '+JSON.stringify(report.observedNodeTestCounts));
   logger('Historical outstanding: '+String(report.historical.outstanding));
   logger('Release: NO_GO until independent real E2E and owner approval');
   logger('Report: '+reportPath);
