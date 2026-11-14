@@ -275,10 +275,17 @@ export function localRunner(step,{
   return {exitCode:run.status,signal:run.signal??null,
     error:run.error?.code??null,durationMs:now()-start};
 }
-function classify(step,r,{profileExportsProvided=0,closure=null}={}){
+function classify(step,r,{
+  profileExportsProvided=0,closure=null,
+  testInventoryVerified=true,skippedTestScripts=0,
+}={}){
   if(step.blockReason)return {state:'BLOCKED',reason:step.blockReason};
   if(!r)return {state:'NOT_RUN',reason:'COMMAND_NOT_EXECUTED'};
   if(r.error==='ENOENT')return {state:'BLOCKED',reason:'TOOL_NOT_INSTALLED'};
+  if(step.id==='NODE_ALL_EXISTING_TEST_SCRIPTS'&&
+     r.exitCode===0&&!r.signal&&!r.error&&
+     (!testInventoryVerified||skippedTestScripts>0))
+    return {state:'PARTIAL',reason:'GIT_TEST_INVENTORY_UNVERIFIED_OR_UNSAFE_TESTS_SKIPPED'};
   // W4 still executes the Other-Backend paths if no Fable exports exist.
   // Its missing six real Fable profiles are a prerequisite, not a failed
   // implementation test, and never count as 12/12 PASS.
@@ -302,7 +309,9 @@ export function evaluateOneCommandPlan(plan,runs=[],{
   const results=plan.plan.map(step=>{
     const run=byId.get(step.id);
     const classified=classify(step,run,{
-      profileExportsProvided:plan.profileExportsProvided,closure});
+      profileExportsProvided:plan.profileExportsProvided,closure,
+      testInventoryVerified:plan.gitTestInventoryVerified,
+      skippedTestScripts:plan.unsupportedTestCommands.length});
     const conditionalIncomplete=step.id==='W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS'&&
       plan.profileExportsProvided!==3;
     return {id:step.id,stage:step.stage,state:classified.state,
@@ -314,6 +323,7 @@ export function evaluateOneCommandPlan(plan,runs=[],{
   const counts={passed:results.filter(x=>x.state==='LOCAL_CHECK_PASS').length,
     failed:results.filter(x=>x.state==='FAILED').length,
     blocked:results.filter(x=>x.state==='BLOCKED').length,
+    partial:results.filter(x=>x.state==='PARTIAL').length,
     notRun:results.filter(x=>x.state==='NOT_RUN').length};
   return {schemaVersion:1,batch:plan.batch,
     selectedManager:'pnpm',oneCommand:'pnpm fable:all',
