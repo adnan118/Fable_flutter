@@ -115,14 +115,14 @@ test('RC217 nonzero test exit never counts as success',()=>{
  assert.equal(r.checks[0].state,'FAILED');
  assert.equal(r.counts.failed,1);
 });
-test('RC217 missing flutter is BLOCKED while real Node tests may still pass',()=>{
+test('RC218 missing flutter is BLOCKED and incomplete Git test inventory stays PARTIAL',()=>{
  const p=plan({scripts:tests.scripts});
  const r=evaluated(p,[
   {id:'NODE_ALL_EXISTING_TEST_SCRIPTS',exitCode:0,signal:null,error:null},
   {id:'W7_FLUTTER_ANALYZE',exitCode:null,signal:null,error:'ENOENT'},
  ]);
  assert.equal(r.checks.find(x=>x.id==='NODE_ALL_EXISTING_TEST_SCRIPTS')
-  .state,'LOCAL_CHECK_PASS');
+  .state,'PARTIAL');
  assert.equal(r.checks.find(x=>x.id==='W7_FLUTTER_ANALYZE').state,'BLOCKED');
 });
 test('RC217 passing all artificial local runs still cannot waive real devices/approval',()=>{
