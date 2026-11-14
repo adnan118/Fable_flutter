@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -44,6 +45,14 @@ Dio _network(Response<dynamic> Function(RequestOptions) response){
 }
 Response<dynamic> _response(RequestOptions req,int status,Object? data)=>
   Response(requestOptions:req,statusCode:status,data:data);
+Dio _delayedNetwork(Future<Response<dynamic>> Function(RequestOptions) response){
+  final dio=Dio();
+  dio.interceptors.add(InterceptorsWrapper(onRequest:(req,h)async{
+    try{h.resolve(await response(req));}
+    catch(error){h.reject(DioException(requestOptions:req,error:error));}
+  }));
+  return dio;
+}
 
 void main(){
   for(final mustChange in [true,false]){
@@ -100,4 +109,74 @@ void main(){
     expect(find.text('My active devices & sessions'),findsNothing);
     expect(session.access,'saved-token');
   });
+  testWidgets('RC214 stale saved-session verification unlocks the screen after identity switch',
+      (tester)async{
+    final session=_Session()..access='saved-old-token';
+    final reached=Completer<void>(),resume=Completer<void>();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://fable.test'),
+      contract:_contract(),secureSession:session,
+      client:_delayedNetwork((req)async{
+        if(req.path=='/auth/sessions'){
+          reached.complete();await resume.future;
+          return _response(req,200,{'data':[]});
+        }
+        return _response(req,404,{});
+      }));
+    addTearDown(gateway.dispose);
+    await tester.pumpWidget(MaterialApp(home:FableLoginPage(
+      contract:_contract(),gateway:gateway)));
+    await tester.pumpAndSettle();
+    expect(find.text('Verify saved session'),findsOneWidget);
+    await tester.tap(find.text('Verify saved session'));
+    await tester.pump();
+    await reached.future;
+    expect(await session.replaceTokensIfIdentity(expectedIdentity:0,
+      accessToken:'new-account-token'),true);
+    resume.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Your saved session was verified by the server.'),findsNothing);
+    final verify=tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton,'Verify saved session'));
+    expect(verify.onPressed,isNotNull,
+      reason:'A discarded old response must not permanently lock verification');
+    expect(session.access,'new-account-token');
+  });
+
+  testWidgets('RC214 late old logout never claims sign-out or deletes a new account',
+      (tester)async{
+    final session=_Session()..access='saved-old-token';
+    final reached=Completer<void>(),resume=Completer<void>();
+    final gateway=FableAuthGateway(baseUri:Uri.parse('https://fable.test'),
+      contract:_contract(),secureSession:session,
+      client:_delayedNetwork((req)async{
+        if(req.path=='/auth/sessions')return _response(req,200,{'data':[]});
+        if(req.path=='/auth/logout'){
+          reached.complete();await resume.future;
+          return _response(req,200,{'data':{'revoked':true}});
+        }
+        return _response(req,404,{});
+      }));
+    addTearDown(gateway.dispose);
+    await tester.pumpWidget(MaterialApp(home:FableLoginPage(
+      contract:_contract(),gateway:gateway)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Verify saved session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign out'),findsOneWidget);
+    await tester.tap(find.text('Sign out'));
+    await tester.pump();
+    await reached.future;
+    expect(await session.replaceTokensIfIdentity(expectedIdentity:0,
+      accessToken:'new-account-token'),true);
+    resume.complete();
+    await tester.pumpAndSettle();
+    expect(session.access,'new-account-token');
+    expect(find.text('Signed out of this session.'),findsNothing);
+    expect(find.text('Local credentials removed. Server revocation could not be confirmed.'),
+      findsNothing);
+    expect(find.text('Session changed during sign-out. Verify the current session.'),
+      findsOneWidget);
+    expect(find.text('Verify saved session'),findsOneWidget);
+  });
+
 }
