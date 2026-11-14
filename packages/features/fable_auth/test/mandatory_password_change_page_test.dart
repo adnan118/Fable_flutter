@@ -22,6 +22,15 @@ class _Session extends FableSecureSession {
     access=accessToken;refresh=refreshToken;identityRevision++;
     return true;
   }
+  @override Future<bool> clearSessionIfIdentity(int expectedIdentity,{
+    String? expectedAccessToken,String? expectedRefreshToken,
+  })async{
+    if(expectedIdentity!=identityRevision||
+       expectedAccessToken!=null&&expectedAccessToken!=access||
+       expectedRefreshToken!=null&&expectedRefreshToken!=refresh)return false;
+    access=null;refresh=null;identityRevision++;
+    return true;
+  }
 }
 FableContract _contract()=>FableContract(
   contractHash:List<String>.filled(64,'a').join(),
