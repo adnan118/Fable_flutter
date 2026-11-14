@@ -56,14 +56,14 @@ export function discoverTrackedNodeTests(root,{
     names=runGit('git',['ls-files','--cached','-z','--','test','tools'],{
       cwd:root,encoding:'utf8',timeout:8000,maxBuffer:8*1024*1024,
       stdio:['ignore','pipe','ignore'],
-    }).split('\\0').filter(Boolean);
+    }).split('\0').filter(Boolean);
   }catch{
     return {files:[],rejected:[],gitInventoryVerified:false};
   }
   const files=[],rejected=[];
   for(const name of [...new Set(names)].sort()){
     if(!name.endsWith('.test.mjs'))continue;
-    if(!/^(?:test|tools)\\/[a-zA-Z0-9_.\\/-]+\\.test\\.mjs$/.test(name)||
+    if(!(name.startsWith('test/')||name.startsWith('tools/'))||
        !validFile(name)){
       rejected.push(name);continue;
     }
@@ -256,8 +256,8 @@ export function flutterChildSpec(step,{platform=process.platform}={}){
     return {command:process.execPath,args:step.args};
   if(platform!=='win32')return {command:'flutter',args:step.args};
   if(!Array.isArray(step.args)||step.args.length===0||
-     step.args.some(x=>typeof x!=='string'||
-       !/^[a-zA-Z0-9_.\\/-]+$/.test(x)))
+     step.args.some(x=>typeof x!=='string'||!x||
+       [...x].some(ch=>!(/[a-zA-Z0-9_.-]/.test(ch)||ch==='/'))))
     throw Error('RC218_UNSAFE_WINDOWS_FLUTTER_COMMAND');
   return {command:'cmd.exe',args:['/d','/s','/c',
     'flutter '+step.args.join(' ')]};
