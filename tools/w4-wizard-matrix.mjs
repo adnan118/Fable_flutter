@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
-import {basename,join,relative,resolve,sep} from 'node:path';
+import {join,relative,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
   runGuidedFlutterSetup,importBackendDecisions,manualFrontendDecisions,
@@ -173,6 +173,20 @@ export async function runW4WizardMatrix({
   const owned=!workspaceRoot;
   const workspace=workspaceRoot?resolve(workspaceRoot):
     mkdtempSync(join(tmpdir(),'fable-w4-rc212-'));
+  const source=resolve(flutterSourceRoot);
+  const contains=(parent,child)=>child===parent || child.startsWith(parent+sep);
+  if(contains(workspace,source)||contains(source,workspace))
+    throw Error('W4 workspace must not overlap the Flutter source repository');
+  mkdirSync(workspace,{recursive:true});
+  if(lstatSync(workspace).isSymbolicLink() || !lstatSync(workspace).isDirectory())
+    throw Error('W4 workspace must be an ordinary directory');
+  const inputs=W4_PROFILES.map(p=>fableExports[p]).filter(Boolean);
+  for(const pin of inputs)
+    if(pin.source && contains(workspace,resolve(pin.source)))
+      throw Error('W4 workspace must not contain an imported Backend export');
+  if(inputs.length===W4_PROFILES.length &&
+     new Set(inputs.map(x=>x.expectedContractHash)).size!==W4_PROFILES.length)
+    throw Error('W4 minimal, standard and complex Fable exports must be independently distinct');
   const cases=[],issues=[];
   const pairs=new Map();
   try{
