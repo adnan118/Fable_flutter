@@ -61,7 +61,7 @@ test('RC222 interrupted session state fails closed across device restarts',()=>{
  assert.match(native,/RC222 persisted interrupted marker fails closed after a simulated app restart/);
 });
 test('RC222 real fault-injection Flutter tests remain included in one pnpm command',()=>{
- assert.equal((native.match(/test\('/g)||[]).length,9);
+ assert.equal((native.match(/test\('/g)||[]).length,10);
  assert.ok(native.includes('class _ControlledStorage implements FlutterSecureStorage'));
  assert.ok(native.includes('rc222.logout.failure'));
  assert.ok(native.includes('rc222.recovery'));
