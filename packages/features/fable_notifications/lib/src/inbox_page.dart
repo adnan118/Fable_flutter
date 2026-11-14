@@ -155,12 +155,28 @@ class _FableInboxPageState extends State<FableInboxPage> {
    setState(()=>_loading=true);
    final epoch=session.identityRevision;
    final generation=_generation;
+   var queuedRefresh=false;
    try{
      await _repository(api).markRead(item.id);
      if(mounted && generation==_generation && identical(session,_session) && epoch==session.identityRevision)setState(()=>_items=null);
    }catch(_){if(mounted && generation==_generation && identical(session,_session) && epoch==session.identityRevision)setState(()=>_error=_ar?'تعذر تعيين الإشعار كمقروء.':'Could not mark as read.');}
-   finally{if(mounted)setState(()=>_loading=false);}
-   if(mounted&&generation==_generation&&identical(session,_session)&&epoch==session.identityRevision&&_error==null)await _load();
+   finally{
+     if(mounted){
+       setState(()=>_loading=false);
+       // Identity changes and foreground push events occurring during the
+       // mutation must refresh the *current* inbox once the busy slot clears.
+       // Without draining this flag, an account switch could leave an empty
+       // or obsolete inbox until the next manual refresh.
+       queuedRefresh=_refreshQueued;
+       _refreshQueued=false;
+       if(queuedRefresh){
+         WidgetsBinding.instance.addPostFrameCallback((_){
+           if(mounted)_requestRefresh();
+         });
+       }
+     }
+   }
+   if(!queuedRefresh&&mounted&&generation==_generation&&identical(session,_session)&&epoch==session.identityRevision&&_error==null)await _load();
  }
  @override void dispose(){
    unawaited(_identityChanges?.cancel());

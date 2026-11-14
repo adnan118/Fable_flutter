@@ -81,12 +81,27 @@ class FableNotificationNavigation {
   }
 
   Future<bool> openVerifiedInternalRoute(String route) async {
-    if(route.length>240||!RegExp(r'^/[a-zA-Z0-9_/-]+$').hasMatch(route)||
+    if(route.length>240||!RegExp(r'^/[a-zA-Z0-9_/-]+
+  void reset() { clearPending(); navigateCapability = null; navigateVerifiedUrl = null; navigateVerifiedAppRoute=null; isAuthenticated=null; identityRevision=null; }
+}
+).hasMatch(route)||
        route.contains('//')||route.contains('..')||!route.contains('password'))
       return false;
     final handler=navigateVerifiedAppRoute;
     if(handler==null)return false;
-    try {return await handler(route);} catch(_){return false;}
+    // A password-recovery route can be available while logged out, but
+    // still belongs to the identity epoch that displayed the security
+    // notice. A delayed callback for the previous account is not a valid
+    // confirmation on the current account.
+    final requestRevision=++_revision;
+    final identityAtTap=identityRevision?.call();
+    bool sameContext()=>requestRevision==_revision &&
+      (identityRevision==null||identityRevision!()==identityAtTap);
+    if(!sameContext())return false;
+    try{
+      final opened=await handler(route);
+      return sameContext() && opened;
+    }catch(_){return false;}
   }
   void reset() { clearPending(); navigateCapability = null; navigateVerifiedUrl = null; navigateVerifiedAppRoute=null; isAuthenticated=null; identityRevision=null; }
 }
