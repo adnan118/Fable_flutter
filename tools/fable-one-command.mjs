@@ -227,14 +227,35 @@ export function buildOneCommandPlan({
     profileExportsProvided:PROFILES.filter(p=>args.profiles[p]).length,
     independentInputsProvided:Boolean(args.backendPin&&args.flutterPin)};
 }
-function localRunner(step){
-  const start=Date.now();
-  const run=spawnSync(step.program==='flutter'?'flutter':process.execPath,
-    step.args,{cwd:step.root,encoding:'utf8',windowsHide:true,
-      stdio:['ignore','pipe','pipe'],timeout:step.timeoutMs,
-      maxBuffer:4*1024*1024});
+/**
+ * Flutter on Windows is distributed as flutter.bat, not an executable.
+ * Node's no-shell child spawning cannot directly launch .bat files.
+ * Only the fixed, allowlisted Flutter argv defined by this module may pass
+ * through cmd.exe; NO user-provided commands, shell metacharacters or paths.
+ */
+export function flutterChildSpec(step,{platform=process.platform}={}){
+  if(step.program!=='flutter')
+    return {command:process.execPath,args:step.args};
+  if(platform!=='win32')return {command:'flutter',args:step.args};
+  if(!Array.isArray(step.args)||step.args.length===0||
+     step.args.some(x=>typeof x!=='string'||
+       !/^[a-zA-Z0-9_.\\/-]+$/.test(x)))
+    throw Error('RC218_UNSAFE_WINDOWS_FLUTTER_COMMAND');
+  return {command:'cmd.exe',args:['/d','/s','/c',
+    'flutter '+step.args.join(' ')]};
+}
+export function localRunner(step,{
+  spawn=spawnSync,platform=process.platform,now=Date.now,
+}={}){
+  const start=now();
+  const spec=flutterChildSpec(step,{platform});
+  const run=spawn(spec.command,spec.args,{
+    cwd:step.root,encoding:'utf8',windowsHide:true,
+    stdio:['ignore','pipe','pipe'],timeout:step.timeoutMs,
+    maxBuffer:16*1024*1024});
+  // No raw command output is surfaced in reports (may contain secrets).
   return {exitCode:run.status,signal:run.signal??null,
-    error:run.error?.code??null,durationMs:Date.now()-start};
+    error:run.error?.code??null,durationMs:now()-start};
 }
 function classify(step,r,{profileExportsProvided=0,closure=null}={}){
   if(step.blockReason)return {state:'BLOCKED',reason:step.blockReason};
