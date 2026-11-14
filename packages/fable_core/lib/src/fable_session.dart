@@ -110,18 +110,18 @@ class FableSecureSession {
   // A login/refresh writes more than one secure-storage key. Readers must
   // wait for the namespace write queue to drain, never observe a half-written
   // access/refresh pair during account switching.
-  Future<String?> get accessToken async {
-    final pending = _pendingWrites[_prefix];
-    if (pending != null) await pending;
-    if (!await _credentialsReadable()) return null;
-    return _storage.read(key:_accessKey);
+  Future<String?> _readCommittedCredential(String key) async {
+    String? value;
+    // Serialize even a read: merely awaiting the current pending write can
+    // race with a new mutation starting between the integrity and key read.
+    await _serializedWrite(() async {
+      if (!await _credentialsReadable()) return;
+      value=await _storage.read(key:key);
+    });
+    return value;
   }
-  Future<String?> get refreshToken async {
-    final pending = _pendingWrites[_prefix];
-    if (pending != null) await pending;
-    if (!await _credentialsReadable()) return null;
-    return _storage.read(key:_refreshKey);
-  }
+  Future<String?> get accessToken => _readCommittedCredential(_accessKey);
+  Future<String?> get refreshToken => _readCommittedCredential(_refreshKey);
   /// Commit refreshed credentials only when they still belong to the same
   /// signed-in identity. The check is INSIDE the namespace write lock.
   Future<bool> saveTokensIfIdentity({required int expectedIdentity,
