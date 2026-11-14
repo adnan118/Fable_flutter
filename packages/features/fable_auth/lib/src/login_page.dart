@@ -125,8 +125,9 @@ class _FableLoginPageState extends State<FableLoginPage> {
         setState(()=>_message=
           'Session verification is unavailable. Your saved credentials were not deleted.');
     } finally {
-      if(mounted && client.session.identityRevision==revision)
-        setState(()=>_busy=false);
+      // A different session may become active while verification is in flight.
+      // Reset the local busy flag even when its obsolete result is discarded.
+      if(mounted)setState(()=>_busy=false);
     }
   }
   @override void dispose(){_user.dispose();_password.dispose();_otp.dispose();_gateway?.dispose();super.dispose();}
@@ -146,9 +147,11 @@ class _FableLoginPageState extends State<FableLoginPage> {
       setState(() => _message = 'Set FABLE_API_BASE_URL at build/run time.');
       return;
     }
+    final client=_client();
+    final identityAtStart=client.session.identityRevision;
     setState(() { _busy = true; _message = null; });
     try {
-      final result = await _client().login(
+      final result = await client.login(
         identifier: _user.text,
         password: _password.text,
         platform: defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
@@ -192,9 +195,11 @@ class _FableLoginPageState extends State<FableLoginPage> {
         });
       }
     } on FableApiException catch (error) {
-      if (mounted) setState(() => _message = 'Server rejected login: ${error.code}');
+      if(mounted && client.session.identityRevision==identityAtStart)
+        setState(() => _message = 'Server rejected login: ${error.code}');
     } catch (_) {
-      if (mounted) setState(() => _message = 'Sign-in failed. Check contract and backend connection.');
+      if(mounted && client.session.identityRevision==identityAtStart)
+        setState(() => _message = 'Sign-in failed. Check contract and backend connection.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -260,10 +265,24 @@ class _FableLoginPageState extends State<FableLoginPage> {
 
   Future<void> _logout() async {
     if (_busy) return;
+    final client=_client();
     setState(() { _busy = true; _message = null; });
     try {
-      final confirmed = await _client().logout();
-      if (mounted) setState(() {
+      final confirmed = await client.logout();
+      // An in-flight old logout may finish after another account signs in.
+      // Do not claim its new credentials were removed or its server session
+      // revoked. Offer an explicit server verification of the current token.
+      final activeToken=await client.session.accessToken;
+      if (!mounted)return;
+      if(activeToken!=null && activeToken.isNotEmpty){
+        setState((){
+          _signedIn=false;_passwordChangeRequired=false;
+          _savedSessionAvailable=true;
+          _message='Session changed during sign-out. Verify the current session.';
+        });
+        return;
+      }
+      setState(() {
         _signedIn = false;
         _passwordChangeRequired=false;
         _savedSessionAvailable = false;

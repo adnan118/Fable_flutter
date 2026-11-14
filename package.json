@@ -30,6 +30,8 @@
     "test:w4:matrix": "node --test test/rc212-w4-wizard-matrix.test.mjs",
     "wizard:w4:matrix": "node tools/run-w4-wizard-matrix.mjs",
     "test:w5:source-flows": "node --test test/rc213-w5-operation-flow-audit.test.mjs test/selected-feature-integration-rc90.test.mjs",
-    "wizard:w5:audit": "node tools/run-w5-feature-flow-audit.mjs --json"
+    "wizard:w5:audit": "node tools/run-w5-feature-flow-audit.mjs --json",
+    "test:w6:auth": "flutter test packages/fable_core/test/auth_gateway_identity_regression_test.dart packages/features/fable_auth/test/mandatory_password_change_page_test.dart",
+    "test:w6:auth:source": "node --test test/rc214-w6-auth-race-source.test.mjs"
   }
 }
