@@ -182,6 +182,18 @@ export function buildOneCommandPlan({
     catch {invalidPaths.push('UNSAFE_NODE_TEST_FILE:'+path);}
   }
   safePaths.sort();
+  // RC220: W1/W2 gate suites cover generated-project acceptance, not every
+  // historical Backend test. Run the tracked Backend Node suite separately
+  // without requiring a second user command or GitHub Actions.
+  const backendTracked=backend?gitTestDiscovery(backend):{
+    files:[],rejected:[],gitInventoryVerified:false,
+  };
+  const backendPaths=[],backendRejected=[...backendTracked.rejected];
+  for(const file of backendTracked.files){
+    try{safeTestRead(backend,file);backendPaths.push(file);}
+    catch{backendRejected.push('UNSAFE_BACKEND_NODE_TEST:'+file);}
+  }
+  backendPaths.sort();
   const plan=[];
   const add=(id,stage,program,argv,cwd,reason=null,timeout=TIMEOUT.node)=>
     plan.push({id,stage,program,args:argv,root:cwd,
@@ -189,6 +201,10 @@ export function buildOneCommandPlan({
   add('NODE_ALL_EXISTING_TEST_SCRIPTS','W0-W7','node',
     ['--test','--test-concurrency=4',...safePaths],flutterRoot,
     safePaths.length?null:'NO_SAFE_NODE_TEST_FILES_FOUND');
+  add('BACKEND_ALL_TRACKED_NODE_TESTS','W1-W2','node',
+    ['--test','--test-concurrency=4',...backendPaths],backend,
+    backendPaths.length?null:'BACKEND_TRACKED_NODE_TESTS_UNAVAILABLE',
+    TIMEOUT.backendFull);
   add('BACKEND_W1_W2_FAST','W1-W2','node',
     ['tools/fable-w1-w2-one-shot.mjs','--fast','--json'],backend,
     backend?null:'PRIVATE_BACKEND_CHECKOUT_NOT_FOUND',TIMEOUT.backendFast);
@@ -241,6 +257,9 @@ export function buildOneCommandPlan({
     filesDiscovered:safePaths.length,
     unregisteredNodeTests:tracked.files.filter(path=>!nodeTests.paths.includes(path)).length,
     gitTestInventoryVerified:tracked.gitInventoryVerified,
+    backendTestsDiscovered:backendPaths.length,
+    backendGitTestInventoryVerified:backendTracked.gitInventoryVerified,
+    backendUnsafeTests:[...new Set(backendRejected)].sort(),
     unsupportedTestCommands:[...new Set(invalidPaths)].sort(),
     profileExportsProvided:PROFILES.filter(p=>args.profiles[p]).length,
     independentInputsProvided:Boolean(args.backendPin&&args.flutterPin)};
@@ -278,6 +297,7 @@ export function localRunner(step,{
 function classify(step,r,{
   profileExportsProvided=0,closure=null,
   testInventoryVerified=true,skippedTestScripts=0,
+  backendInventoryVerified=true,unsafeBackendTests=0,
 }={}){
   if(step.blockReason)return {state:'BLOCKED',reason:step.blockReason};
   if(!r)return {state:'NOT_RUN',reason:'COMMAND_NOT_EXECUTED'};
@@ -286,6 +306,10 @@ function classify(step,r,{
      r.exitCode===0&&!r.signal&&!r.error&&
      (!testInventoryVerified||skippedTestScripts>0))
     return {state:'PARTIAL',reason:'GIT_TEST_INVENTORY_UNVERIFIED_OR_UNSAFE_TESTS_SKIPPED'};
+  if(step.id==='BACKEND_ALL_TRACKED_NODE_TESTS'&&
+     r.exitCode===0&&!r.signal&&!r.error&&
+     (!backendInventoryVerified||unsafeBackendTests>0))
+    return {state:'PARTIAL',reason:'BACKEND_TEST_INVENTORY_UNVERIFIED_OR_UNSAFE_TESTS_SKIPPED'};
   // W4 still executes the Other-Backend paths if no Fable exports exist.
   // Its missing six real Fable profiles are a prerequisite, not a failed
   // implementation test, and never count as 12/12 PASS.
@@ -311,7 +335,9 @@ export function evaluateOneCommandPlan(plan,runs=[],{
     const classified=classify(step,run,{
       profileExportsProvided:plan.profileExportsProvided,closure,
       testInventoryVerified:plan.gitTestInventoryVerified,
-      skippedTestScripts:plan.unsupportedTestCommands.length});
+      skippedTestScripts:plan.unsupportedTestCommands.length,
+      backendInventoryVerified:plan.backendGitTestInventoryVerified,
+      unsafeBackendTests:plan.backendUnsafeTests?.length??0});
     const conditionalIncomplete=step.id==='W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS'&&
       plan.profileExportsProvided!==3;
     return {id:step.id,stage:step.stage,state:classified.state,
@@ -329,6 +355,9 @@ export function evaluateOneCommandPlan(plan,runs=[],{
     selectedManager:'pnpm',oneCommand:'pnpm fable:all',
     latestSource:{backend:backendCheckout,flutter:flutterCheckout},
     testsDiscovered:plan.filesDiscovered,
+    backendTestsDiscovered:plan.backendTestsDiscovered??0,
+    completeBackendGitTestInventoryVerified:Boolean(plan.backendGitTestInventoryVerified),
+    backendUnsafeTests:plan.backendUnsafeTests??[],
     previouslyUnregisteredNodeTests:plan.unregisteredNodeTests??0,
     completeGitTestInventoryVerified:Boolean(plan.gitTestInventoryVerified),
     sourceTestScriptIssues:plan.unsupportedTestCommands,
