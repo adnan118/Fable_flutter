@@ -69,8 +69,16 @@ Future<bool> runFableVerifiedBackgroundSync({
 })async{
   if(engine==null||executor==null)return false;
   try{
+    // A no-op due to missing identity or network is not a completed sync.
+    // The worker must be bootstrapped with the actual verified account scope
+    // in this isolate, never the foreground process's remembered identity.
+    if(await engine.context.verifiedScope()!=engine.scope ||
+       !await engine.context.networkAvailable())return false;
     await engine.flush(executor);
-    return true;
+    // A logout/network loss during the flush cannot be reported as a
+    // successful authenticated background run.
+    return await engine.context.verifiedScope()==engine.scope &&
+           await engine.context.networkAvailable();
   }catch(_){
     return false;
   }
