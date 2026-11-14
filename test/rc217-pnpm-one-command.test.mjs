@@ -79,6 +79,13 @@ test('RC217 zero generated Flutter project must never make W5 false PASS',()=>{
   'BLOCKED');
  assert.equal(r.productionReady,false);
 });
+test('RC217 a starter fixture that returns exit zero cannot pass W5 without real project pins',()=>{
+ const p=plan();
+ const r=evaluated(p,[{id:'W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT',
+  exitCode:0,signal:null,error:null}]);
+ assert.equal(r.checks.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT')
+  .state,'BLOCKED');
+});
 test('RC217 missing Fable exports still runs Other Wizard scenarios but marks W4 BLOCKED',()=>{
  const p=plan();
  const r=evaluated(p,[{id:'W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS',
