@@ -10,6 +10,7 @@ import {verifyFableContract} from './verify-fable-contract.mjs';
 import {FEATURE_OWNERSHIP} from './frontend-feature-ownership.mjs';
 
 const MANIFEST='.fable/w5-operation-flows.json';
+const REQUIREMENTS='.fable/feature-integration-requirements.json';
 const SELECTION='.fable/mobile-features.json';
 const BACKEND='assets/config/backend.json';
 const FABLE_CONTRACT='assets/contracts/contract.json';
@@ -54,7 +55,7 @@ function validateContractBinding(entry,contract,backend,externalBindings){
 /** Pure/overridable file reader is for isolated tests; CLI always uses secure Node reader. */
 export function inspectW5SourceFlowPlan({
   selected,backendKind,manifest,contract,readEvidence,
-  externalBindings=null,projectId,contractHash,
+  externalBindings=null,projectId,contractHash,requirements=null,
 }={}){
   const issues=[],rows=[],features=[];
   if(!Array.isArray(selected)||selected.some(x=>typeof x!=='string'||!x)||
@@ -166,6 +167,39 @@ export function inspectW5SourceFlowPlan({
   for(const id of selected){
     const list=byFeature.get(id)??[];
     const gap=[];
+    const scope=requirements?.features?.[id];
+    if(!isObject(scope)||typeof scope.needsBackend!=='boolean'||
+       !Array.isArray(scope.operations))
+      gap.push('W5_PROJECT_OPERATION_SCOPE_NOT_DECLARED');
+    else{
+      if(scope.needsBackend && scope.operations.length===0)
+        gap.push('W5_REQUIRED_BACKEND_OPERATIONS_EMPTY');
+      if(!scope.needsBackend && FEATURE_OWNERSHIP[id]==='server')
+        gap.push('W5_SERVER_FEATURE_BACKEND_SCOPE_REQUIRED');
+      const requiredIds=new Set();
+      for(const item of scope.operations){
+        if(!item||typeof item.operationId!=='string'||!item.operationId ||
+           !METHODS.has(item.method)||typeof item.path!=='string'||
+           !item.path.startsWith('/')||requiredIds.has(item.operationId)){
+          gap.push('W5_INVALID_OR_DUPLICATE_REQUIRED_OPERATION');continue;
+        }
+        requiredIds.add(item.operationId);
+        const recorded=list.find(x=>x.operationId===item.operationId);
+        if(!recorded)gap.push('W5_REQUIRED_OPERATION_UNTRACED:'+item.operationId);
+        const flow=manifest.flows.find(x=>x?.feature===id &&
+          x?.operationId===item.operationId);
+        if(flow&&(flow.method!==item.method||flow.path!==item.path||
+            flow.mode!=='backend'))
+          gap.push('W5_REQUIRED_OPERATION_SCOPE_DRIFT:'+item.operationId);
+      }
+      for(const row of list){
+        const declared=manifest.flows.find(x=>x?.feature===id &&
+          x?.operationId===row.operationId);
+        if(declared?.mode==='backend' &&
+           (!scope.needsBackend || !requiredIds.has(row.operationId)))
+          gap.push('W5_UNDECLARED_BACKEND_OPERATION:'+row.operationId);
+      }
+    }
     if(!list.length)gap.push('SELECTED_FEATURE_HAS_NO_FLOW_EVIDENCE');
     if(list.some(x=>!x.sourceVerified))gap.push('SELECTED_FEATURE_HAS_UNVERIFIED_FLOWS');
     const complete=list.length>0&&gap.length===0;
@@ -199,6 +233,12 @@ export function auditW5FeatureFlows(root,{
   const kind=cfg?.backend?.kind;
   if(!['fable','other'].includes(kind))throw Error('W5_BACKEND_NOT_SELECTED');
   const manifest=existsSync(join(root,MANIFEST))?safeJson(root,MANIFEST):null;
+  const requirements=existsSync(join(root,REQUIREMENTS))?
+    safeJson(root,REQUIREMENTS):null;
+  if(requirements&&(requirements.schemaVersion!==1||
+      requirements.kind!=='fable.feature-integration-requirements'||
+      !isObject(requirements.features)))
+    throw Error('W5_INVALID_PROJECT_OPERATION_REQUIREMENTS');
   let contract,bindings=null,contractHash=null,projectId=manifest?.projectId??null;
   const sourceIssues=[];
   if(kind==='fable'){
@@ -234,7 +274,7 @@ export function auditW5FeatureFlows(root,{
   }
   const result=inspectW5SourceFlowPlan({selected,backendKind:kind,manifest,
     contract,externalBindings:bindings,projectId,contractHash,
-    readEvidence:path=>readSafeFeatureEvidence(root,path)});
+    requirements,readEvidence:path=>readSafeFeatureEvidence(root,path)});
   result.sourceIssues=sourceIssues;
   result.sourceTracePassed=result.sourceTracePassed&&sourceIssues.length===0;
   result.backendKind=kind;
