@@ -25,8 +25,12 @@ class ExternalProfileFields {
       throw const FormatException('Unbound profile read operation');
     }
     final operation = catalog.require(operationId);
-    if (operation.method != 'GET' || operation.path.contains('{')) {
-      throw const FormatException('Profile read requires GET without path parameters');
+    if (operation.method != 'GET' || !operation.requiresAuth ||
+        !operation.enforceAuth || operation.credentialHeader != null ||
+        operation.path.contains('{')) {
+      // The signed-in user's profile must be a per-account Bearer read.
+      // A public GET or provider-wide API credential is not a user identity.
+      throw const FormatException('Profile read requires authenticated user GET without path parameters');
     }
     final source = value['fields'];
     if (source is! Map || source['displayName'] is! String) {
