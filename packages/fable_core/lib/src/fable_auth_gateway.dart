@@ -317,21 +317,23 @@ class FableAuthGateway implements BackendApiGateway {
   Future<bool> logout() async {
     final identityAtStart = session.identityRevision;
     var revokedOnServer = false;
+    var clearedThisIdentity = false;
     try {
       if (await session.accessToken != null && _supportsAuthOperation(
         'auth.logout', 'POST', '/auth/logout', requiresAuth: true,
       )) {
         final response=await _api.request('auth.logout');
-        // الوصول إلى HTTP 200 لا يثبت إبطال الجلسة. Fable يعيد revoked.
-        // لا نخلط نجاح حذف اعتماد الهاتف مع نجاح الخادم.
+        // HTTP 200 is not proof of server revocation; Fable must say revoked.
+        // A late success for the old account cannot confirm sign-out of a
+        // different account that logged in while this request was in flight.
         revokedOnServer=_payload(response.data)['revoked']==true;
       }
     } catch (_) {
-      // Device sign-out is still necessary even when the server is unreachable.
+      // Device sign-out is still necessary when the server is unavailable.
     } finally {
-      await session.clearSessionIfIdentity(identityAtStart);
+      clearedThisIdentity=await session.clearSessionIfIdentity(identityAtStart);
     }
-    return revokedOnServer;
+    return clearedThisIdentity && revokedOnServer;
   }
 
   /// تغيير كلمة المرور عملية حساسة في عقد Fable؛ ليست تعديل ملف شخصي.
