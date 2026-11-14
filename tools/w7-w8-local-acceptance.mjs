@@ -4,9 +4,9 @@
  * independent release review, or production readiness.
  */
 import {spawnSync,execFileSync} from 'node:child_process';
-import {readFileSync} from 'node:fs';
 import {resolve,join,basename} from 'node:path';
 import {auditClosureRegister} from './closure-gap-audit.mjs';
+import {readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
 
 const SHA=/^[a-f0-9]{40}$/;
 const D64=/^[a-f0-9]{64}$/;
@@ -209,8 +209,8 @@ export function runLocalAcceptance(plan,{runner=defaultRunner,gitChecker=checkLo
   const checkout={flutterVerified,backendVerified};
   let inventory=null;
   try {
-    const read=name=>JSON.parse(readFileSync(
-      join(plan.flutterRoot,'docs/integrations',name),'utf8'));
+    const read=name=>JSON.parse(readSafeFeatureEvidence(
+      plan.flutterRoot,'docs/integrations/'+name));
     inventory=auditClosureRegister(
       read('FABLE-FLUTTER-PARITY-MASTER.json'),
       read('FABLE-FINAL-CLOSURE-W0-GAP-REGISTER.json'));
