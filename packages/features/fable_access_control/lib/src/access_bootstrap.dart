@@ -105,10 +105,17 @@ class _FableAccessBootstrapState extends State<FableAccessBootstrap>
         throw const FormatException('Policy provider does not match backend');
       }
       for (final entry in policy.operationModes.entries) {
-        if (!catalog.supports(entry.key) ||
-            (entry.value == 'public' && catalog.require(entry.key).requiresAuth) ||
-            (entry.value != 'public' && !catalog.require(entry.key).requiresAuth)) {
-          throw const FormatException('Policy operation differs from catalog');
+        if (!catalog.supports(entry.key)) {
+          throw const FormatException('Policy operation is missing from contract');
+        }
+        final operation = catalog.require(entry.key);
+        // Merely advertising requiresAuth does not mean the generated
+        // transport enforces that policy. Protected actions need BOTH,
+        // including permission-gated writes and the access snapshot read.
+        if ((entry.value == 'public' && operation.requiresAuth) ||
+            (entry.value != 'public' &&
+             (!operation.requiresAuth || !operation.enforceAuth))) {
+          throw const FormatException('Policy operation differs from enforced contract');
         }
       }
       FableSecureSession credentials;

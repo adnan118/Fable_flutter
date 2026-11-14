@@ -115,12 +115,21 @@ class FableAccessSession extends ValueNotifier<FableAccessSnapshot?> {
   Future<void> refresh() async {
     if (_closed || _sessionId == null) { if (!_closed) value = null; return; }
     final id = _sessionId;
+    final credentials = _credentials;
+    final identityAtStart = credentials?.identityRevision;
     final generation = ++_epoch;
     value = null;
     _refreshingEpoch = generation;
     try {
       final next = await repository.current();
-      if (_closed || generation != _epoch || _sessionId != id) return;
+      // The secure-session epoch can advance without a matching UI stream
+      // callback (for example, during storage errors or a client swap).
+      // Never grant old-account permissions on that stale response.
+      if (_closed || generation != _epoch || _sessionId != id ||
+          !identical(_credentials, credentials) ||
+          (credentials != null &&
+           (credentials.identityRevision != identityAtStart ||
+            id != 'identity:$identityAtStart'))) return;
       if (_expectedUserId != null && next.userId != _expectedUserId) {
         throw StateError('Access snapshot belongs to another account');
       }
