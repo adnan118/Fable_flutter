@@ -31,7 +31,10 @@ class PublicChangeSync {
       throw ArgumentError('A trusted backend origin is required for change snapshots');
     }
     final op=catalog.require(operationId);
-    if(op.method.toUpperCase()!='GET'||op.requiresAuth||op.path.contains('{')){
+    if(op.method.toUpperCase()!='GET'||op.requiresAuth||op.credentialHeader!=null||
+       !op.path.startsWith('/')||op.path.startsWith('//')||
+       op.path.contains('..')||op.path.contains('%')||op.path.contains('?')||
+       op.path.contains('#')||op.path.contains('{')){
       throw ArgumentError('Change feed must be a declared public GET snapshot');
     }
     if(checkInterval<const Duration(seconds:5)){
@@ -50,10 +53,12 @@ class PublicChangeSync {
   static final _entryRevision=RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$');
   final _changes=StreamController<PublicChangeDelta>.broadcast();
   Timer? _timer;
-  bool _working=false;
+  Future<PublicChangeDelta?>? _inFlight;
+  int _stateVersion=0;
   bool _disposed=false;
   Stream<PublicChangeDelta> get updates=>_changes.stream;
-  String get _storageKey=>'fable.public-changes.v1.${Uri.encodeComponent(namespace)}';
+  // عزل ملفات الكاش عن كل مسار وعقد مشروع، حتى لو اشتركت التطبيقات بالمضيف.
+  String get _storageKey=>'fable.public-changes.v2.${Uri.encodeComponent(namespace)}.${Uri.encodeComponent(operationId)}.${Uri.encodeComponent(catalog.require(operationId).contractHash)}';
   String? _revision;
   Map<String,String> _entries={};
 
@@ -75,25 +80,39 @@ class PublicChangeSync {
   }
   Future<void> loadLocal() async {
     if(_disposed)throw StateError('Change watcher already disposed');
+    final expectedVersion=_stateVersion;
     try{
       final raw=await _storage.getString(_storageKey);
+      // لا تسمح لقراءة محلية متأخرة باستبدال حالة وصلتنا من الشبكة.
+      if(_disposed||expectedVersion!=_stateVersion)return;
       if(raw==null||raw.length>120000)return;
       final record=jsonDecode(raw);
       if(record is! Map||record['revision'] is! String||
          !_hex.hasMatch(record['revision'] as String)||record['entries'] is! List)return;
       final parsed=_parseEntries(record['entries']);
       _entries=parsed;_revision=record['revision'] as String;
+      _stateVersion++;
       _changes.add(PublicChangeDelta(revision:_revision!,changed:parsed.keys.toSet(),
         removed:const {},initialLoad:true,offline:true));
     }catch(_){/* Damaged public-only cache is discarded; next sync repairs it. */}
   }
-  Future<PublicChangeDelta?> check({bool force=false})async{
-    if(_disposed||_working)return null;
-    _working=true;
-    try{
-      final response=await gateway.execute(operationId,query:{
+  Future<PublicChangeDelta?> check({bool force=false}) {
+    if(_disposed)return Future<PublicChangeDelta?>.value(null);
+    // أشعة SSE والاستئناف والمؤقت تشترك بنفس عملية التحديث بدل خسارة واحدة منها.
+    final running=_inFlight;
+    if(running!=null)return running;
+    late final Future<PublicChangeDelta?> pending;
+    pending=_fetchAndApply().whenComplete((){
+      if(identical(_inFlight,pending))_inFlight=null;
+    });
+    _inFlight=pending;
+    return pending;
+  }
+  Future<PublicChangeDelta?> _fetchAndApply()async{
+    final response=await gateway.execute(operationId,query:{
         if(_revision!=null)'revision':_revision,
       });
+      if(_disposed)return null;
       final body=response.data;
       if(body is! Map||body['revision'] is! String||
         !_hex.hasMatch(body['revision'] as String))throw const FormatException('Invalid revision response');
@@ -117,12 +136,12 @@ class PublicChangeSync {
       if(safe.length>120000)throw const FormatException('Change snapshot too large');
       // Lack of local storage must not suppress a valid online UI refresh.
       try{await _storage.setString(_storageKey,safe);}catch(_){/* in-memory only */}
-      _revision=revision;_entries=latest;
+      if(_disposed)return null;
+      _revision=revision;_entries=latest;_stateVersion++;
       final delta=PublicChangeDelta(revision:revision,changed:changed,
         removed:removed,initialLoad:initial,offline:false);
       if(!_disposed)_changes.add(delta);
       return delta;
-    } finally {_working=false;}
   }
   /// Call when the app returns to foreground, regains network or receives SSE
   /// hint. A failed request NEVER validates a cached price or removes data.
