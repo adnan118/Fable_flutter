@@ -532,6 +532,7 @@ export function renderTypedFeature(plan){
     put('lib/src/presentation/'+slug+'_controller.dart',presentation(op));
     put('lib/src/presentation/'+slug+'_page.dart',readPage(op));
     put('test/'+slug+'_dto_test.dart',dtoTest(op,feature));
+    put('test/'+slug+'_page_test.dart',readPageTest(op,feature));
     exports.push("export 'src/domain/"+slug+"_entity.dart';",
       "export 'src/domain/"+slug+"_repository.dart';",
       "export 'src/application/"+slug+"_use_case.dart';",
