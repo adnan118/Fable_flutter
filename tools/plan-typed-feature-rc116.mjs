@@ -221,7 +221,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     for(const value of [id,spec.path,op.contractHash])safeString(value);
     const bodyFields=spec.method==='POST'
       ?validatedCreateFields(op,route,id,featureId):[];
-    if(bodyFields.some(f=>params.includes(f.name)||fields.some(x=>x.name===f.name)))
+    if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,bodyFields});
