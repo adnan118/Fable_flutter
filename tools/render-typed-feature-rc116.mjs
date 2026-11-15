@@ -617,8 +617,16 @@ function readPageTest(op,featureId){
     ]:[]),
     '    await tester.pump();',
     '    repository.pending.complete('+entity+'(',
-    ...op.fields.filter(f=>f.required)
-      .map(f=>'      '+f.name+': '+sample(f.type)+','),
+    ...(op.resultKind==='unpaginated-list'?[
+      '      items:<'+name+'Item>[',
+      '        '+name+'Item(',
+      ...op.fields.filter(f=>f.required)
+        .map(f=>'          '+f.name+': '+sample(f.type)+','),
+      '        ),',
+      '      ],',
+      '      count:1,maxRows:100,limitExceeded:false,',
+    ]:op.fields.filter(f=>f.required)
+      .map(f=>'      '+f.name+': '+sample(f.type)+',')),
     '    ));',
     '    await tester.pumpAndSettle();',
     '    expect(find.text('+dart(op.fields[0].name+': '+
