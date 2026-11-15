@@ -665,7 +665,42 @@ function failure(){
     '  final TypedReadFailure failure;',
     '}');
 }
+function listDtoTest(op,featureId){
+  const file=snake(op.operationId),name=op.className;
+  const fields=op.fields.map(f=>{
+    const value=f.type==='String'?dart('example'):f.type==='int'?'7':
+      f.type==='double'?'2.5':'true';
+    return '        '+dart(f.name)+': '+value+',';
+  });
+  return line(
+    "import 'package:flutter_test/flutter_test.dart';",
+    "import 'package:fable_"+featureId+"/src/data/"+file+"_dto.dart';",
+    'void main(){',
+    "  test('RC271 source-verified unpaginated list DTO rejects invalid meta and rows',(){",
+    '    final json=<String,Object?>{',
+    '      "items":<Object?>[<String,Object?>{',
+    ...fields,
+    '      }],',
+    '      "meta":<String,Object?>{',
+    '        "mode":"unpaginated","count":1,',
+    '        "maxRows":100,"limitExceeded":false,',
+    '      },',
+    '    };',
+    '    final parsed='+name+'Dto.fromJson(json).toDomain();',
+    '    expect(parsed.items.length,1);',
+    '    expect(parsed.items.single.'+op.fields[0].name+',isNotNull);',
+    '    expect(parsed.limitExceeded,isFalse);',
+    '    json.remove("meta");',
+    '    expect(()=>'+name+'Dto.fromJson(json),throwsFormatException);',
+    '    json["meta"]={"mode":"unpaginated","count":-1,"maxRows":100,"limitExceeded":false};',
+    '    expect(()=>'+name+'Dto.fromJson(json),throwsFormatException);',
+    '  });',
+    '}',
+  );
+}
+
 function dtoTest(op,featureId){
+  if(op.resultKind==='unpaginated-list')return listDtoTest(op,featureId);
   const file=snake(op.operationId),name=op.className;
   const valid=op.fields.map(f=>{
     const value=f.type==='String'?dart('example'):f.type==='int'?'7':
