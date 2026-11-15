@@ -9,7 +9,7 @@ const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
 const params=op=>argsOf(op).map(x=>'required String '+x).join(', ');
-const named=op=>op.params.length?'{'+params(op)+'}':'';
+const named=op=>argsOf(op).length?'{'+params(op)+'}':'';
 const callArgs=op=>argsOf(op).map(x=>x+': '+x).join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
@@ -273,7 +273,7 @@ function readPage(op){
     '  late '+name+'Controller _controller;',
     '  StreamSubscription<Object?>? _identity;',
   ];
-  for(const p of op.params)parts.push('  final _'+p+'=TextEditingController();');
+  for(const p of argsOf(op))parts.push('  final _'+p+'=TextEditingController();');
   parts.push(
     '  void _redraw(){if(mounted)setState((){});}',
     '  void _bind(){',
@@ -296,11 +296,26 @@ function readPage(op){
     '  @override void dispose(){',
     '    unawaited(_identity?.cancel());',
     '    _controller.removeListener(_redraw);_controller.dispose();',
-    ...op.params.map(p=>'    _'+p+'.dispose();'),
+    ...argsOf(op).map(p=>'    _'+p+'.dispose();'),
     '    super.dispose();',
     '  }',
-    '  void _load(){_controller.load('+
-      op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');}',
+    ...(op.method==='POST'?[
+      '  Future<void> _load()async{',
+      '    if(_controller.state is '+name+'Loading)return;',
+      '    final confirmed=await showDialog<bool>(context:context,builder:(context)=>',
+      '      AlertDialog(title:const Text("Confirm record creation"),',
+      '        content:const Text("This creates a record. If the network fails, verify Backend state before attempting another create."),',
+      '        actions:[',
+      '          TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text("Cancel")),',
+      '          FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text("Confirm create")),',
+      '        ]));',
+      '    if(confirmed!=true || !mounted)return;',
+      '    _controller.submit('+argsOf(op).map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
+      '  }',
+    ]:[
+      '  void _load(){_controller.load('+
+        op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');}',
+    ]),
     '  @override Widget build(BuildContext context){',
     '    final state=_controller.state;',
     '    return Scaffold(',
@@ -308,17 +323,21 @@ function readPage(op){
     '      body:SafeArea(child:ListView(',
     '        padding:const EdgeInsets.all(20),',
     '        children:[',
-    '          const Text("Authenticated source-bound GET"),',
+    '          const Text('+(op.method==='GET'?dart('Authenticated source-bound GET'):dart('Authenticated, confirmed create POST (no automatic write retries)'))+'),',
   );
   for(const p of op.params)parts.push(
     '          TextField(controller:_'+p+',maxLength:191,',
     '            decoration:const InputDecoration(labelText:'+dart(p)+'),',
     '            enabled:state is! '+name+'Loading),');
+  for(const f of op.bodyFields??[])parts.push(
+    '          TextField(controller:_'+f.name+',maxLength:'+f.maxLength+',',
+    '            decoration:const InputDecoration(labelText:'+dart(f.name)+'),',
+    '            enabled:state is! '+name+'Loading),');
   parts.push(
     '          FilledButton.icon(',
     '            onPressed:state is '+name+'Loading?null:_load,',
     '            icon:const Icon(Icons.refresh),',
-    '            label:const Text("Load verified data"),',
+    '            label:const Text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+'),',
     '          ),',
     '          if(state is '+name+'Loading)',
     '            const LinearProgressIndicator(),',
@@ -363,7 +382,7 @@ function projectNavigation(plan){
     const v='op'+index;
     parts.push(
       '    final '+v+'=contract.operations['+dart(op.operationId)+'];',
-      '    if('+v+'==null || '+v+'.method!="GET" ||',
+      '    if('+v+'==null || '+v+'.method!='+dart(op.method)+' ||',
       '        '+v+'.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
       '        '+v+'.contractHash!='+dart(op.contractHash)+' ||',
       '        !'+v+'.requiresAuth || !'+v+'.enforceAuth ||',
