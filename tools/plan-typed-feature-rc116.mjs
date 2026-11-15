@@ -255,23 +255,27 @@ function signedPaginatedListFields(op,schema,route){
     }
     if(type)filters.push({name,type});
   }
-  // Keep the existing RC278 exact-match selection. Add at most one paired
-  // numeric range only if both bounds, the numeric base and the visible item
-  // are independently confirmed in the signed contract + OpenAPI.
+  // RC280/RC281: append only complete signed numeric or UTC datetime ranges
+  // after the existing RC278 exact-match controls. A pair consumes two slots.
   const selected=filters.slice(0,3);
   for(const item of signed.item.fields){
     if(selected.length>1)break; // a pair is atomic; never emit a lone bound
     const name=item?.name,declared=fields.find(f=>f.name===name);
-    if(!['int','decimal'].includes(item?.type)||!safeIdent(name)||
+    const numeric=['int','decimal'].includes(item?.type);
+    const datetime=item?.type==='datetime';
+    if((!numeric&&!datetime)||!safeIdent(name)||
        /(?:password|secret|token|otp|pin|private|credential|session|payment|billing|accesskey)/i.test(name)||
        item.protectedAuth===true||item.sensitiveFilterSort===true||
-       declared?.type!==(item.type==='int'?'int':'double'))continue;
-    const min=name+'Min',max=name+'Max';
+       declared?.type!==(item.type==='int'?'int':
+         item.type==='decimal'?'double':'String'))continue;
+    const min=name+(datetime?'From':'Min'),max=name+(datetime?'To':'Max');
     if(!safeIdent(min)||!safeIdent(max)||
        selected.some(f=>[name,min,max].includes(f.name)))continue;
-    const numeric=[q.get(name),q.get(min),q.get(max)];
-    if(!numeric.every(v=>v?.type==='number' && v.required!==true &&
-       v.format==null && v.enum===undefined &&
+    const expectedType=datetime?'string':'number';
+    const expectedFormat=datetime?'date-time':null;
+    const range=[q.get(name),q.get(min),q.get(max)];
+    if(!range.every(v=>v?.type===expectedType && v.required!==true &&
+       (v.format??null)===expectedFormat && v.enum===undefined &&
        v.minimum===undefined && v.maximum===undefined))continue;
     selected.push({name:min,type:item.type},{name:max,type:item.type});
   }
