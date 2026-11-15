@@ -386,7 +386,15 @@
       "liveE2EVerified": false,
       "existingFrontendSources": [
         "packages/features/fable_biometrics/lib/src/biometrics_repository.dart",
-        "packages/features/fable_biometrics/lib/src/biometrics_widgets.dart"
+        "packages/features/fable_biometrics/lib/src/biometrics_widgets.dart",
+        "packages/features/fable_biometrics/lib/src/passkey_registration.dart",
+        "packages/features/fable_biometrics/lib/src/passkey_management.dart",
+        "packages/features/fable_biometrics/lib/src/passkey_management_page.dart",
+        "packages/features/fable_biometrics/lib/src/native_passkeys.dart",
+        "packages/fable_core/lib/src/fable_auth_gateway.dart",
+        "packages/features/fable_auth/lib/src/login_page.dart",
+        "android/app/src/main/kotlin/com/example/helloworld/FablePasskeysNativeBridge.kt",
+        "ios/Runner/FablePasskeysNativeBridge.swift"
       ],
       "gaps": [
         {
@@ -397,7 +405,7 @@
         },
         {
           "id": "FAM-BIOMETRICS-02",
-          "description": "تحقق platform biometric/passkey user verification وبيئات iOS/Android",
+          "description": "RC253–RC256: Native Passkeys source integrated in Android Credential Manager and iOS AuthenticationServices, Flutter Auth UI and DPoP-bound session; Android Digital Asset Links, iOS webcredentials entitlement/AASA, project signing and real device/Backend verification remain OPEN.",
           "status": "OPEN",
           "acceptance": "CODE_AND_TEST_EVIDENCE_REQUIRED"
         },
