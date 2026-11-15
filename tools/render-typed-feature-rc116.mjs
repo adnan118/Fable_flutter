@@ -81,14 +81,15 @@ function createRequestDto(op){
   ];
   for(const field of fs){
     const val=field.name;
+    const validation=val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+
+      ' || '+val+'.codeUnits.any((c)=>c<32||c==127)';
     parts.push(
-      '    if('+(field.required?'':'('+val+'!=null && (')+
-        val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+' ||',
-      '        '+val+'.codeUnits.any((c)=>c<32||c==127)'+(field.required?'':'))')+')',
+      '    if('+(field.required?validation:val+'!=null && ('+validation+')')+')',
       '      throw const FormatException('+dart('Invalid '+val+' create field')+');',
     );
     if(field.uuid)parts.push(
-      '    if(!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+val+'))',
+      '    if('+(field.required?'':val+'!=null && ')+
+        '!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+val+'))',
       '      throw const FormatException('+dart('Invalid '+val+' UUID')+');',
     );
   }
