@@ -7,6 +7,7 @@ import workmanager_apple
   // Keep the MethodChannel owner alive for the lifetime of the UIScene engine.
   // FableDpopNativeBridge captures self weakly in its handler.
   private var nativeDpopBridge: FableDpopNativeBridge?
+  private var nativePasskeysBridge: FablePasskeysNativeBridge?
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -27,6 +28,10 @@ import workmanager_apple
     // not with the former launch-time Flutter view controller.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FableNativeDpop") {
       nativeDpopBridge = FableDpopNativeBridge(messenger: registrar.messenger())
+    }
+    // Native Passkeys rely on UIScene presentation and the system credential UI.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FableNativePasskeys") {
+      nativePasskeysBridge = FablePasskeysNativeBridge(messenger: registrar.messenger())
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FableProtectedMedia") {
       let bridge = FableProtectedMediaBridge(messenger: registrar.messenger())
