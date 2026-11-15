@@ -78,7 +78,13 @@ function listDto(op){
     "    final input=raw['items'],meta=raw['meta'];",
     '    if(input is! List || input.length>500 || meta is! Map ||',
     ...(op.resultKind==='paginated-list'?[
-      "       meta['mode']!='page' ||",
+      "       "+(op.supportsSearch
+        ?"(meta['mode']!='page' && meta['mode']!='search')"
+        :"meta['mode']!='page'")+" ||",
+      ...(op.supportsSearch?[
+        "       (meta['mode']=='search' &&",
+        "         (meta['count'] is! int || meta['count']!=input.length)) ||",
+      ]:[]),
       "       meta['page'] is! int || meta['limit'] is! int ||",
       "       meta['total'] is! int || meta['totalPages'] is! int ||",
       "       (meta['page'] as int)<1 || (meta['page'] as int)>100000 ||",
