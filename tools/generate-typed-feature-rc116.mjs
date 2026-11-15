@@ -8,7 +8,7 @@
  */
 import {
   existsSync,readFileSync,mkdirSync,mkdtempSync,writeFileSync,
-  renameSync,rmSync,lstatSync,copyFileSync,
+  renameSync,rmSync,lstatSync,
 } from 'node:fs';
 import {resolve,join,relative,dirname,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -205,6 +205,7 @@ function cli(args){
   for(let i=0;i<args.length;i++){
     const flag=args[i];
     if(flag==='--apply'){o.apply=true;continue;}
+    if(flag==='--wire-app'){o.wireApp=true;continue;}
     const keys={
       '--root':'root','--feature':'featureId',
       '--expected-project-id':'expectedProjectId',
