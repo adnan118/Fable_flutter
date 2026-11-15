@@ -137,6 +137,9 @@ function signedUnpaginatedListFields(op,schema){
  */
 function signedPaginatedListFields(op,schema,route){
   const signed=op.response?.data,id=op.operationId;
+  if(op.recordAccess!=null &&
+     !['permission-wide','global','none'].includes(op.recordAccess))
+    fail('scoped/managed-entity pagination requires an explicitly bound tenant context: '+id);
   if(op.method!=='GET'||!id.endsWith('.list.paginated')||
      op.response?.kind!=='fable-success-envelope'||
      signed?.type!=='list-result'||signed.item?.type!=='object'||
@@ -189,6 +192,17 @@ function signedPaginatedListFields(op,schema,route){
   const variants=schema.properties.meta?.oneOf;
   if(!Array.isArray(variants)||variants.length!==2)
     fail('paginated metadata requires signed page/search alternatives: '+id);
+  const expectedMetadata={
+    page:{page:'integer',limit:'integer',total:'integer',totalPages:'integer'},
+    search:{limit:'integer',count:'integer'},
+  };
+  for(const mode of ['page','search']){
+    const declared=signed.meta?.[mode];
+    if(!declared ||
+       JSON.stringify(Object.entries(declared).sort())!==
+       JSON.stringify(Object.entries(expectedMetadata[mode]).sort()))
+      fail('paginated source metadata semantics are not verified: '+id);
+  }
   const byMode=new Map();
   for(const entry of variants){
     const mode=entry?.properties?.mode?.const;
