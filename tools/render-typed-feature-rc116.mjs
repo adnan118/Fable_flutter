@@ -7,7 +7,8 @@ const line=(...parts)=>parts.join('\n')+'\n';
 const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
-const params=op=>argsOf(op).map(x=>'required String '+x).join(', ');
+const params=op=>[...op.params.map(x=>'required String '+x),
+  ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name)].join(', ');
 const named=op=>argsOf(op).length?'{'+params(op)+'}':'';
 const callArgs=op=>argsOf(op).map(x=>x+': '+x).join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
@@ -72,17 +73,18 @@ function createRequestDto(op){
   if(op.method!=='POST'||!fs.length)
     throw Error('RC267 requires a verified POST request schema');
   const parts=[
-    '// GENERATED: validated create payload; no raw UI Map or private credentials.',
+    '// GENERATED: validated create payload; omit optional fields if empty.',
     'final class '+name+'CreateRequest {',
-    '  const '+name+'CreateRequest({'+fs.map(f=>'required this.'+f.name).join(', ')+'});',
-    ...fs.map(f=>'  final String '+f.name+';'),
+    '  const '+name+'CreateRequest({'+fs.map(f=>(f.required?'required this.':'this.')+f.name).join(', ')+'});',
+    ...fs.map(f=>'  final String'+(f.required?'':'?')+' '+f.name+';'),
     '  Map<String,Object?> toJson(){',
   ];
   for(const field of fs){
     const val=field.name;
     parts.push(
-      '    if('+val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+' ||',
-      '        '+val+'.codeUnits.any((c)=>c<32||c==127))',
+      '    if('+(field.required?'':'('+val+'!=null && (')+
+        val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+' ||',
+      '        '+val+'.codeUnits.any((c)=>c<32||c==127)'+(field.required?'':'))')+')',
       '      throw const FormatException('+dart('Invalid '+val+' create field')+');',
     );
     if(field.uuid)parts.push(
@@ -92,7 +94,9 @@ function createRequestDto(op){
   }
   parts.push(
     '    return <String,Object?>{',
-    ...fs.map(f=>'      '+dart(f.name)+': '+f.name+','),
+    ...fs.map(f=>f.required
+      ?'      '+dart(f.name)+': '+f.name+','
+      :'      if('+f.name+'!=null) '+dart(f.name)+': '+f.name+','),
     '    };',
     '  }',
     '}',
