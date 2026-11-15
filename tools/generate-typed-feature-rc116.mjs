@@ -92,6 +92,27 @@ export function planPinnedTypedFeature(root,{
   testSourceBoundaries(root,featureId,files);
   return {plan,files};
 }
+function prepareAppBinding(root,featureId){
+  // App integration is a project-level write. Every existing ancestor and
+  // destination must be real source, never a symlink to an unrelated tree.
+  for(const folder of [root,join(root,'lib'),join(root,'lib/src'),
+      join(root,'lib/src/generated')])checkSourceDir(folder);
+  const yamlPath=join(root,'pubspec.yaml');
+  const registryPath=join(root,'lib/src/generated/feature_registry.dart');
+  for(const file of [yamlPath,registryPath]){
+    if(!existsSync(file)||lstatSync(file).isSymbolicLink()||
+        !lstatSync(file).isFile())throw Error('RC266 unsafe app integration file');
+  }
+  const originalYaml=readFileSync(yamlPath,'utf8');
+  const originalRegistry=readFileSync(registryPath,'utf8');
+  return {
+    ...planW5AppFeatureBinding({
+      featureId,pubspec:originalYaml,registry:originalRegistry,
+    }),
+    yamlPath,registryPath,originalYaml,originalRegistry,
+  };
+}
+
 export function generatePinnedTypedFeature(root,options={}){
   root=resolve(root);
   const {plan,files}=planPinnedTypedFeature(root,options);
