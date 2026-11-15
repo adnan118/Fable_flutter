@@ -55,8 +55,8 @@ function dataFields(schema){
  * response. OpenAPI's route hash metadata alone does not authenticate JSON
  * schema bodies; they must agree with the op response covered by opHash.
  */
-function checkSignedResponseShape(op,schema,fields){
-  const source=op.response?.data;
+function checkSignedResponseShape(op,schema,fields,signedData=op.response?.data){
+  const source=signedData;
   if(op.response?.kind!=='fable-success-envelope'||source?.type!=='object'||
      !Array.isArray(source.fields)||source.fields.length!==fields.length){
     fail('signed operation has no matching flat response DTO: '+op.operationId);
@@ -89,6 +89,47 @@ function checkSignedResponseShape(op,schema,fields){
  * Only all-required text fields are supported so generated UI never guesses
  * boolean/date/currency behavior, secrets or a PATCH concurrency policy.
  */
+/**
+ * RC271: READ only source-verified unpaginated list results. No guessed
+ * page/search input or fake runtime list. Use an immutable typed items model.
+ */
+function signedUnpaginatedListFields(op,schema){
+  const signed=op.response?.data;
+  if(op.method!=='GET'||!op.operationId.endsWith('.list.unpaginated')||
+     op.response?.kind!=='fable-success-envelope'||
+     signed?.type!=='list-result'||
+     signed?.item?.type!=='object'||
+     !Array.isArray(signed?.item?.fields)||
+     !Array.isArray(signed?.meta?.modes)||
+     signed.meta.modes.length!==1||
+     signed.meta.modes[0]!=='unpaginated'||
+     (op.request?.query??[]).length!==0||
+     (op.request?.headers??[]).length!==0)
+    fail('list operation requires signed unpaginated response and no unbound query/header: '+op.operationId);
+  if(!schema||schema.type!=='object'||!schema.properties||
+     Object.keys(schema.properties).sort().join(',')!=='items,meta'||
+     !Array.isArray(schema.required)||
+     schema.required.length!==2||
+     !schema.required.includes('items')||!schema.required.includes('meta')||
+     schema.properties.items?.type!=='array')
+    fail('list response must contain explicit items + meta envelope: '+op.operationId);
+  const metadata=schema.properties.meta;
+  if(!metadata||metadata.type!=='object' ||
+     Object.keys(metadata.properties??{}).sort().join(',')!=='count,limitExceeded,maxRows,mode'||
+     metadata.properties.mode?.const!=='unpaginated'||
+     metadata.properties.count?.type!=='integer'||
+     metadata.properties.maxRows?.type!=='integer'||
+     metadata.properties.limitExceeded?.type!=='boolean'||
+     !Array.isArray(metadata.required)||
+     metadata.required.length!==4||
+     !['mode','count','maxRows','limitExceeded'].every(k=>metadata.required.includes(k)))
+    fail('list metadata must match signed unpaginated format: '+op.operationId);
+  const itemSchema=schema.properties.items.items;
+  const fields=dataFields(itemSchema);
+  checkSignedResponseShape(op,itemSchema,fields,signed.item);
+  return fields;
+}
+
 function validatedCreateFields(op,route,id,featureId){
   // A generic typed form cannot invent fresh OTP/Idempotency-Key headers,
   // managed-entity scope, URL query binding, or server-issued revisions.
@@ -231,8 +272,13 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
        !Array.isArray(schema.required)||
        !schema.required.includes('success')||!schema.required.includes('data'))
       fail('strict Fable success envelope and data schema required: '+id);
-    const fields=dataFields(schema.properties?.data);
-    checkSignedResponseShape(op,schema.properties.data,fields);
+    const resultKind=op.response?.data?.type==='list-result'
+      ?'unpaginated-list':'single';
+    const fields=resultKind==='unpaginated-list'
+      ?signedUnpaginatedListFields(op,schema.properties?.data)
+      :dataFields(schema.properties?.data);
+    if(resultKind==='single')
+      checkSignedResponseShape(op,schema.properties.data,fields);
     const className=typeName(id);
     if(!/^[A-Z][A-Za-z0-9]*$/.test(className)||className.length>80||
        names.has(className))fail('unsafe/colliding Dart type name: '+id);
@@ -244,7 +290,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
-      className,fields,params,bodyFields});
+      className,fields,params,bodyFields,resultKind});
   }
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
