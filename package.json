@@ -37,6 +37,8 @@
     "test:w6:notifications:source": "node --test test/rc215-w6-notification-races-source.test.mjs",
     "fable:closeout": "node tools/run-w7-w8-local-acceptance.mjs",
     "test:closeout": "node --test test/rc216-local-closeout.test.mjs test/rc215-w6-notification-races-source.test.mjs test/rc214-w6-auth-race-source.test.mjs",
-    "fable:all": "node tools/run-fable-all.mjs"
+    "fable:all": "node tools/run-fable-all.mjs",
+    "wizard:passkeys:domains": "node tools/generate-passkey-associations.mjs",
+    "test:passkeys:domains": "node --test test/rc262-passkey-domain-association.test.mjs"
   }
 }
