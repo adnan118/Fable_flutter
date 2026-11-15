@@ -10,10 +10,10 @@ const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
 const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name),
-  ...(op.resultKind==='paginated-list'?['required int page']:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[])]:[])].join(', ');
 const named=op=>(argsOf(op).length||op.resultKind==='paginated-list')?'{'+params(op)+'}':'';
 const callArgs=op=>[...argsOf(op).map(x=>x+': '+x),
-  ...(op.resultKind==='paginated-list'?['page: page']:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['page: page',...(op.supportsSearch?['search: search']:[])]:[])].join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
   if(!plan||!Array.isArray(plan.operations)||!plan.operations.length||
@@ -247,6 +247,11 @@ function adapter(op,projectHash){
     ...(op.resultKind==='paginated-list'?[
       '    if(page<1||page>100000)',
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      ...(op.supportsSearch?[
+        '    if(search!=null && (search.trim().length>191 ||',
+        '        search.codeUnits.any((c)=>c<32||c==127)))',
+        '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      ]:[]),
     ]:[]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
@@ -255,7 +260,10 @@ function adapter(op,projectHash){
       (op.method==='POST'?',body:'+name+'CreateRequest('+
         (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+
       (op.resultKind==='paginated-list'
-        ?',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}':'')+');',
+        ?(op.supportsSearch
+          ?',query:<String,dynamic>{"page":page,"limit":20,"mode":search!=null && search.trim().isNotEmpty?"search":"page",if(search!=null && search.trim().isNotEmpty)"q":search.trim()}'
+          :',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}')
+        :'')+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
