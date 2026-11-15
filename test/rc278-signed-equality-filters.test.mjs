@@ -102,19 +102,19 @@ test('RC278 contract-signed text and boolean equality filters propagate across e
   const state=out.get(base+'lib/src/presentation/catalog_list_paginated_controller.dart');
   const ui=out.get(base+'lib/src/presentation/catalog_list_paginated_page.dart');
   const widgetTest=out.get(base+'test/catalog_list_paginated_page_test.dart');
-  assert.match(port,/String\\? status, String\\? published/);
+  assert.match(port,/String\? status, String\? published/);
   assert.match(useCase,/status: status, published: published/);
-  assert.match(adapter,/if\\(status!=null && status.trim\\(\\).isNotEmpty\\)"status":status.trim\\(\\)/);
-  assert.match(adapter,/if\\(published!=null && published.trim\\(\\).isNotEmpty\\)"published":published.trim\\(\\)/);
-  assert.match(adapter,/published.trim\\(\\)!="true" && published.trim\\(\\)!="false"/);
-  assert.match(state,/_status=status\\?\\.trim\\(\\)/);
+  assert.match(adapter,/if\(status!=null && status.trim\(\).isNotEmpty\)"status":status.trim\(\)/);
+  assert.match(adapter,/if\(published!=null && published.trim\(\).isNotEmpty\)"published":published.trim\(\)/);
+  assert.match(adapter,/published.trim\(\)!="true" && published.trim\(\)!="false"/);
+  assert.match(state,/_status=status\?\.trim\(\)/);
   assert.match(state,/search:_search,status:_status,published:_published/);
   assert.match(ui,/Exact filter: status/);
   assert.match(ui,/Exact filter: published/);
   assert.match(ui,/DropdownButtonFormField<String>/);
-  assert.match(ui,/status:\\(_filterstatus.text.trim\\(\\).isEmpty\\?null:_filterstatus.text.trim\\(\\)\\)/);
+  assert.match(ui,/status:\(_filterstatus.text.trim\(\).isEmpty\?null:_filterstatus.text.trim\(\)\)/);
   assert.match(ui,/published:_filterpublished/);
-  assert.match(widgetTest,/String\\? status,String\\? published/);
+  assert.match(widgetTest,/String\? status,String\? published/);
   assert.doesNotMatch(ui,/Dio|package:fable_core|Map<String,dynamic>/);
 });
 
@@ -140,5 +140,5 @@ test('RC278 older signed Backend pagination remains unchanged without filter con
   const files=renderTypedFeature(planTypedFeature(fixture()));
   const page=files.get('packages/features/fable_catalog/lib/src/presentation/catalog_list_paginated_page.dart');
   assert.doesNotMatch(page,/Exact filter:/);
-  assert.match(page,/ListView\\.builder/);
+  assert.match(page,/ListView\.builder/);
 });
