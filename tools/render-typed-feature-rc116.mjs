@@ -272,6 +272,7 @@ function readPage(op){
     'final class _'+name+'PageState extends State<'+name+'Page> {',
     '  late '+name+'Controller _controller;',
     '  StreamSubscription<Object?>? _identity;',
+    '  int _identityEpoch=0;',
   ];
   for(const p of argsOf(op))parts.push('  final _'+p+'=TextEditingController();');
   parts.push(
@@ -280,14 +281,16 @@ function readPage(op){
     '    _controller='+name+'Controller('+name+'UseCase(widget.repository));',
     '    _controller.addListener(_redraw);',
     '    _identity=widget.identityEvents.listen((_){',
+    '      _identityEpoch++;',
     '      if(mounted)_controller.invalidate();',
     '    });',
     '  }',
     '  @override void initState(){super.initState();_bind();}',
     '  @override void didUpdateWidget(covariant '+name+'Page old){',
     '    super.didUpdateWidget(old);',
-    '    if(!identical(old.repository,widget.repository) ||',
+    '    if(!identical(old.repository,widget.repository) ||
     '        !identical(old.identityEvents,widget.identityEvents)){',
+    '      _identityEpoch++;',
     '      unawaited(_identity?.cancel());',
     '      _controller.removeListener(_redraw);_controller.dispose();',
     '      _bind();',
@@ -302,6 +305,7 @@ function readPage(op){
     ...(op.method==='POST'?[
       '  Future<void> _load()async{',
       '    if(_controller.state is '+name+'Loading)return;',
+      '    final originalIdentity=_identityEpoch;',
       '    final confirmed=await showDialog<bool>(context:context,builder:(context)=>',
       '      AlertDialog(title:const Text("Confirm record creation"),',
       '        content:const Text("This creates a record. If the network fails, verify Backend state before attempting another create."),',
@@ -309,7 +313,7 @@ function readPage(op){
       '          TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text("Cancel")),',
       '          FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text("Confirm create")),',
       '        ]));',
-      '    if(confirmed!=true || !mounted)return;',
+      '    if(confirmed!=true || !mounted || originalIdentity!=_identityEpoch)return;',
       '    _controller.submit('+argsOf(op).map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
       '  }',
     ]:[
