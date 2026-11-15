@@ -463,11 +463,33 @@ function readPage(op){
     ]:[]),
     '          if(state is '+name+'Ready)...[',
   );
-  for(const f of op.fields)
-    parts.push('            Text('+dart(f.name+': ')+'+state.value.'+f.name+'.toString()),');
+  if(op.resultKind==='unpaginated-list'){
+    parts.push(
+      '            Text("Showing "+state.value.items.length.toString()+" items; reported count: "+state.value.count.toString()),',
+      '            if(state.value.limitExceeded)',
+      '              const Text("More records exist. This is not the full collection."),',
+      '            if(state.value.items.isEmpty)',
+      '              const Text("No records available."),',
+      '            for(final item in state.value.items.take(100))',
+      '              Card(child:Padding(',
+      '                padding:const EdgeInsets.all(12),',
+      '                child:Column(',
+      '                  crossAxisAlignment:CrossAxisAlignment.start,',
+      '                  children:[',
+      ...op.fields.map(f=>'                    Text('+dart(f.name+': ')+'+item.'+f.name+'.toString()),'),
+      '                  ],',
+      '                ),',
+      '              )),',
+      '            if(state.value.items.length>100)',
+      '              const Text("Displaying first 100 rows; refine the project query for more."),',
+    );
+  }else{
+    for(const f of op.fields)
+      parts.push('            Text('+dart(f.name+': ')+'+state.value.'+f.name+'.toString()),');
+  }
   parts.push(
     '          ],',
-    '        ],',
+    '        ],
     '      )),',
     '    );',
     '  }',
