@@ -272,6 +272,7 @@ function readPage(op){
     '  late '+name+'Controller _controller;',
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
+    ...(op.method==='POST'?['  bool _confirming=false;']:[]),
   ];
   for(const p of argsOf(op))parts.push('  final _'+p+'=TextEditingController();');
   parts.push(
@@ -282,6 +283,7 @@ function readPage(op){
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
     '      if(mounted)_controller.invalidate();',
+    ...argsOf(op).map(p=>'      _'+p+'.clear();'),
     '    });',
     '  }',
     '  @override void initState(){super.initState();_bind();}',
@@ -303,8 +305,10 @@ function readPage(op){
     '  }',
     ...(op.method==='POST'?[
       '  Future<void> _load()async{',
-      '    if(_controller.state is '+name+'Loading)return;',
+      '    if(_confirming || _controller.state is '+name+'Loading)return;',
+      '    _confirming=true;',
       '    final originalIdentity=_identityEpoch;',
+      '    try {',
       '    final confirmed=await showDialog<bool>(context:context,builder:(context)=>',
       '      AlertDialog(title:const Text("Confirm record creation"),',
       '        content:const Text("This creates a record. If the network fails, verify Backend state before attempting another create."),',
@@ -314,6 +318,7 @@ function readPage(op){
       '        ]));',
       '    if(confirmed!=true || !mounted || originalIdentity!=_identityEpoch)return;',
       '    _controller.submit('+argsOf(op).map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
+      '    } finally {_confirming=false;}',
       '  }',
     ]:[
       '  void _load(){_controller.load('+
@@ -338,7 +343,7 @@ function readPage(op){
     '            enabled:state is! '+name+'Loading),');
   parts.push(
     '          FilledButton.icon(',
-    '            onPressed:state is '+name+'Loading?null:_load,',
+    '            onPressed:state is '+name+'Loading'+(op.method==='POST'?' || _confirming':'')+'?null:_load,',
     '            icon:const Icon('+(op.method==='POST'?'Icons.add_circle_outline':'Icons.refresh')+'),',
     '            label:const Text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+'),',
     '          ),',
