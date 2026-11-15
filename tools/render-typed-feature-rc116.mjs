@@ -1,7 +1,6 @@
 /**
- * RC116: deterministic, typed Dart code for verified Fable GET contracts only.
- * The generator does NOT create decorative screens, magic routes, Auth/OTP,
- * mutations, or false live tests. Data adapter is the ONLY JSON boundary.
+ * RC116/RC267: typed Dart code for verified Fable GET and reviewed CREATE POST.
+ * No generic mutations, guessed Auth/OTP, PATCH/DELETE, or false live tests. Data adapter is the ONLY JSON boundary.
  */
 const snake=value=>value.replace(/[.-]/g,'_').replace(/([a-z0-9])([A-Z])/g,'$1_$2').toLowerCase();
 const line=(...parts)=>parts.join('\n')+'\n';
@@ -257,7 +256,7 @@ function presentation(op){
 // for state, while the platform session event invalidates old-account results.
 function readPage(op){
   const name=op.className,file=snake(op.operationId),parts=[
-    '// GENERATED W5: usable typed Fable read screen (live E2E pending).',
+    '// GENERATED W5: usable typed Fable '+op.method+' screen (live E2E pending).',
     "import 'dart:async';",
     "import 'package:material_ui/material_ui.dart';",
     "import '../application/"+file+"_use_case.dart';",
@@ -617,10 +616,10 @@ export function renderTypedFeature(plan){
     'Project ID: '+plan.projectId,
     'Pinned Backend Contract SHA-256: '+plan.contractHash,
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
-    'Supported: verified authenticated GET with strict flat-object DTO only.',
+    'Supported: authenticated GET and reviewed create POST with signed flat-object DTO only.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, mutations and runtime-only schemas are NOT generated.',
+    'Other Backend, PUT/PATCH/DELETE, sensitive POST and ambiguous schemas are NOT generated.',
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
