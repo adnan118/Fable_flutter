@@ -192,17 +192,20 @@ function signedPaginatedListFields(op,schema,route){
   const variants=schema.properties.meta?.oneOf;
   if(!Array.isArray(variants)||variants.length!==2)
     fail('paginated metadata requires signed page/search alternatives: '+id);
-  const expectedMetadata={
-    page:{page:'integer',limit:'integer',total:'integer',totalPages:'integer'},
-    search:{limit:'integer',count:'integer'},
-  };
-  for(const mode of ['page','search']){
-    const declared=signed.meta?.[mode];
-    if(!declared ||
-       JSON.stringify(Object.entries(declared).sort())!==
-       JSON.stringify(Object.entries(expectedMetadata[mode]).sort()))
-      fail('paginated source metadata semantics are not verified: '+id);
-  }
+  const expectedPage={page:'integer',limit:'integer',total:'integer',totalPages:'integer'};
+  const legacySearch={limit:'integer',count:'integer'};
+  const pagedSearch={page:'integer',limit:'integer',total:'integer',totalPages:'integer',count:'integer'};
+  const same=(a,b)=>JSON.stringify(Object.entries(a??{}).sort())===
+    JSON.stringify(Object.entries(b).sort());
+  if(!same(signed.meta?.page,expectedPage))
+    fail('page metadata semantics are not signed: '+id);
+  const searchPaged=same(signed.meta?.search,pagedSearch);
+  if(!searchPaged&&!same(signed.meta?.search,legacySearch))
+    fail('unknown search metadata shape: '+id);
+  const searchQuery=q.get('q');
+  if(searchQuery&&(searchQuery.type!=='string'||searchQuery.required===true))
+    fail('search input must be a signed optional string: '+id);
+  const searchPageSupported=searchPaged&&Boolean(searchQuery);
   const byMode=new Map();
   for(const entry of variants){
     const mode=entry?.properties?.mode?.const;
@@ -211,7 +214,9 @@ function signedPaginatedListFields(op,schema,route){
       fail('invalid paginated meta alternative: '+id);
     const names=mode==='page'
       ?['mode','page','limit','total','totalPages']
-      :['mode','limit','count'];
+      :(searchPaged
+        ?['mode','page','limit','total','totalPages','count']
+        :['mode','limit','count']);
     if(entry.required.length!==names.length||
        Object.keys(entry.properties).sort().join(',')!==names.slice().sort().join(',')||
        !names.every(x=>entry.required.includes(x))||
@@ -222,7 +227,7 @@ function signedPaginatedListFields(op,schema,route){
   if(byMode.size!==2)fail('paginated mode alternative missing: '+id);
   const fields=dataFields(schema.properties.items.items);
   checkSignedResponseShape(op,schema.properties.items.items,fields,signed.item);
-  return fields;
+  return {fields,searchPageSupported};
 }
 
 function validatedCreateFields(op,route,id,featureId){
@@ -374,11 +379,11 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const resultKind=op.response?.data?.type==='list-result'
       ?(op.operationId.endsWith('.list.paginated')?'paginated-list':'unpaginated-list')
       :'single';
+    const paginated=resultKind==='paginated-list'
+      ?signedPaginatedListFields(op,schema.properties?.data,route):null;
     const fields=resultKind==='unpaginated-list'
       ?signedUnpaginatedListFields(op,schema.properties?.data)
-      :resultKind==='paginated-list'
-        ?signedPaginatedListFields(op,schema.properties?.data,route)
-        :dataFields(schema.properties?.data);
+      :paginated?.fields??dataFields(schema.properties?.data);
     if(resultKind==='single')
       checkSignedResponseShape(op,schema.properties.data,fields);
     const className=typeName(id);
@@ -392,7 +397,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
-      className,fields,params,bodyFields,resultKind});
+      className,fields,params,bodyFields,resultKind,
+      supportsSearch:paginated?.searchPageSupported??false});
   }
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),

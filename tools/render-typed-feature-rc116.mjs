@@ -10,10 +10,10 @@ const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
 const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name),
-  ...(op.resultKind==='paginated-list'?['required int page']:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[])]:[])].join(', ');
 const named=op=>(argsOf(op).length||op.resultKind==='paginated-list')?'{'+params(op)+'}':'';
 const callArgs=op=>[...argsOf(op).map(x=>x+': '+x),
-  ...(op.resultKind==='paginated-list'?['page: page']:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['page: page',...(op.supportsSearch?['search: search']:[])]:[])].join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
   if(!plan||!Array.isArray(plan.operations)||!plan.operations.length||
@@ -78,7 +78,13 @@ function listDto(op){
     "    final input=raw['items'],meta=raw['meta'];",
     '    if(input is! List || input.length>500 || meta is! Map ||',
     ...(op.resultKind==='paginated-list'?[
-      "       meta['mode']!='page' ||",
+      "       "+(op.supportsSearch
+        ?"(meta['mode']!='page' && meta['mode']!='search')"
+        :"meta['mode']!='page'")+" ||",
+      ...(op.supportsSearch?[
+        "       (meta['mode']=='search' &&",
+        "         (meta['count'] is! int || meta['count']!=input.length)) ||",
+      ]:[]),
       "       meta['page'] is! int || meta['limit'] is! int ||",
       "       meta['total'] is! int || meta['totalPages'] is! int ||",
       "       (meta['page'] as int)<1 || (meta['page'] as int)>100000 ||",
@@ -247,6 +253,11 @@ function adapter(op,projectHash){
     ...(op.resultKind==='paginated-list'?[
       '    if(page<1||page>100000)',
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      ...(op.supportsSearch?[
+        '    if(search!=null && (search.trim().length>191 ||',
+        '        search.codeUnits.any((c)=>c<32||c==127)))',
+        '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      ]:[]),
     ]:[]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
@@ -255,7 +266,10 @@ function adapter(op,projectHash){
       (op.method==='POST'?',body:'+name+'CreateRequest('+
         (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+
       (op.resultKind==='paginated-list'
-        ?',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}':'')+');',
+        ?(op.supportsSearch
+          ?',query:<String,dynamic>{"page":page,"limit":20,"mode":search!=null && search.trim().isNotEmpty?"search":"page",if(search!=null && search.trim().isNotEmpty)"q":search.trim()}'
+          :',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}')
+        :'')+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
@@ -326,7 +340,90 @@ function application(op){
     '    }','  }','}');
   return line(...parts);
 }
+
+/**
+ * RC273: one controller owns the accumulated pages, query and request epoch.
+ * The UI remains HTTP-free; stale account/search responses cannot be added
+ * to current results. A failed page is retried only on explicit user intent.
+ */
+function infiniteListController(op){
+  const name=op.className,file=snake(op.operationId),item=name+'Item';
+  return line(
+    '// GENERATED RC273: source-pinned infinite list controller (no HTTP in UI).',
+    "import 'dart:async';",
+    "import 'package:flutter/foundation.dart';",
+    "import '../application/"+file+"_use_case.dart';",
+    "import '../domain/"+file+"_entity.dart';",
+    "import '../domain/typed_read_result.dart';",
+    'final class '+name+'Controller extends ChangeNotifier {',
+    '  '+name+'Controller(this._read);',
+    '  final '+name+'UseCase _read;',
+    '  final List<'+item+'> _items=<'+item+'>[];',
+    '  List<'+item+'> get items=>List<'+item+'>.unmodifiable(_items);',
+    '  bool _loading=false,_completed=false,_closed=false;',
+    '  int _epoch=0,_nextPage=1,_total=0;',
+    ...(op.supportsSearch?['  String _search="";']:[]),
+    '  TypedReadFailureKind? _error;',
+    '  bool get isLoading=>_loading;',
+    '  bool get hasMore=>!_completed;',
+    '  int get total=>_total;',
+    '  TypedReadFailureKind? get error=>_error;',
+    '  void reset('+ (op.supportsSearch?'{String search=""}':'') +'){',
+    '    if(_closed)return;',
+    '    _epoch++;_items.clear();',
+    '    _nextPage=1;_total=0;_loading=false;_completed=false;',
+    '    _error=null;',
+    ...(op.supportsSearch?['    _search=search.trim();']:[]),
+    '    notifyListeners();',
+    '  }',
+    '  Future<void> loadNext()async{',
+    '    if(_closed || _loading || _completed || _error!=null)return;',
+    '    final epoch=_epoch,requested=_nextPage;',
+    '    _loading=true;notifyListeners();',
+    '    try{',
+    '      final result=await _read.call(page:requested'+
+      (op.supportsSearch?',search:_search':'')+');',
+    '      if(_closed || _epoch!=epoch)return;',
+    '      switch(result){',
+    '        case TypedReadSuccess<'+name+'Entity> ok:',
+    '          final data=ok.value;',
+    '          if(data.page!=requested){',
+    '            _error=TypedReadFailureKind.invalidResponse;',
+    '            break;',
+    '          }',
+    '          _items.addAll(data.items);',
+    '          _total=data.total;',
+    '          _nextPage=requested+1;',
+    '          _completed=requested>=data.totalPages ||',
+    '            data.items.isEmpty || requested>=100000;',
+    '        case TypedReadFailed<'+name+'Entity> failed:',
+    '          _error=failed.failure.kind;',
+    '      }',
+    '    }catch(_){',
+    '      if(!_closed && _epoch==epoch)',
+    '        _error=TypedReadFailureKind.unknown;',
+    '    }finally{',
+    '      if(!_closed && _epoch==epoch){',
+    '        _loading=false;notifyListeners();',
+    '      }',
+    '    }',
+    '  }',
+    '  void retry(){',
+    '    if(_closed || _error==null)return;',
+    '    _error=null;notifyListeners();',
+    '    unawaited(loadNext());',
+    '  }',
+    '  void invalidate()=>reset();',
+    '  @override void dispose(){',
+    '    _closed=true;_epoch++;_items.clear();',
+    '    super.dispose();',
+    '  }',
+    '}',
+  );
+}
+
 function presentation(op){
+  if(op.resultKind==='paginated-list')return infiniteListController(op);
   const name=op.className,file=snake(op.operationId),args=named(op);
   const parts=[
     '// GENERATED by Fable RC116: UI state only; no HTTP or JSON.',
@@ -383,7 +480,159 @@ function presentation(op){
 }
 // RC265: real authenticated GET pages. The Controller remains responsible
 // for state, while the platform session event invalidates old-account results.
+
+/**
+ * RC273: Flutter ScrollController infinite feed. No next/previous buttons;
+ * the only pagination input comes from signed Repository via controller.
+ */
+function infiniteListPage(op){
+  const name=op.className,file=snake(op.operationId);
+  const parts=[
+    '// GENERATED RC273: lazy infinite-scroll signed Backend paging.',
+    "import 'dart:async';",
+    "import 'package:material_ui/material_ui.dart';",
+    "import '../application/"+file+"_use_case.dart';",
+    "import '../domain/"+file+"_repository.dart';",
+    "import '"+file+"_controller.dart';",
+    'final class '+name+'Page extends StatefulWidget {',
+    '  const '+name+'Page({super.key,required this.repository,required this.identityEvents});',
+    '  final '+name+'Repository repository;',
+    '  final Stream<Object?> identityEvents;',
+    '  @override State<'+name+'Page> createState()=>_'+name+'PageState();',
+    '}',
+    'final class _'+name+'PageState extends State<'+name+'Page> {',
+    '  late '+name+'Controller _controller;',
+    '  final ScrollController _scroll=ScrollController();',
+    ...(op.supportsSearch?['  final TextEditingController _search=TextEditingController();']:[]),
+    '  StreamSubscription<Object?>? _identity;',
+    '  int _identityEpoch=0;',
+    '  void _redraw(){',
+    '    if(!mounted)return;',
+    '    setState((){});',
+    '    WidgetsBinding.instance.addPostFrameCallback((_){',
+    '      if(mounted)_maybeLoadMore();',
+    '    });',
+    '  }',
+    '  void _maybeLoadMore(){',
+    '    if(!_scroll.hasClients || _controller.isLoading ||',
+    '       !_controller.hasMore || _controller.error!=null)return;',
+    '    if(_scroll.position.extentAfter<400)',
+    '      unawaited(_controller.loadNext());',
+    '  }',
+    '  void _bind(){',
+    '    _controller='+name+'Controller('+name+'UseCase(widget.repository));',
+    '    _controller.addListener(_redraw);',
+    '    _identity=widget.identityEvents.listen((_){',
+    '      _identityEpoch++;',
+    ...(op.supportsSearch?['      _search.clear();']:[]),
+    '      _controller.invalidate();',
+    '    });',
+    '    final bindingIdentity=_identityEpoch;',
+    '    WidgetsBinding.instance.addPostFrameCallback((_){',
+    '      if(mounted && _identityEpoch==bindingIdentity)',
+    '        unawaited(_controller.loadNext());',
+    '    });',
+    '  }',
+    '  @override void initState(){',
+    '    super.initState();',
+    '    _scroll.addListener(_maybeLoadMore);',
+    '    _bind();',
+    '  }',
+    '  @override void didUpdateWidget(covariant '+name+'Page old){',
+    '    super.didUpdateWidget(old);',
+    '    if(!identical(old.repository,widget.repository) ||',
+    '       !identical(old.identityEvents,widget.identityEvents)){',
+    '      _identityEpoch++;',
+    ...(op.supportsSearch?['      _search.clear();']:[]),
+    '      unawaited(_identity?.cancel());',
+    '      _controller.removeListener(_redraw);_controller.dispose();',
+    '      _bind();',
+    '    }',
+    '  }',
+    '  @override void dispose(){',
+    '    unawaited(_identity?.cancel());',
+    '    _controller.removeListener(_redraw);_controller.dispose();',
+    '    _scroll.removeListener(_maybeLoadMore);_scroll.dispose();',
+    ...(op.supportsSearch?['    _search.dispose();']:[]),
+    '    super.dispose();',
+    '  }',
+    '  void _refresh(){',
+    '    _controller.reset('+(op.supportsSearch?'search:_search.text.trim()':'')+');',
+    '    if(_scroll.hasClients)_scroll.jumpTo(0);',
+    '    unawaited(_controller.loadNext());',
+    '  }',
+    '  @override Widget build(BuildContext context){',
+    '    final items=_controller.items;',
+    '    return Scaffold(',
+    '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
+    '      body:SafeArea(child:Column(children:[',
+    ...(op.supportsSearch?[
+      '        Padding(padding:const EdgeInsets.all(12),',
+      '          child:Row(children:[',
+      '            Expanded(child:TextField(',
+      '              controller:_search,',
+      '              maxLength:191,',
+      '              textInputAction:TextInputAction.search,',
+      '              decoration:const InputDecoration(',
+      '                labelText:"Search across all authorized records",',
+      '                prefixIcon:Icon(Icons.search)),',
+      '              onSubmitted:(_)=>_refresh(),',
+      '            )),',
+      '            IconButton(onPressed:_refresh,',
+      '              tooltip:"Search all results",icon:const Icon(Icons.search)),',
+      '          ])),',
+    ]:[]),
+    '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+    '          child:Row(children:[',
+    '            Expanded(child:Text("Loaded "+items.length.toString()+',
+    '              " of "+_controller.total.toString()+" matches")),',
+    '            IconButton(onPressed:_controller.isLoading?null:_refresh,',
+    '              tooltip:"Refresh list",icon:const Icon(Icons.refresh)),',
+    '          ])),',
+    '        Expanded(child:ListView.builder(',
+    '          controller:_scroll,',
+    '          padding:const EdgeInsets.all(12),',
+    '          itemCount:items.length+1,',
+    '          itemBuilder:(context,index){',
+    '            if(index==items.length){',
+    '              if(_controller.error!=null)',
+    '                return OutlinedButton.icon(',
+    '                  onPressed:_controller.retry,',
+    '                  icon:const Icon(Icons.refresh),',
+    '                  label:Text("Retry failed page: "+_controller.error!.name));',
+    '              if(_controller.isLoading)',
+    '                return const Padding(padding:EdgeInsets.all(16),',
+    '                  child:Center(child:CircularProgressIndicator()));',
+    '              if(items.isEmpty)',
+    '                return const Center(child:Text("No matching records"));',
+    '              if(!_controller.hasMore)',
+    '                return const Center(child:Text("All results loaded"));',
+    '              return const SizedBox(height:32);',
+    '            }',
+    '            final item=items[index];',
+    '            return Card(child:Padding(',
+    '              padding:const EdgeInsets.all(12),',
+    '              child:Column(',
+    '                crossAxisAlignment:CrossAxisAlignment.start,',
+    '                children:[',
+    ...op.fields.map(f=>
+      '                  Text('+dart(f.name+': ')+'+item.'+f.name+'.toString()),'),
+    '                ],',
+    '              ),',
+    '            ));',
+    '          },',
+    '        )),',
+    '      ])),',
+    '    );',
+    '  }',
+    '}',
+  ];
+  return line(...parts);
+}
+
+
 function readPage(op){
+  if(op.resultKind==='paginated-list')return infiniteListPage(op);
   const name=op.className,file=snake(op.operationId),parts=[
     '// GENERATED W5: usable typed Fable '+op.method+' screen (live E2E pending).',
     "import 'dart:async';",
@@ -660,7 +909,66 @@ function projectNavigation(plan){
   return {source:line(...parts),value};
 }
 
+
+function infiniteListPageTest(op,featureId){
+  const name=op.className,file=snake(op.operationId);
+  const fields=op.fields.filter(f=>f.required).map(f=>
+    '          '+f.name+': '+(
+      f.type==='String'?dart('sample'):
+      f.type==='int'?'7':f.type==='double'?'2.5':'true')+',');
+  return line(
+    "import 'dart:async';",
+    "import 'package:flutter_test/flutter_test.dart';",
+    "import 'package:material_ui/material_ui.dart';",
+    "import 'package:fable_"+featureId+"/src/domain/"+file+"_repository.dart';",
+    "import 'package:fable_"+featureId+"/src/domain/"+file+"_entity.dart';",
+    "import 'package:fable_"+featureId+"/src/presentation/"+file+"_page.dart';",
+    'final class _FakeRepository implements '+name+'Repository {',
+    '  final calls=<int>[];',
+    ...(op.supportsSearch?['  final searches=<String?>[];']:[]),
+    '  @override Future<'+name+'Entity> load({required int page'+
+      (op.supportsSearch?',String? search':'')+'})async{',
+    '    calls.add(page);',
+    ...(op.supportsSearch?['    searches.add(search);']:[]),
+    '    return '+name+'Entity(',
+    '      items:<'+name+'Item>[',
+    '        '+name+'Item(',
+    ...fields,
+    '        ),',
+    '      ],',
+    '      page:page,limit:20,total:40,totalPages:2,',
+    '    );',
+    '  }',
+    '}',
+    'void main(){',
+    '  testWidgets("RC273 lazy infinite scroll uses signed repository and session fencing",',
+    '    (tester)async{',
+    '      final events=StreamController<Object?>.broadcast(sync:true);',
+    '      final repository=_FakeRepository();',
+    '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
+    '        repository:repository,identityEvents:events.stream)));',
+    '      await tester.pumpAndSettle();',
+    '      expect(repository.calls,contains(1));',
+    '      expect(find.byType(ListView),findsOneWidget);',
+    '      expect(find.text("Previous page"),findsNothing);',
+    '      expect(find.text("Next page"),findsNothing);',
+    ...(op.supportsSearch?[
+      '      await tester.enterText(find.byType(TextField).first,"needle");',
+      '      await tester.testTextInput.receiveAction(TextInputAction.search);',
+      '      await tester.pumpAndSettle();',
+      '      expect(repository.searches,contains("needle"));',
+    ]:[]),
+    '      events.add(Object());',
+    '      await tester.pump();',
+    '      await tester.pumpWidget(const SizedBox.shrink());',
+    '      await events.close();',
+    '    });',
+    '}',
+  );
+}
+
 function readPageTest(op,featureId){
+  if(op.resultKind==='paginated-list')return infiniteListPageTest(op,featureId);
   const name=op.className,file=snake(op.operationId);
   const sample=type=>type==='String'?dart('example'):
     type==='int'?'7':type==='double'?'1.5':'true';
@@ -886,10 +1194,10 @@ export function renderTypedFeature(plan){
     'Project ID: '+plan.projectId,
     'Pinned Backend Contract SHA-256: '+plan.contractHash,
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
-    'Supported: signed object GET, unpaginated GET, bounded page-mode GET and reviewed create POST.',
+    'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, and reviewed create POST.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, search/filter/sort, tenant-scoped pagination, PUT/PATCH/DELETE, sensitive POST and ambiguous schemas are NOT generated.',
+    'Other Backend, arbitrary filter/sort, legacy unpaged search, tenant-scoped paging, PUT/PATCH/DELETE and sensitive POST are NOT generated.',
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
