@@ -45,7 +45,7 @@ pnpm wizard:passkeys:domains -- --root . --config .fable/passkeys-association.js
 
 الأداة لا تغيّر Application ID، ولا توقع Android/iOS، ولا تكتب تلقائيًا فوق Entitlements الفعلية، ولا تنشر الملفات على النطاق. يجب دمج إعدادات التوقيع الصحيحة، ونشر ملفات `.well-known` عبر HTTPS، وفحص Android Digital Asset Links مع شهادة الإصدار الحقيقية، والتحقق من Associated Domains وApple CDN على جهاز iPhone فعلي.
 
-يجب أن يتطابق `rpId` حرفيًا مع `PASSKEY_RP_ID` الموثوق لدى Backend، وأن تتضمن `PASSKEY_EXPECTED_ORIGINS` أصول التطبيق/الويب الصحيحة وفق متطلبات WebAuthn. عدم التطابق يفشل إغلاق W6.
+يجب أن يتطابق `rpId` حرفيًا مع `AUTH_PASSKEY_RP_ID` الموثوق لدى Backend، وأن تتضمن `AUTH_PASSKEY_ORIGINS` أصول التطبيق/الويب الصحيحة وفق متطلبات WebAuthn. عدم التطابق يفشل إغلاق W6.
 
 للمرجع الرسمي:
 
