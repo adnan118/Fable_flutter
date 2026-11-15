@@ -23,7 +23,7 @@ export function planW5AppFeatureBinding({pubspec,registry,featureId}){
     throw Error('W5 unexpected app source inputs');
   if(/^\s*name:\s*ci_fable\s*$/m.test(pubspec))
     throw Error('W5 refuses to mutate reusable ci_fable validation starter');
-  if((pubspec.match(/^dependencies:\s*$/gm)||[]).length!==1||
+  if((pubspec.match(/^dependencies:[ \t]*$/gm)||[]).length!==1||
      (registry.match(/^const List<FableFeature> installedFeatures = <FableFeature>\[$/gm)||[]).length!==1)
     throw Error('W5 app dependencies or typed feature registry are not canonical');
   const dependency='  '+packageName+':\n    path: packages/features/'+packageName+'\n';
@@ -32,7 +32,7 @@ export function planW5AppFeatureBinding({pubspec,registry,featureId}){
      registry.includes(exportedImport)||
      new RegExp('^\\s*'+variable+',\\s*$','m').test(registry))
     throw Error('W5 feature already wired; no overwrite permitted');
-  const updatedPubspec=pubspec.replace(/^dependencies:\s*$/m,
+  const updatedPubspec=pubspec.replace(/^dependencies:[ \t]*$/m,
     ()=> 'dependencies:\n'+dependency.trimEnd());
   const marker='const List<FableFeature> installedFeatures = <FableFeature>[\n';
   const updatedRegistry=registry
