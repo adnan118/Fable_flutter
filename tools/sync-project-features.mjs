@@ -36,7 +36,7 @@ function allSource(root,skip=new Set()){
   walk(join(root,'packages'));
   return out;
 }
-function wiredTypedProjectFeatures(root,selected){
+export function wiredTypedProjectFeatures(root,selected){
   const yamlPath=join(root,'pubspec.yaml');
   const registryPath=join(root,'lib/src/generated/feature_registry.dart');
   const yaml=existsSync(yamlPath)?readFileSync(yamlPath,'utf8'):'';
