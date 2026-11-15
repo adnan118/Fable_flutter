@@ -930,14 +930,15 @@ function infiniteListPageTest(op,featureId){
     "import 'package:fable_"+featureId+"/src/domain/"+file+"_entity.dart';",
     "import 'package:fable_"+featureId+"/src/presentation/"+file+"_page.dart';",
     'final class _FakeRepository implements '+name+'Repository {',
-    '  final calls=<int>[];',
+    '  final calls=<int>[];'
+    '  bool emptyIntermediate=false;',,
     ...(op.supportsSearch?['  final searches=<String?>[];']:[]),
     '  @override Future<'+name+'Entity> load({required int page'+
       (op.supportsSearch?',String? search':'')+'})async{',
     '    calls.add(page);',
     ...(op.supportsSearch?['    searches.add(search);']:[]),
     '    return '+name+'Entity(',
-    '      items:<'+name+'Item>[',
+    '      items:emptyIntermediate?<'+name+'Item>[]:<'+name+'Item>[',
     '        '+name+'Item(',
     ...fields,
     '        ),',
