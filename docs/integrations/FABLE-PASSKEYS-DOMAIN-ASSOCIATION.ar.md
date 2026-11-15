@@ -41,6 +41,7 @@ pnpm wizard:passkeys:domains -- --root . --config .fable/passkeys-association.js
 - `site/.well-known/assetlinks.json` لربط Credential Manager مع نطاق RP بواسطة `delegate_permission/common.get_login_creds`.
 - `site/.well-known/apple-app-site-association` بلا امتداد لإثبات `webcredentials` لهوية `TEAMID.bundleID`.
 - `ios/FablePasskeys.entitlements` كمقطع مراجعة لقائمة `com.apple.developer.associated-domains`.
+- `backend/Passkeys-origin-review.env` بقيمتي `AUTH_PASSKEY_RP_ID` و`AUTH_PASSKEY_ORIGINS` للمراجعة، بما فيها أصل Android `android:apk-key-hash:<SHA256_BASE64URL>` المحسوب من شهادة التوقيع الفعلية. يُسمح بـ HTTPS RP أصلًا للـ iOS؛ قد تحتاج أصول الويب الأخرى إلى إضافتها يدويًا بعد التوثيق.
 - `README.md` يحدد خطوات النشر والتحقق المطلوبة، مع بصمة عقد Backend.
 
 الأداة لا تغيّر Application ID، ولا توقع Android/iOS، ولا تكتب تلقائيًا فوق Entitlements الفعلية، ولا تنشر الملفات على النطاق. يجب دمج إعدادات التوقيع الصحيحة، ونشر ملفات `.well-known` عبر HTTPS، وفحص Android Digital Asset Links مع شهادة الإصدار الحقيقية، والتحقق من Associated Domains وApple CDN على جهاز iPhone فعلي.

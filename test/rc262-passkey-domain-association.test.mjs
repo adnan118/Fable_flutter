@@ -19,6 +19,7 @@ test('RC262 export contains only Android credential relationship and iOS webcred
   const paths=Object.keys(out);
   assert.deepEqual(paths.sort(),[
     'README.md','ios/FablePasskeys.entitlements',
+    'backend/Passkeys-origin-review.env',
     'site/.well-known/apple-app-site-association',
     'site/.well-known/assetlinks.json',
   ].sort());
@@ -30,6 +31,12 @@ test('RC262 export contains only Android credential relationship and iOS webcred
   assert.deepEqual(ios.webcredentials.apps,['A1B2C3D4E5.com.projectaccount.mobile']);
   assert.match(out['ios/FablePasskeys.entitlements'],
     /webcredentials:login\.project-account\.com/);
+  const origin='android:apk-key-hash:'+
+    Buffer.from('AB'.repeat(32),'hex').toString('base64url');
+  const env=out['backend/Passkeys-origin-review.env'];
+  assert.ok(env.includes('AUTH_PASSKEY_RP_ID=login.project-account.com'));
+  assert.ok(env.includes('AUTH_PASSKEY_ORIGINS=https://login.project-account.com,'+origin));
+  assert.ok(!env.includes('AUTH_PASSKEY_ENABLED=true'));
 });
 
 test('RC262 refuses placeholder, web URL, local, empty or wildcard RP hosts',()=>{

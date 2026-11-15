@@ -62,6 +62,13 @@ export function createPasskeyAssociationBundle(config) {
       config.ios.bundleId.startsWith('com.example.'))
     fail('Real Apple Team ID and Bundle ID must be supplied');
   const origin='https://'+config.rpId;
+  // Android Credential Manager signs WebAuthn clientDataJSON with the
+  // signing certificate's *base64url* SHA-256 hash as an app origin, not the
+  // website's HTTPS origin. Generate it from the independently supplied
+  // release certificate so Backend can explicitly authorize the real app.
+  const androidOrigins=certs.map(cert=>'android:apk-key-hash:'+
+    Buffer.from(cert.replaceAll(':',''),'hex').toString('base64url'));
+  const expectedOrigins=[origin,...androidOrigins];
   const assetlinks=[{
     relation:['delegate_permission/common.get_login_creds'],
     target:{namespace:'android_app',package_name:config.android.packageName,
@@ -89,8 +96,10 @@ export function createPasskeyAssociationBundle(config) {
     '3. Independently verify the Apple Team ID and production Bundle ID.',
     '4. Merge the associated-domains key from FablePasskeys.entitlements into the REAL signed iOS Runner entitlement.',
     '5. Publish apple-app-site-association WITHOUT a .json extension at '+origin+'/.well-known/apple-app-site-association, HTTPS application/json.',
-    '6. Validate both links on actual signed Android/iOS applications and Apple CDN; source export is NOT live validation.',
-    '7. Confirm matching Fable Backend AUTH_PASSKEY_RP_ID, allowed origin and registered public WebAuthn methods.',
+    '6. Review backend/Passkeys-origin-review.env: Android uses android:apk-key-hash:<base64url SHA-256 cert>; iOS uses HTTPS RP origin.',
+    '7. Apply AUTH_PASSKEY_RP_ID and AUTH_PASSKEY_ORIGINS ONLY after checking every origin against the deployed signing identities.',
+    '8. Validate both links on actual signed Android/iOS applications and Apple CDN; source export is NOT live validation.',
+    '9. Confirm Backend AUTH_PASSKEY_ENABLED, WebAuthn challenge verification and registered credential methods.',
     '',
     'This tool NEVER edits signing profiles, Android application IDs, app entitlements, DNS or hosted website files.',
     'It does NOT imply W6 E2E passing or production GO.',
@@ -100,6 +109,14 @@ export function createPasskeyAssociationBundle(config) {
     'site/.well-known/assetlinks.json':JSON.stringify(assetlinks,null,2)+'\n',
     'site/.well-known/apple-app-site-association':JSON.stringify(apple,null,2)+'\n',
     'ios/FablePasskeys.entitlements':entitlements,
+    'backend/Passkeys-origin-review.env':[
+      '# REVIEW ONLY: do not publish or blindly source these settings.',
+      '# Native Android origin is derived from the real APK signing certificate.',
+      '# Add only independently verified extra HTTPS origins when required.',
+      'AUTH_PASSKEY_RP_ID='+config.rpId,
+      'AUTH_PASSKEY_ORIGINS='+expectedOrigins.join(','),
+      '',
+    ].join('\n'),
     'README.md':readme,
   });
 }
