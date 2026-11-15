@@ -118,8 +118,24 @@ class FablePasskeyRepository {
         (safe['response'] as Map)['signature'] is! String) {
       throw const FormatException('Invalid WebAuthn assertion');
     }
+    // Fable's session issuance requires a stable installation identifier just
+    // like /auth/login. Sending a valid WebAuthn assertion without this field
+    // previously failed at AuthSecurityContextService.assertInstallation.
+    // Never inject Fable installation metadata into Other Backend adapters.
+    final fableClient=gateway is UnifiedApiClient ? gateway as UnifiedApiClient : null;
+    final fableLogin=fableClient!=null &&
+      fableClient.contract is FableContract &&
+      fableClient.adapter is FableTransportAdapter &&
+      operations.verifyId=='passkeys.authentication.verify';
+    if(fableClient!=null && fableLogin && !fableClient.session.sharesIdentityNamespaceWith(session)){
+      throw StateError('Fable passkey session does not match the verified API client');
+    }
+    final installationId=fableLogin?await session.installationId():null;
+    if(session.identityRevision!=identity)return null;
     final verified = await gateway.execute(operations.verifyId,
-      body:{'challengeId':challengeId,'response':safe,'clientType':'flutter'});
+      body:{'challengeId':challengeId,'response':safe,
+        'clientType':'flutter',
+        if(installationId!=null)'installationId':installationId});
     // Backend verifies challenge, origin, RP, signature and counter.
     if (session.identityRevision != identity) return null;
     return decodeVerify(verified.data);
