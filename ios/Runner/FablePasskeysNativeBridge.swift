@@ -82,9 +82,11 @@ final class FablePasskeysNativeBridge: NSObject,
           let challengeString=options["challenge"] as? String,
           let challenge=urlDecode(challengeString),
           challenge.count>=16,
-          let rpId=call.method=="register"
-            ?(options["rp"] as? [String:Any])?["id"] as? String
-            :options["rpId"] as? String,
+          let rpId=(
+            call.method=="register"
+              ? (options["rp"] as? [String:Any])?["id"]
+              : options["rpId"]
+          ) as? String,
           validRp(rpId),
           JSONSerialization.isValidJSONObject(options),
           let encodedOptions=try? JSONSerialization.data(withJSONObject:options),
