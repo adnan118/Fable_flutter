@@ -7,7 +7,9 @@ const line=(...parts)=>parts.join('\n')+'\n';
 const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
-const params=op=>argsOf(op).map(x=>'required String '+x).join(', ');
+const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
+const params=op=>[...op.params.map(x=>'required String '+x),
+  ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name)].join(', ');
 const named=op=>argsOf(op).length?'{'+params(op)+'}':'';
 const callArgs=op=>argsOf(op).map(x=>x+': '+x).join(', ');
 const fieldType=f=>f.type+(f.required?'':'?');
@@ -72,27 +74,31 @@ function createRequestDto(op){
   if(op.method!=='POST'||!fs.length)
     throw Error('RC267 requires a verified POST request schema');
   const parts=[
-    '// GENERATED: validated create payload; no raw UI Map or private credentials.',
+    '// GENERATED: validated create payload; omit optional fields if empty.',
     'final class '+name+'CreateRequest {',
-    '  const '+name+'CreateRequest({'+fs.map(f=>'required this.'+f.name).join(', ')+'});',
-    ...fs.map(f=>'  final String '+f.name+';'),
+    '  const '+name+'CreateRequest({'+fs.map(f=>(f.required?'required this.':'this.')+f.name).join(', ')+'});',
+    ...fs.map(f=>'  final String'+(f.required?'':'?')+' '+f.name+';'),
     '  Map<String,Object?> toJson(){',
   ];
   for(const field of fs){
     const val=field.name;
+    const validation=val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+
+      ' || '+val+'.codeUnits.any((c)=>c<32||c==127)';
     parts.push(
-      '    if('+val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+' ||',
-      '        '+val+'.codeUnits.any((c)=>c<32||c==127))',
+      '    if('+(field.required?validation:val+'!=null && ('+validation+')')+')',
       '      throw const FormatException('+dart('Invalid '+val+' create field')+');',
     );
     if(field.uuid)parts.push(
-      '    if(!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+val+'))',
+      '    if('+(field.required?'':val+'!=null && ')+
+        '!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+val+'))',
       '      throw const FormatException('+dart('Invalid '+val+' UUID')+');',
     );
   }
   parts.push(
     '    return <String,Object?>{',
-    ...fs.map(f=>'      '+dart(f.name)+': '+f.name+','),
+    ...fs.map(f=>f.required
+      ?'      '+dart(f.name)+': '+f.name+','
+      :'      if('+f.name+'!=null) '+dart(f.name)+': '+f.name+','),
     '    };',
     '  }',
     '}',
@@ -181,7 +187,7 @@ function application(op){
     '  Future<TypedReadResult<'+name+'Entity>> call('+named(op)+') async {',
     '    try {',
   ];
-  for(const p of argsOf(op)){
+  for(const p of requiredArgsOf(op)){
     parts.push('      if('+p+'.trim().isEmpty){',
       '        return const TypedReadFailed<'+name+'Entity>(',
       '          TypedReadFailure(TypedReadFailureKind.invalidInput));',
@@ -292,6 +298,7 @@ function readPage(op){
     '    if(!identical(old.repository,widget.repository) ||',
     '        !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
+    ...argsOf(op).map(p=>'      _'+p+'.clear();'),
     '      unawaited(_identity?.cancel());',
     '      _controller.removeListener(_redraw);_controller.dispose();',
     '      _bind();',
@@ -317,8 +324,29 @@ function readPage(op){
       '          FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text("Confirm create")),',
       '        ]));',
       '    if(confirmed!=true || !mounted || originalIdentity!=_identityEpoch)return;',
-      '    _controller.submit('+argsOf(op).map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
-      '    } finally {_confirming=false;}',
+      '    _controller.submit('+argsOf(op).map(p=>{
+        const field=(op.bodyFields??[]).find(f=>f.name===p);
+        const value='_'+p+'.text.trim()';
+        return p+': '+(field&&!field.required? '('+value+'.isEmpty?null:'+value+')':value);
+      }).join(', ')+');',
+      '    } finally {_confirming=false;if(mounted)setState((){});}',
+      '  }',
+      '  Future<void> _resetCreate()async{',
+      '    if(_confirming || _controller.state is '+name+'Loading)return;',
+      '    _confirming=true;',
+      '    final originalIdentity=_identityEpoch;',
+      '    try{',
+      '      final confirmed=await showDialog<bool>(context:context,builder:(context)=>',
+      '        AlertDialog(title:const Text("Start a new creation?"),',
+      '          content:const Text("Before attempting another create, check the Backend state. A failed connection does not prove the previous record was not created."),',
+      '          actions:[',
+      '            TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text("Cancel")),',
+      '            FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text("I checked; start new")),',
+      '          ]));',
+      '      if(confirmed!=true || !mounted || originalIdentity!=_identityEpoch)return;',
+      ...argsOf(op).map(p=>'      _'+p+'.clear();'),
+      '      _controller.invalidate();',
+      '    }finally{_confirming=false;if(mounted)setState((){});}',
       '  }',
     ]:[
       '  void _load(){_controller.load('+
@@ -343,7 +371,7 @@ function readPage(op){
     '            enabled:state is! '+name+'Loading),');
   parts.push(
     '          FilledButton.icon(',
-    '            onPressed:state is '+name+'Loading'+(op.method==='POST'?' || _confirming':'')+'?null:_load,',
+    '            onPressed:state is '+name+'Loading'+(op.method==='POST'?' || _confirming || state is '+name+'Ready || state is '+name+'Failed':'')+'?null:_load,',
     '            icon:const Icon('+(op.method==='POST'?'Icons.add_circle_outline':'Icons.refresh')+'),',
     '            label:const Text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+'),',
     '          ),',
@@ -351,6 +379,14 @@ function readPage(op){
     '            const LinearProgressIndicator(),',
     '          if(state is '+name+'Failed)',
     '            Text('+(op.method==='POST'?dart('Create outcome not confirmed; verify Backend before retry: '):dart('Read unavailable: '))+'+state.kind.name),',
+    ...(op.method==='POST'?[
+      '          if(state is '+name+'Ready || state is '+name+'Failed)',
+      '            OutlinedButton.icon(',
+      '              onPressed:_confirming?null:_resetCreate,',
+      '              icon:const Icon(Icons.restart_alt),',
+      '              label:const Text("Check Backend, then start a new create"),',
+      '            ),',
+    ]:[]),
     '          if(state is '+name+'Ready)...[',
   );
   for(const f of op.fields)
