@@ -350,6 +350,7 @@ function infiniteListController(op){
   const name=op.className,file=snake(op.operationId),item=name+'Item';
   return line(
     '// GENERATED RC273: source-pinned infinite list controller (no HTTP in UI).',
+    "import 'dart:async';",
     "import 'package:flutter/foundation.dart';",
     "import '../application/"+file+"_use_case.dart';",
     "import '../domain/"+file+"_entity.dart';",
@@ -410,7 +411,7 @@ function infiniteListController(op){
     '  void retry(){',
     '    if(_closed || _error==null)return;',
     '    _error=null;notifyListeners();',
-    '    loadNext();',
+    '    unawaited(loadNext());',
     '  }',
     '  void invalidate()=>reset();',
     '  @override void dispose(){',
@@ -526,11 +527,13 @@ function infiniteListPage(op){
     ...(op.supportsSearch?['      _search.clear();']:[]),
     '      _controller.invalidate();',
     '    });',
+    '    final bindingIdentity=_identityEpoch;',
     '    WidgetsBinding.instance.addPostFrameCallback((_){',
-    '      if(mounted)unawaited(_controller.loadNext());',
+    '      if(mounted && _identityEpoch==bindingIdentity)',
+    '        unawaited(_controller.loadNext());',
     '    });',
     '  }',
-    '  @override void initState(){',
+    '  @override void initState(){
     '    super.initState();',
     '    _scroll.addListener(_maybeLoadMore);',
     '    _bind();',
@@ -1191,10 +1194,10 @@ export function renderTypedFeature(plan){
     'Project ID: '+plan.projectId,
     'Pinned Backend Contract SHA-256: '+plan.contractHash,
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
-    'Supported: signed object GET, unpaginated GET, bounded page-mode GET and reviewed create POST.',
+    'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, and reviewed create POST.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, search/filter/sort, tenant-scoped pagination, PUT/PATCH/DELETE, sensitive POST and ambiguous schemas are NOT generated.',
+    'Other Backend, arbitrary filter/sort, legacy unpaged search, tenant-scoped paging, PUT/PATCH/DELETE and sensitive POST are NOT generated.',
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
