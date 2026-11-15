@@ -328,10 +328,14 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const params=[...spec.path.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(x=>x[1]);
     if(new Set(params).size!==params.length||params.some(x=>!safeIdent(x)))
       fail('unsafe path parameters: '+id);
-    if((route.parameters??[]).length!==params.length||
-       params.some(name=>!route.parameters.some(p=>p.in==='path'&&
+    const routePathParams=(route.parameters??[]).filter(p=>p.in==='path');
+    const extraParams=(route.parameters??[]).filter(p=>p.in!=='path');
+    if(routePathParams.length!==params.length||
+       (extraParams.length>0&&!id.endsWith('.list.paginated'))||
+       extraParams.some(p=>p.in!=='query')||
+       params.some(name=>!routePathParams.some(p=>
          p.name===name&&p.required===true&&p.schema?.type==='string')))
-      fail('only explicitly-typed string path parameters supported: '+id);
+      fail('only signed path parameters and explicitly reviewed paginated queries supported: '+id);
     // Verify parameter formats against the signed operation response/source,
     // not merely against the OpenAPI route's untrusted body.
     const sourceParams=op.request?.params;
