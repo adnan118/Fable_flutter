@@ -112,6 +112,7 @@ export function planFeatureSync(root,verified,{prune=false}={}){
   // their own exact operation/permission mapping audit before any retirement.
   const protectedProjectFeatures=externalProjectFeatures?.features??[];
   if(!Array.isArray(protectedProjectFeatures))throw Error('Malformed project feature manifest');
+  const wiredProjectFeatures=wiredTypedProjectFeatures(rootDir,protectedProjectFeatures);
   return {
     kind:'fable.flutter-feature-prune-plan',schemaVersion:1,
     projectId:verified.projectId,contractHash:verified.contractHash,
@@ -124,6 +125,7 @@ export function planFeatureSync(root,verified,{prune=false}={}){
     ownership:ownership.decisions,
     clientOnlyReview:declared.clientOnlyReview,
     protectedProjectFeatureCount:protectedProjectFeatures.length,
+    wiredProjectFeatures,
     requestedSource:local?.selectionSource??null,
     pruneAvailable:verified.projectBound===true,
     note:'Backend routes use enabled; hybrid and local Flutter packages are retained even if unsupported on the server; physical pruning is restricted to disabled server-only features.',
@@ -206,7 +208,7 @@ function applyPrune(root,plan,{prune=false}={}){
     disabled:plan.disabled,
     clientOnlyReview:plan.clientOnlyReview,
   };
-  writeFileSync(registryPath,registry(plan.retainedPackages));
+  writeFileSync(registryPath,registry(plan.retainedPackages,plan.wiredProjectFeatures));
   writeJSON(inventoryPath,inventory);
   if(prune){
     writeFileSync(appPath,app);
