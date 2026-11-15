@@ -148,6 +148,85 @@ class FableAuthGateway implements BackendApiGateway {
     return FableLoginOutcome.authenticated(mustChangePassword: mandatoryChange);
   }
 
+  bool get canManageAccountPasskeys =>
+    _contract.isFeatureAvailable('biometrics') &&
+    _supportsAuthOperation('passkeys.list','GET','/auth/passkeys',
+      requiresAuth:true) &&
+    _supportsAuthOperation('passkeys.remove','DELETE',
+      '/auth/passkeys/{id}',requiresAuth:true) &&
+    canRequestSensitiveProof;
+
+  /// Metadata only. No private keys or biometric samples leave the OS.
+  Future<List<FableAccountPasskey>> listAccountPasskeys() async {
+    if(!canManageAccountPasskeys)
+      throw StateError('Verified Fable Passkey management contract is required');
+    final revision=session.identityRevision;
+    final response=await _api.request('passkeys.list');
+    if(session.identityRevision!=revision)
+      throw FableApiException(409,'session_changed_discard_response');
+    final body=response.data;
+    if(body is! Map||body['success']!=true||body['data'] is! List ||
+        (body['data'] as List).length>256)
+      throw const FormatException('Invalid Fable Passkey list envelope');
+    String? label(Object? value,{int limit=191}){
+      if(value==null)return null;
+      if(value is! String || value.length>limit ||
+          value.contains(RegExp(r'[\x00-\x1f\x7f]')))
+        throw const FormatException('Invalid Fable Passkey label');
+      return value;
+    }
+    final ids=<String>{};
+    final output=<FableAccountPasskey>[];
+    for(final row in body['data'] as List){
+      if(row is! Map || row['id'] is! String ||
+          !_uuid.hasMatch(row['id'] as String) ||
+          !ids.add(row['id'] as String) || row['backedUp'] is! bool)
+        throw const FormatException('Invalid Fable Passkey credential record');
+      output.add(FableAccountPasskey(
+        id:row['id'] as String,
+        label:label(row['label']),
+        deviceType:label(row['deviceType'],limit:64),
+        backedUp:row['backedUp'] as bool,
+        lastUsedAt:label(row['lastUsedAt'],limit:64),
+      ));
+    }
+    return List<FableAccountPasskey>.unmodifiable(output);
+  }
+
+  /// A verified, purpose-bound proof is consumed once by the Backend.
+  /// The same Auth gateway signs and submits the request; no raw UI proof ID.
+  Future<bool> removeAccountPasskey({
+    required FableAccountPasskey passkey,
+    required FableVerifiedSensitiveProof proof,
+  }) async {
+    if(!canManageAccountPasskeys)
+      throw StateError('Verified Fable Passkey management contract is required');
+    final revision=session.identityRevision;
+    if(!_uuid.hasMatch(passkey.id) ||
+        !identical(proof._owner,this)||
+        proof._identityRevision!=revision||
+        proof._consumed||proof._inFlight)
+      throw StateError('Passkey removal requires current independent authorization');
+    proof._inFlight=true;
+    try{
+      final response=await _api.request('passkeys.remove',
+        path:{'id':passkey.id},securityChallengeId:proof._challengeId);
+      if(session.identityRevision!=revision)
+        throw FableApiException(409,'session_changed_discard_response');
+      final wrapper=response.data;
+      if(wrapper is! Map||wrapper['success']!=true||
+          wrapper['data'] is! Map)
+        throw const FormatException('Invalid Passkey removal confirmation');
+      final count=(wrapper['data'] as Map)['count'];
+      if(count is! int || (count!=0&&count!=1))
+        throw const FormatException('Invalid Passkey removal count');
+      proof._consumed=true; // No local reuse even for a missing credential.
+      return count==1;
+    }finally{
+      proof._inFlight=false;
+    }
+  }
+
   bool get canRegisterNativePasskey =>
     _contract.isFeatureAvailable('biometrics') &&
     _supportsAuthOperation('passkeys.registration.options','POST',
@@ -1045,6 +1124,15 @@ class FableActiveSession {
   }
 }
 
+
+/// Public, bounded credential metadata from the authenticated Fable backend.
+class FableAccountPasskey {
+  const FableAccountPasskey({required this.id,required this.backedUp,
+    this.label,this.deviceType,this.lastUsedAt});
+  final String id;
+  final bool backedUp;
+  final String? label,deviceType,lastUsedAt;
+}
 
 /// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
 /// Backend consumes the challenge on the first protected action if the session

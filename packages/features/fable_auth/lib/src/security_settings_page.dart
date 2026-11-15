@@ -17,6 +17,9 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   final passkeyCode=TextEditingController();
   FableVerifiedSensitiveProof? passkeyRecent;
   String? passkeyChallenge;
+  List<FableAccountPasskey> accountPasskeys=const [];
+  bool passkeysLoaded=false,passkeysLoading=false;
+  int passkeyLoadEpoch=0;
   StreamSubscription<FableIdentityEvent>? identity;
   FableTwoFactorStatus? status;
   FableSecurityOtpPurpose? purpose;
@@ -37,14 +40,18 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
       });
     });
     unawaited(_refresh());
+    unawaited(_loadPasskeys());
   }
   void _clear(){
     code.clear();recentCode.clear();destination.clear();
     challenge=null;verified=null;recent=null;recentChallenge=null;
     passkeyRecent=null;passkeyChallenge=null;passkeyCode.clear();
+    accountPasskeys=const [];passkeysLoaded=false;passkeysLoading=false;
+    passkeyLoadEpoch++;
     requiresRecent=false;
   }
   @override void dispose(){
+    passkeyLoadEpoch++;
     unawaited(identity?.cancel());
     code.dispose();recentCode.dispose();passkeyCode.dispose();destination.dispose();
     super.dispose();
@@ -163,7 +170,8 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
     }finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> _requestPasskeyProof()async{
-    if(busy||!widget.gateway.canRegisterNativePasskey)return;
+    if(busy || !(widget.gateway.canRegisterNativePasskey ||
+        widget.gateway.canManageAccountPasskeys))return;
     setState(()=>busy=true);
     final revision=widget.gateway.session.identityRevision;
     try{
@@ -213,10 +221,76 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
           message='Native Passkey registration was cancelled.';
         }
       });
+      if(created&&widget.gateway.canManageAccountPasskeys)
+        unawaited(_loadPasskeys());
     }catch(_){
       if(mounted&&widget.gateway.session.identityRevision==revision)
         setState(()=>message='Passkey registration failed. Check your authorization and app domain.');
     }finally{if(mounted)setState(()=>busy=false);}
+  }
+
+  Future<void> _loadPasskeys()async{
+    if(passkeysLoading||!widget.gateway.canManageAccountPasskeys)return;
+    final epoch=++passkeyLoadEpoch;
+    final revision=widget.gateway.session.identityRevision;
+    setState(()=>passkeysLoading=true);
+    try{
+      final rows=await widget.gateway.listAccountPasskeys();
+      if(!mounted||passkeyLoadEpoch!=epoch||
+          widget.gateway.session.identityRevision!=revision)return;
+      setState((){
+        accountPasskeys=rows;passkeysLoaded=true;
+      });
+    }catch(_){
+      if(mounted&&passkeyLoadEpoch==epoch&&
+          widget.gateway.session.identityRevision==revision)
+        setState((){
+          accountPasskeys=const [];passkeysLoaded=false;
+          message='Passkey list could not be verified with Backend.';
+        });
+    }finally{
+      if(mounted&&passkeyLoadEpoch==epoch)
+        setState(()=>passkeysLoading=false);
+    }
+  }
+  Future<void> _removePasskey(FableAccountPasskey passkey)async{
+    final proof=passkeyRecent;
+    if(busy||passkeysLoading||proof==null)return;
+    final revision=widget.gateway.session.identityRevision;
+    final confirmed=await showDialog<bool>(context:context,builder:(context)=>
+      AlertDialog(
+        title:const Text('Remove this Passkey?'),
+        content:const Text('This may affect account recovery. Backend will block removing your last sign-in method.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(context,false),
+            child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(context,true),
+            child:const Text('Remove')),
+        ],
+      ));
+    if(confirmed!=true||!mounted||
+        widget.gateway.session.identityRevision!=revision ||
+        !identical(passkeyRecent,proof))return;
+    setState(()=>busy=true);
+    var removed=false;
+    try{
+      removed=await widget.gateway.removeAccountPasskey(
+        passkey:passkey,proof:proof);
+      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      setState((){
+        passkeyRecent=null;passkeyChallenge=null;passkeyCode.clear();
+        message=removed?'Backend confirmed Passkey deletion.':
+          'Credential no longer existed; refresh the list.';
+      });
+    }catch(_){
+      if(mounted&&widget.gateway.session.identityRevision==revision)
+        setState((){
+          passkeyRecent=null;passkeyChallenge=null;passkeyCode.clear();
+          message='Passkey removal was not confirmed. Reauthorize and retry.';
+        });
+    }finally{if(mounted)setState(()=>busy=false);}
+    if(removed&&mounted&&widget.gateway.session.identityRevision==revision)
+      unawaited(_loadPasskeys());
   }
 
   @override Widget build(BuildContext context)=>Scaffold(
@@ -276,12 +350,39 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
           _clear();purpose=null;
         }),child:const Text('Cancel and clear codes')),
       ],
-      if(widget.gateway.canRegisterNativePasskey &&
+      if((widget.gateway.canRegisterNativePasskey ||
+          widget.gateway.canManageAccountPasskeys) &&
           !kIsWeb && (defaultTargetPlatform==TargetPlatform.android ||
                      defaultTargetPlatform==TargetPlatform.iOS)) ...[
         const Divider(),
-        const Text('Passkey registration'),
-        const Text('Device passkeys are created by the operating system. Backend requires a verified recent-auth code.'),
+        const Text('Passkey security'),
+        const Text('Create, review or remove device Passkeys with a fresh verified authorization code.'),
+        if(widget.gateway.canManageAccountPasskeys)...[
+          OutlinedButton.icon(
+            onPressed:passkeysLoading?null:_loadPasskeys,
+            icon:const Icon(Icons.refresh),
+            label:const Text('Refresh linked Passkeys')),
+          if(passkeysLoading)const LinearProgressIndicator(),
+          if(passkeysLoaded&&accountPasskeys.isEmpty)
+            const Text('No Passkeys linked to this account.'),
+          for(final credential in accountPasskeys)
+            ListTile(
+              leading:const Icon(Icons.fingerprint),
+              title:Text(credential.label?.isNotEmpty==true
+                ?credential.label!:'Passkey'),
+              subtitle:Text([
+                if(credential.deviceType!=null)credential.deviceType!,
+                credential.backedUp?'Backed up':'Device-bound',
+                if(credential.lastUsedAt!=null)credential.lastUsedAt!,
+              ].join(' · ')),
+              trailing:IconButton(
+                tooltip:'Remove with recent authorization',
+                onPressed:busy||passkeysLoading||passkeyRecent==null
+                  ?null:()=>unawaited(_removePasskey(credential)),
+                icon:const Icon(Icons.delete_outline),
+              ),
+            ),
+        ],
         if(passkeyChallenge==null)
           OutlinedButton.icon(
             onPressed:busy?null:_requestPasskeyProof,
@@ -295,7 +396,7 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
             onPressed:busy?null:_verifyPasskeyProof,
             child:const Text('Verify authorization')),
         ],
-        if(passkeyRecent!=null)
+        if(passkeyRecent!=null&&widget.gateway.canRegisterNativePasskey)
           FilledButton.icon(onPressed:busy?null:_registerPasskey,
             icon:const Icon(Icons.fingerprint),
             label:const Text('Create Passkey on this device')),
