@@ -340,13 +340,13 @@ function readPage(op){
   parts.push(
     '          FilledButton.icon(',
     '            onPressed:state is '+name+'Loading?null:_load,',
-    '            icon:const Icon(Icons.refresh),',
+    '            icon:const Icon('+(op.method==='POST'?'Icons.add_circle_outline':'Icons.refresh')+'),',
     '            label:const Text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+'),',
     '          ),',
     '          if(state is '+name+'Loading)',
     '            const LinearProgressIndicator(),',
     '          if(state is '+name+'Failed)',
-    '            Text("Read unavailable: "+state.kind.name),',
+    '            Text('+(op.method==='POST'?dart('Create outcome not confirmed; verify Backend before retry: '):dart('Read unavailable: '))+'+state.kind.name),',
     '          if(state is '+name+'Ready)...[',
   );
   for(const f of op.fields)
