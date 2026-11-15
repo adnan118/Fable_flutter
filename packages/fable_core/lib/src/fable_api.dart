@@ -209,14 +209,22 @@ class UnifiedApiClient implements BackendApiGateway {
       headers['Range']='bytes=${mediaRange.start}-${mediaRange.endInclusive}';
     }
     if(securityChallengeId!=null){
-      const eligiblePaths={'/auth/sessions/revoke-selected','/auth/logout-all',
-        '/auth/sessions/{id}/revoke','/auth/social/:provider'};
+      const eligiblePostPaths={'/auth/sessions/revoke-selected','/auth/logout-all',
+        '/auth/sessions/{id}/revoke'};
+      const eligibleDeletePaths={'/auth/social/:provider','/auth/passkeys/:id',
+        '/auth/passkeys/{id}'};
+      final passkeyRemove=op.method=='DELETE' &&
+        const {'/auth/passkeys/:id','/auth/passkeys/{id}'}.contains(op.path);
+      final eligible=(op.method=='POST' && eligiblePostPaths.contains(op.path)) ||
+        (op.method=='DELETE' && eligibleDeletePaths.contains(op.path));
       final uuid=RegExp(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
         caseSensitive:false);
       if(contract is! FableContract || adapter is! FableTransportAdapter ||
          !op.requiresAuth || op.credentialHeader!=null ||
-         (op.method!='POST' && !(op.method=='DELETE' && op.path=='/auth/social/:provider'))||!eligiblePaths.contains(op.path)||
-         !uuid.hasMatch(securityChallengeId)){
+         (passkeyRemove && !op.enforceAuth) ||
+         (passkeyRemove && (path?['id'] is! String ||
+           !uuid.hasMatch(path!['id'] as String) || path.length!=1)) ||
+         !eligible || !uuid.hasMatch(securityChallengeId)){
         throw ArgumentError('Security challenge is not authorized for this verified Fable operation');
       }
       headers['X-Security-Challenge-Id']=securityChallengeId;
