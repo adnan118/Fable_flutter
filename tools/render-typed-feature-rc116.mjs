@@ -298,6 +298,7 @@ function readPage(op){
     '    if(!identical(old.repository,widget.repository) ||',
     '        !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
+    ...argsOf(op).map(p=>'      _'+p+'.clear();'),
     '      unawaited(_identity?.cancel());',
     '      _controller.removeListener(_redraw);_controller.dispose();',
     '      _bind();',
@@ -328,7 +329,24 @@ function readPage(op){
         const value='_'+p+'.text.trim()';
         return p+': '+(field&&!field.required? '('+value+'.isEmpty?null:'+value+')':value);
       }).join(', ')+');',
-      '    } finally {_confirming=false;}',
+      '    } finally {_confirming=false;if(mounted)setState((){});}',
+      '  }',
+      '  Future<void> _resetCreate()async{',
+      '    if(_confirming || _controller.state is '+name+'Loading)return;',
+      '    _confirming=true;',
+      '    final originalIdentity=_identityEpoch;',
+      '    try{',
+      '      final confirmed=await showDialog<bool>(context:context,builder:(context)=>',
+      '        AlertDialog(title:const Text("Start a new creation?"),',
+      '          content:const Text("Before attempting another create, check the Backend state. A failed connection does not prove the previous record was not created."),',
+      '          actions:[',
+      '            TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text("Cancel")),',
+      '            FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text("I checked; start new")),',
+      '          ]));',
+      '      if(confirmed!=true || !mounted || originalIdentity!=_identityEpoch)return;',
+      ...argsOf(op).map(p=>'      _'+p+'.clear();'),
+      '      _controller.invalidate();',
+      '    }finally{_confirming=false;if(mounted)setState((){});}',
       '  }',
     ]:[
       '  void _load(){_controller.load('+
@@ -353,7 +371,7 @@ function readPage(op){
     '            enabled:state is! '+name+'Loading),');
   parts.push(
     '          FilledButton.icon(',
-    '            onPressed:state is '+name+'Loading'+(op.method==='POST'?' || _confirming':'')+'?null:_load,',
+    '            onPressed:state is '+name+'Loading'+(op.method==='POST'?' || _confirming || state is '+name+'Ready || state is '+name+'Failed':'')+'?null:_load,',
     '            icon:const Icon('+(op.method==='POST'?'Icons.add_circle_outline':'Icons.refresh')+'),',
     '            label:const Text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+'),',
     '          ),',
@@ -361,6 +379,14 @@ function readPage(op){
     '            const LinearProgressIndicator(),',
     '          if(state is '+name+'Failed)',
     '            Text('+(op.method==='POST'?dart('Create outcome not confirmed; verify Backend before retry: '):dart('Read unavailable: '))+'+state.kind.name),',
+    ...(op.method==='POST'?[
+      '          if(state is '+name+'Ready || state is '+name+'Failed)',
+      '            OutlinedButton.icon(',
+      '              onPressed:_confirming?null:_resetCreate,',
+      '              icon:const Icon(Icons.restart_alt),',
+      '              label:const Text("Check Backend, then start a new create"),',
+      '            ),',
+    ]:[]),
     '          if(state is '+name+'Ready)...[',
   );
   for(const f of op.fields)
