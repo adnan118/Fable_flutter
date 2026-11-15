@@ -13,11 +13,11 @@ void main(){
   FableContract fable({String optionsPath='/auth/passkeys/authentication/options',
       String verifyPath='/auth/passkeys/authentication/verify',
       bool enforceAuth=true})=>FableContract(
-    contractHash:'a'*64,operations:{
+    contractHash:List<String>.filled(64,'a').join(),operations:{
       'passkeys.authentication.options':FableOperation('passkeys.authentication.options',
-        'POST',optionsPath,'b'*64,requiresAuth:false,enforceAuth:enforceAuth),
+        'POST',optionsPath,List<String>.filled(64,'b').join(),requiresAuth:false,enforceAuth:enforceAuth),
       'passkeys.authentication.verify':FableOperation('passkeys.authentication.verify',
-        'POST',verifyPath,'c'*64,requiresAuth:false,enforceAuth:enforceAuth),
+        'POST',verifyPath,List<String>.filled(64,'c').join(),requiresAuth:false,enforceAuth:enforceAuth),
     },featureIds:const {'auth','biometrics'},projectName:'project',
     selectionMode:'explicit');
   test('signed Fable public POST passkey options and verify required',(){
