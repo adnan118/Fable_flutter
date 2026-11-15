@@ -1125,9 +1125,6 @@ class FableActiveSession {
 }
 
 
-/// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
-/// Backend consumes the challenge on the first protected action if the session
-/// itself does not already satisfy the recent AAL2 policy.
 /// Public, bounded credential metadata from the authenticated Fable backend.
 class FableAccountPasskey {
   const FableAccountPasskey({required this.id,required this.backedUp,
@@ -1137,6 +1134,9 @@ class FableAccountPasskey {
   final String? label,deviceType,lastUsedAt;
 }
 
+/// A confirmed SENSITIVE_ACTION OTP, never serialized or stored in preferences.
+/// Backend consumes the challenge on the first protected action if the session
+/// itself does not already satisfy the recent AAL2 policy.
 class FableVerifiedSensitiveProof {
   const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision,this._owner);
   final String _challengeId;
