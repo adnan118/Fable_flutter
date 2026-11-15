@@ -970,6 +970,18 @@ function infiniteListPageTest(op,featureId){
     '      await tester.pumpWidget(const SizedBox.shrink());',
     '      await events.close();',
     '    });',
+    '  testWidgets("RC275 rejects empty intermediate pages without discarding loaded state",',
+    '    (tester)async{',
+    '      final events=StreamController<Object?>.broadcast(sync:true);',
+    '      final repository=_FakeRepository()..emptyIntermediate=true;',
+    '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
+    '        repository:repository,identityEvents:events.stream)));',
+    '      await tester.pumpAndSettle();',
+    '      expect(find.textContaining("Retry failed page"),findsOneWidget);',
+    '      expect(find.text("All results loaded"),findsNothing);',
+    '      await tester.pumpWidget(const SizedBox.shrink());',
+    '      await events.close();',
+    '    });',
     '}',
   );
 }
