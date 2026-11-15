@@ -83,6 +83,13 @@ test('RC273 signed RC274 search + infinite scroll uses same operation across all
   assert.match(repo,/if\(search!=null && search.trim\(\).isNotEmpty\)"q":search.trim\(\)/);
   assert.match(dto, /meta\['mode'\]!='search'/);
   assert.match(dto, /meta\['count'\]!=input.length/);
+  assert.match(dto, /mode:meta\["mode"\]=="search"\?CatalogListPaginatedListMode.search:CatalogListPaginatedListMode.page/);
+  assert.match(repo, /entity.mode!=requestedMode/);
+  assert.match(repo, /Backend returned a different search mode/);
+  const entity=files.get(root+'lib/src/domain/catalog_list_paginated_entity.dart');
+  assert.match(entity,/enum CatalogListPaginatedListMode \{ page, search \}/);
+  assert.match(entity,/required this.mode/);
+  assert.match(widget,/mode:\(search!=null && search.isNotEmpty\?CatalogListPaginatedListMode.search:CatalogListPaginatedListMode.page\)/);
   assert.match(controller,/final List<CatalogListPaginatedItem> _items/);
   assert.match(controller,/_items\.addAll\(data.items\)/);
   assert.match(controller,/if\(_closed \|\| _epoch!=epoch\)return/);
@@ -108,6 +115,7 @@ test('RC273 older signed search metadata still works for infinite page scrolling
   assert.match(page,/ListView\.builder/);
   assert.doesNotMatch(page,/Search across all authorized records/);
   assert.match(repo,/"mode":"page"/);
+  assert.match(repo,/entity.mode!=CatalogListPaginatedListMode.page/);
   assert.doesNotMatch(repo,/"q":search\.trim/);
 });
 
