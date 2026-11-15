@@ -64,6 +64,16 @@ class FablePasskeyManagementRepository {
         listOperationId:exportedList));
   }
 
+  /// The real Fable HTTP interceptor wraps every controller result.
+  /// Never parse a raw Array/Map as a successful authenticated response.
+  static Object? _verifiedData(Object? reply){
+    if(reply is! Map || reply['success']!=true ||
+        !reply.containsKey('data')){
+      throw const FormatException('Invalid verified Fable success envelope');
+    }
+    return reply['data'];
+  }
+
   Future<int> _signedInEpoch() async {
     final identity=client.session.identityRevision;
     final token=await client.session.accessToken;
@@ -81,7 +91,7 @@ class FablePasskeyManagementRepository {
     final identity=await _signedInEpoch();
     final reply=await client.request(op);
     if(client.session.identityRevision!=identity)return const [];
-    final raw=reply.data;
+    final raw=_verifiedData(reply.data);
     if(raw is! List||raw.length>256){
       throw const FormatException('Invalid passkey list response');
     }
@@ -122,7 +132,7 @@ class FablePasskeyManagementRepository {
       final reply=await client.request(operations.removeId,
         path:{'id':credentialId},securityChallengeId:securityChallengeId);
       if(client.session.identityRevision!=identity)return false;
-      final data=FableImmutablePayload.object(reply.data);
+      final data=FableImmutablePayload.object(_verifiedData(reply.data));
       if(data['count'] is! int||!(data['count']==0||data['count']==1)){
         throw const FormatException('Invalid passkey removal confirmation');
       }
