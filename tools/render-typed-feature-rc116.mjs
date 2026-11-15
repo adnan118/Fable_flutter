@@ -288,7 +288,7 @@ function readPage(op){
     '  @override void initState(){super.initState();_bind();}',
     '  @override void didUpdateWidget(covariant '+name+'Page old){',
     '    super.didUpdateWidget(old);',
-    '    if(!identical(old.repository,widget.repository) ||
+    '    if(!identical(old.repository,widget.repository) ||',
     '        !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
     '      unawaited(_identity?.cancel());',
