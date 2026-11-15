@@ -90,10 +90,12 @@ function checkSignedResponseShape(op,schema,fields){
  * boolean/date/currency behavior, secrets or a PATCH concurrency policy.
  */
 function validatedCreateFields(op,route,id,featureId){
+  if(!/(?:^|[._-])create$/i.test(id))
+    fail('POST operation must declare an explicit create role: '+id);
   const restricted=new Set(['auth','payments','biometrics','access_control',
     'social','media','messaging','support']);
   if(restricted.has(featureId)||
-     /(?:^|[.\/_-])(admin|security|billing|payment|delete|revoke|transfer|refund|token|otp)(?:$|[.\/_-])/i.test(id+' '+op.path))
+     /(?:^|[.\/_-])(admin|security|billing|payment|delete|revoke|transfer|refund|token|otp|execute|purge|rotate|sync|cancel|disable|approve|send|charge|settle|run)(?:$|[.\/_-])/i.test(id+' '+op.path))
     fail('sensitive POST operation requires a dedicated reviewed workflow: '+id);
   const spec=route.requestBody;
   if(!spec||spec.required!==true ||
