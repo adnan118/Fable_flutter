@@ -401,6 +401,7 @@ function readPage(op){
     '  late '+name+'Controller _controller;',
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
+    ...(op.resultKind==='paginated-list'?['  int _page=1;']:[]),
     ...(op.method==='POST'?['  bool _confirming=false;']:[]),
   ];
   for(const p of argsOf(op))parts.push('  final _'+p+'=TextEditingController();');
@@ -411,6 +412,7 @@ function readPage(op){
     '    _controller.addListener(_redraw);',
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
+    ...(op.resultKind==='paginated-list'?['      _page=1;']:[]),
     '      if(mounted)_controller.invalidate();',
     ...argsOf(op).map(p=>'      _'+p+'.clear();'),
     '    });',
@@ -421,6 +423,7 @@ function readPage(op){
     '    if(!identical(old.repository,widget.repository) ||',
     '        !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
+    ...(op.resultKind==='paginated-list'?['      _page=1;']:[]),
     ...argsOf(op).map(p=>'      _'+p+'.clear();'),
     '      unawaited(_identity?.cancel());',
     '      _controller.removeListener(_redraw);_controller.dispose();',
@@ -473,7 +476,15 @@ function readPage(op){
       '  }',
     ]:[
       '  void _load(){_controller.load('+
-        op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');}',
+        [...op.params.map(p=>p+': _'+p+'.text.trim()'),
+         ...(op.resultKind==='paginated-list'?['page: _page']:[])].join(', ')+');}',
+      ...(op.resultKind==='paginated-list'?[
+        '  void _jump(int next){',
+        '    if(_controller.state is '+name+'Loading || next<1 || next>100000)return;',
+        '    setState(()=>_page=next);',
+        '    _load();',
+        '  }',
+      ]:[]),
     ]),
     '  @override Widget build(BuildContext context){',
     '    final state=_controller.state;',
@@ -512,11 +523,17 @@ function readPage(op){
     ]:[]),
     '          if(state is '+name+'Ready)...[',
   );
-  if(op.resultKind==='unpaginated-list'){
+  if(['unpaginated-list','paginated-list'].includes(op.resultKind)){
     parts.push(
-      '            Text("Showing "+state.value.items.length.toString()+" items; reported count: "+state.value.count.toString()),',
-      '            if(state.value.limitExceeded)',
-      '              const Text("More records exist. This is not the full collection."),',
+      ...(op.resultKind==='paginated-list'?[
+        '            Text("Page "+state.value.page.toString()+" / "+state.value.totalPages.toString()+" · total "+state.value.total.toString()),',
+      ]:[
+        '            Text("Showing "+state.value.items.length.toString()+" items; reported count: "+state.value.count.toString()),',
+      ]),
+      ...(op.resultKind==='unpaginated-list'?[
+        '            if(state.value.limitExceeded)',
+        '              const Text("More records exist. This is not the full collection."),',
+      ]:[]),
       '            if(state.value.items.isEmpty)',
       '              const Text("No records available."),',
       '            for(final item in state.value.items.take(100))',
@@ -531,6 +548,16 @@ function readPage(op){
       '              )),',
       '            if(state.value.items.length>100)',
       '              const Text("Displaying first 100 rows; refine the project query for more."),',
+      ...(op.resultKind==='paginated-list'?[
+        '            Row(children:[',
+        '              OutlinedButton(onPressed:state.value.page>1 ? ()=>_jump(state.value.page-1):null,',
+        '                child:const Text("Previous page")),',
+        '              const SizedBox(width:12),',
+        '              OutlinedButton(onPressed:state.value.page<state.value.totalPages && state.value.page<100000',
+        '                ?()=>_jump(state.value.page+1):null,',
+        '                child:const Text("Next page")),',
+        '            ]),',
+      ]:[]),
     );
   }else{
     for(const f of op.fields)
