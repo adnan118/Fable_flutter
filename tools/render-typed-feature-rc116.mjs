@@ -95,9 +95,13 @@ function adapter(op,projectHash){
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);','    }');
   }
   parts.push(
+    '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+');',
+    '      if(gateway.session.identityRevision!=identity){',
+    '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
+    '      }',
     '      final envelope=response.data;',
     "      if(envelope is! Map || envelope['success']!=true || envelope['data'] is! Map){",
     "        throw const FormatException('Invalid typed read success envelope');",
