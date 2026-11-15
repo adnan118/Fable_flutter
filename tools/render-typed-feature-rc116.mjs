@@ -461,20 +461,24 @@ function readPageTest(op,featureId){
     "import 'package:fable_"+featureId+"/src/presentation/"+file+"_page.dart';",
     'final class _FakeRepository implements '+name+'Repository {',
     '  final pending=Completer<'+entity+'>();',
-    '  @override Future<'+entity+'> load('+named(op)+')=>pending.future;',
+    '  @override Future<'+entity+'> '+(op.method==='GET'?'load':'create')+'('+named(op)+')=>pending.future;',
     '}',
     'void main(){',
-    '  testWidgets("RC265 signed GET screen uses injected typed repository",',
+    '  testWidgets("RC267 signed '+op.method+' screen uses injected typed repository",',
     '      (tester)async{',
     '    final events=StreamController<Object?>.broadcast(sync:true);',
     '    final repository=_FakeRepository();',
     '    await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
     '      repository:repository,identityEvents:events.stream)));',
   ];
-  for(const [i,p] of op.params.entries())
+  for(const [i,p] of argsOf(op).entries())
     parts.push('    await tester.enterText(find.byType(TextField).at('+i+'),'+dart('safe-'+p)+');');
   parts.push(
-    '    await tester.tap(find.text("Load verified data"));',
+    '    await tester.tap(find.text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+');',
+    ...(op.method==='POST'?[
+      '    await tester.pumpAndSettle();',
+      '    await tester.tap(find.text("Confirm create"));',
+    ]:[]),
     '    await tester.pump();',
     '    repository.pending.complete('+entity+'(',
     ...op.fields.filter(f=>f.required)
