@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
 import 'package:fable_biometrics/fable_biometrics.dart';
 import 'sessions_page.dart';
+import 'security_settings_page.dart';
 import 'change_password_page.dart';
 import 'password_reset_page.dart';
 import 'otp_login_page.dart';
@@ -368,6 +369,17 @@ class _FableLoginPageState extends State<FableLoginPage> {
               },
               icon:const Icon(Icons.password),
               label:Text(_passwordChangeRequired?'Change password to continue':'Change password'),
+            )),
+        if(_signedIn && !_passwordChangeRequired &&
+           (_client().canReadTwoFactorStatus ||
+            _client().canRegisterNativePasskey))
+          Padding(padding:const EdgeInsets.only(bottom:12),
+            child:OutlinedButton.icon(
+              onPressed:_busy?null:()=>Navigator.of(context).push(
+                MaterialPageRoute<void>(builder:(_)=>FableSecuritySettingsPage(
+                  gateway:_client()))),
+              icon:const Icon(Icons.security),
+              label:const Text('Account security and Passkeys'),
             )),
         if(_signedIn && !_passwordChangeRequired &&
            widget.contract.supports('auth.sessions'))

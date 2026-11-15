@@ -148,6 +148,80 @@ class FableAuthGateway implements BackendApiGateway {
     return FableLoginOutcome.authenticated(mustChangePassword: mandatoryChange);
   }
 
+  bool get canRegisterNativePasskey =>
+    _contract.isFeatureAvailable('biometrics') &&
+    _supportsAuthOperation('passkeys.registration.options','POST',
+      '/auth/passkeys/registration/options',requiresAuth:true) &&
+    _supportsAuthOperation('passkeys.registration.verify','POST',
+      '/auth/passkeys/registration/{challengeId}/verify',requiresAuth:true) &&
+    canRequestSensitiveProof;
+
+  /// A trusted, purpose-bound recent-auth proof must come from this exact
+  /// gateway. The OS generates the credential, Fable verifies and consumes it.
+  Future<bool> registerNativePasskey({
+    required FableVerifiedSensitiveProof proof,
+    required Future<Map<String,dynamic>?> Function(Map<String,dynamic>)
+      createCredential,
+    String? label,
+  }) async {
+    if(!canRegisterNativePasskey)
+      throw StateError('Fable Passkey registration not selected in the verified project');
+    final revision=session.identityRevision;
+    if(!identical(proof._owner,this)||
+        proof._identityRevision!=revision||
+        proof._consumed||proof._inFlight)
+      throw StateError('Recent-auth proof must belong to this unconsumed session');
+    if(label!=null && (label.trim().isEmpty||label.length>191||
+        label.contains(RegExp(r'[\x00-\x1f\x7f]'))))
+      throw ArgumentError('Invalid Passkey label');
+    proof._inFlight=true;
+    try{
+      final issued=await _api.request('passkeys.registration.options',
+        body:<String,dynamic>{});
+      if(session.identityRevision!=revision)
+        throw FableApiException(409,'session_changed_discard_response');
+      final raw=_payload(issued.data);
+      final challengeId=raw['challengeId'],options=raw['options'];
+      if(challengeId is! String||!_uuid.hasMatch(challengeId)||
+          options is! Map||options['challenge'] is! String||
+          !RegExp(r'^[A-Za-z0-9_-]{16,1024}$')
+            .hasMatch(options['challenge'] as String)||
+          options['rp'] is! Map||
+          (options['rp'] as Map)['id'] is! String||
+          ((options['rp'] as Map)['id'] as String).isEmpty)
+        throw const FormatException('Invalid Backend Passkey registration challenge');
+      final credential=await createCredential(
+        Map<String,dynamic>.unmodifiable(Map<String,dynamic>.from(options)));
+      if(credential==null)return false; // OS-owned native user cancelled.
+      if(session.identityRevision!=revision)
+        throw FableApiException(409,'session_changed_discard_response');
+      final response=credential['response'];
+      if(credential['id'] is! String||
+          credential['rawId'] is! String||
+          credential['type']!='public-key'||
+          response is! Map||
+          response['clientDataJSON'] is! String||
+          response['attestationObject'] is! String)
+        throw const FormatException('Invalid OS Passkey registration response');
+      final verified=await _api.request('passkeys.registration.verify',
+        path:{'challengeId':challengeId},
+        body:{
+          'response':Map<String,dynamic>.from(credential),
+          'securityChallengeId':proof._challengeId,
+          if(label!=null)'label':label.trim(),
+        });
+      if(session.identityRevision!=revision)
+        throw FableApiException(409,'session_changed_discard_response');
+      final result=_payload(verified.data);
+      if(result['verified']!=true)
+        throw const FormatException('Backend did not verify Passkey registration');
+      proof._consumed=true;
+      return true;
+    }finally{
+      proof._inFlight=false;
+    }
+  }
+
   bool get canUseNativePasskeys =>
     _contract.isFeatureAvailable('biometrics') &&
     _supportsAuthOperation('passkeys.authentication.options','POST',
@@ -980,6 +1054,8 @@ class FableVerifiedSensitiveProof {
   final String _challengeId;
   final int _identityRevision;
   final FableAuthGateway _owner;
+  bool _inFlight=false;
+  bool _consumed=false;
 }
 
 
