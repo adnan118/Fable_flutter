@@ -152,8 +152,10 @@ class FableAuthGateway implements BackendApiGateway {
     _contract.isFeatureAvailable('biometrics') &&
     _supportsAuthOperation('passkeys.list','GET','/auth/passkeys',
       requiresAuth:true) &&
-    _supportsAuthOperation('passkeys.remove','DELETE',
-      '/auth/passkeys/{id}',requiresAuth:true) &&
+    (_supportsAuthOperation('passkeys.remove','DELETE',
+      '/auth/passkeys/{id}',requiresAuth:true) ||
+     _supportsAuthOperation('passkeys.remove','DELETE',
+      '/auth/passkeys/:id',requiresAuth:true)) &&
     canRequestSensitiveProof;
 
   /// Metadata only. No private keys or biometric samples leave the OS.
@@ -231,8 +233,10 @@ class FableAuthGateway implements BackendApiGateway {
     _contract.isFeatureAvailable('biometrics') &&
     _supportsAuthOperation('passkeys.registration.options','POST',
       '/auth/passkeys/registration/options',requiresAuth:true) &&
-    _supportsAuthOperation('passkeys.registration.verify','POST',
-      '/auth/passkeys/registration/{challengeId}/verify',requiresAuth:true) &&
+    (_supportsAuthOperation('passkeys.registration.verify','POST',
+      '/auth/passkeys/registration/{challengeId}/verify',requiresAuth:true) ||
+     _supportsAuthOperation('passkeys.registration.verify','POST',
+      '/auth/passkeys/registration/:challengeId/verify',requiresAuth:true)) &&
     canRequestSensitiveProof;
 
   /// A trusted, purpose-bound recent-auth proof must come from this exact
