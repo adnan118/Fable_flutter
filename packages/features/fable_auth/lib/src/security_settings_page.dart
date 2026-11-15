@@ -30,17 +30,44 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   bool busy=false,requiresRecent=false;
   String? message;
 
-  @override void initState(){
-    super.initState();
+  // An old account must never publish an asynchronous OTP, contact,
+  // 2FA or Passkey result into a different account's settings screen.
+  int _securityEpoch=0;
+  bool _live(int epoch,int revision)=>
+    mounted && _securityEpoch==epoch &&
+    widget.gateway.session.identityRevision==revision;
+
+  void _bindIdentity(){
     identity=widget.gateway.session.identityEvents.listen((_){
       if(!mounted)return;
+      _securityEpoch++;
       _clear();
       setState((){
-        status=null;purpose=null;message='Session changed. Sign in again.';
+        status=null;purpose=null;busy=false;
+        message='Session changed. Sign in again.';
       });
     });
+  }
+
+  @override void initState(){
+    super.initState();
+    _bindIdentity();
     unawaited(_refresh());
     unawaited(_loadPasskeys());
+  }
+
+  @override void didUpdateWidget(covariant FableSecuritySettingsPage old){
+    super.didUpdateWidget(old);
+    if(!identical(old.gateway,widget.gateway)){
+      _securityEpoch++;
+      unawaited(identity?.cancel());
+      _clear();
+      status=null;purpose=null;busy=false;
+      message='Security backend changed. Verify your account again.';
+      _bindIdentity();
+      unawaited(_refresh());
+      unawaited(_loadPasskeys());
+    }
   }
   void _clear(){
     code.clear();recentCode.clear();destination.clear();
@@ -51,6 +78,7 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
     requiresRecent=false;
   }
   @override void dispose(){
+    _securityEpoch++;
     passkeyLoadEpoch++;
     unawaited(identity?.cancel());
     code.dispose();recentCode.dispose();passkeyCode.dispose();destination.dispose();
@@ -58,13 +86,14 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   }
   Future<void> _refresh()async{
     if(busy||!widget.gateway.canReadTwoFactorStatus)return;
+    final epoch=_securityEpoch,revision=widget.gateway.session.identityRevision;
     setState(()=>busy=true);
     try{
       final state=await widget.gateway.loadTwoFactorStatus();
-      if(mounted)setState(()=>status=state);
+      if(_live(epoch,revision))setState(()=>status=state);
     }catch(_){
-      if(mounted)setState(()=>message='Backend security status unavailable.');
-    }finally{if(mounted)setState(()=>busy=false);}
+      if(_live(epoch,revision))setState(()=>message='Backend security status unavailable.');
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   void _choose(FableSecurityOtpPurpose value){
     if(busy)return;
@@ -74,38 +103,41 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   }
   Future<void> _request()async{
     if(purpose==null||busy)return;
+    final epoch=_securityEpoch,revision=widget.gateway.session.identityRevision;
     setState(()=>busy=true);
     try{
       final pending=await widget.gateway.requestSecurityOtp(
         purpose:purpose!,
         newDestination:purpose==FableSecurityOtpPurpose.twoFactor
           ?null:destination.text);
-      if(mounted)setState((){
+      if(_live(epoch,revision))setState((){
         challenge=pending;
         message='OTP challenge created. Provider delivery is not confirmed.';
       });
     }catch(_){
-      if(mounted)setState(()=>message=
+      if(_live(epoch,revision))setState(()=>message=
         'Backend did not confirm OTP request; check destination, limits and account.');
-    }finally{if(mounted)setState(()=>busy=false);}
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   Future<void> _verify()async{
     if(challenge==null||busy)return;
+    final epoch=_securityEpoch,revision=widget.gateway.session.identityRevision;
     setState(()=>busy=true);
     try{
       final proof=await widget.gateway.verifySecurityOtp(
         challenge!,code.text.trim());
-      if(mounted)setState((){
+      if(_live(epoch,revision))setState((){
         verified=proof;code.clear();message='OTP verified by Backend.';
       });
     }catch(_){
-      if(mounted)setState(()=>message='OTP rejected, expired or identity changed.');
-    }finally{if(mounted)setState(()=>busy=false);}
+      if(_live(epoch,revision))setState(()=>message='OTP rejected, expired or identity changed.');
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   Future<void> _commit()async{
     if(verified==null||busy)return;
     if(purpose==FableSecurityOtpPurpose.twoFactor&&status==null)return;
     var shouldRefresh=false;
+    final epoch=_securityEpoch,revision=widget.gateway.session.identityRevision;
     setState(()=>busy=true);
     try{
       final number=purpose==FableSecurityOtpPurpose.twoFactor
@@ -114,14 +146,14 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
         :(await widget.gateway.changeVerifiedContact(verified!,
           newDestination:destination.text,
           securityProof:recent)).revokedOtherSessions;
-      if(!mounted)return;
+      if(!_live(epoch,revision))return;
       setState((){
         message='Backend confirmed change; other sessions revoked: $number.';
         _clear();purpose=null;status=null;
       });
       shouldRefresh=true;
     }on FableApiException catch(e){
-      if(!mounted)return;
+      if(!_live(epoch,revision))return;
       setState((){
         if(e.code=='AUTH_RECENT_AUTH_REQUIRED'){
           requiresRecent=true;
@@ -134,10 +166,10 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
         }
       });
     }catch(_){
-      if(mounted)setState(()=>
+      if(_live(epoch,revision))setState(()=>
         message='Change unconfirmed. Verify server state before repeating.');
     }finally{
-      if(mounted){
+      if(_live(epoch,revision)){
         setState(()=>busy=false);
         if(shouldRefresh)unawaited(_refresh());
       }
@@ -145,74 +177,76 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   }
   Future<void> _requestRecent()async{
     if(busy)return;
+    final epoch=_securityEpoch,revision=widget.gateway.session.identityRevision;
     setState(()=>busy=true);
     try{
       final id=await widget.gateway.requestSensitiveActionOtp();
-      if(mounted)setState((){
+      if(_live(epoch,revision))setState((){
         recentChallenge=id;message='Recent-auth challenge created.';
       });
     }catch(_){
-      if(mounted)setState(()=>message='Recent-auth challenge unavailable.');
-    }finally{if(mounted)setState(()=>busy=false);}
+      if(_live(epoch,revision))setState(()=>message='Recent-auth challenge unavailable.');
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   Future<void> _verifyRecent()async{
     if(recentChallenge==null||busy)return;
+    final epoch=_securityEpoch,revision=widget.gateway.session.identityRevision;
     setState(()=>busy=true);
     try{
       final proof=await widget.gateway.verifySensitiveActionOtp(
         recentChallenge!,recentCode.text.trim());
-      if(mounted)setState((){
+      if(_live(epoch,revision))setState((){
         recent=proof;recentCode.clear();
         message='Recent-auth proof verified. Confirm again.';
       });
     }catch(_){
-      if(mounted)setState(()=>message='Additional verification failed.');
-    }finally{if(mounted)setState(()=>busy=false);}
+      if(_live(epoch,revision))setState(()=>message='Additional verification failed.');
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   Future<void> _requestPasskeyProof()async{
     if(busy || !(widget.gateway.canRegisterNativePasskey ||
         widget.gateway.canManageAccountPasskeys))return;
     setState(()=>busy=true);
-    final revision=widget.gateway.session.identityRevision;
+    final revision=widget.gateway.session.identityRevision,epoch=_securityEpoch;
     try{
       final challenge=await widget.gateway.requestSensitiveActionOtp();
-      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      if(!_live(epoch,revision))return;
       setState((){
         passkeyChallenge=challenge;passkeyRecent=null;passkeyCode.clear();
         message='Recent-auth OTP requested; delivery is not yet confirmed.';
       });
     }catch(_){
-      if(mounted&&widget.gateway.session.identityRevision==revision)
+      if(_live(epoch,revision))
         setState(()=>message='Could not request Passkey authorization.');
-    }finally{if(mounted)setState(()=>busy=false);}
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   Future<void> _verifyPasskeyProof()async{
     final challenge=passkeyChallenge;
     if(busy||challenge==null)return;
     setState(()=>busy=true);
-    final revision=widget.gateway.session.identityRevision;
+    final revision=widget.gateway.session.identityRevision,epoch=_securityEpoch;
     try{
       final proof=await widget.gateway.verifySensitiveActionOtp(
         challenge,passkeyCode.text.trim());
-      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      if(!_live(epoch,revision))return;
       setState((){
         passkeyRecent=proof;passkeyCode.clear();
         message='Backend verified your recent authorization.';
       });
     }catch(_){
-      if(mounted&&widget.gateway.session.identityRevision==revision)
+      if(_live(epoch,revision))
         setState(()=>message='Recent-auth challenge was rejected or expired.');
-    }finally{if(mounted)setState(()=>busy=false);}
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
   Future<void> _registerPasskey()async{
     final proof=passkeyRecent;
     if(busy||proof==null||!widget.gateway.canRegisterNativePasskey)return;
     setState(()=>busy=true);
-    final revision=widget.gateway.session.identityRevision;
+    final revision=widget.gateway.session.identityRevision,epoch=_securityEpoch;
     try{
       final created=await widget.gateway.registerNativePasskey(
         proof:proof,createCredential:FableNativePasskeys().createCredential);
-      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      if(!_live(epoch,revision))return;
       setState((){
         if(created){
           passkeyRecent=null;passkeyChallenge=null;
@@ -224,9 +258,9 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
       if(created&&widget.gateway.canManageAccountPasskeys)
         unawaited(_loadPasskeys());
     }catch(_){
-      if(mounted&&widget.gateway.session.identityRevision==revision)
+      if(_live(epoch,revision))
         setState(()=>message='Passkey registration failed. Check your authorization and app domain.');
-    }finally{if(mounted)setState(()=>busy=false);}
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
   }
 
   Future<void> _loadPasskeys()async{
@@ -256,7 +290,7 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
   Future<void> _removePasskey(FableAccountPasskey passkey)async{
     final proof=passkeyRecent;
     if(busy||passkeysLoading||proof==null)return;
-    final revision=widget.gateway.session.identityRevision;
+    final revision=widget.gateway.session.identityRevision,epoch=_securityEpoch;
     final confirmed=await showDialog<bool>(context:context,builder:(context)=>
       AlertDialog(
         title:const Text('Remove this Passkey?'),
@@ -268,28 +302,27 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
             child:const Text('Remove')),
         ],
       ));
-    if(confirmed!=true||!mounted||
-        widget.gateway.session.identityRevision!=revision ||
+    if(confirmed!=true||!_live(epoch,revision) ||
         !identical(passkeyRecent,proof))return;
     setState(()=>busy=true);
     var removed=false;
     try{
       removed=await widget.gateway.removeAccountPasskey(
         passkey:passkey,proof:proof);
-      if(!mounted||widget.gateway.session.identityRevision!=revision)return;
+      if(!_live(epoch,revision))return;
       setState((){
         passkeyRecent=null;passkeyChallenge=null;passkeyCode.clear();
         message=removed?'Backend confirmed Passkey deletion.':
           'Credential no longer existed; refresh the list.';
       });
     }catch(_){
-      if(mounted&&widget.gateway.session.identityRevision==revision)
+      if(_live(epoch,revision))
         setState((){
           passkeyRecent=null;passkeyChallenge=null;passkeyCode.clear();
           message='Passkey removal was not confirmed. Reauthorize and retry.';
         });
-    }finally{if(mounted)setState(()=>busy=false);}
-    if(removed&&mounted&&widget.gateway.session.identityRevision==revision)
+    }finally{if(_live(epoch,revision))setState(()=>busy=false);}
+    if(removed&&_live(epoch,revision))
       unawaited(_loadPasskeys());
   }
 
