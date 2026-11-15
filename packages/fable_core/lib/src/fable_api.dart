@@ -424,6 +424,9 @@ class UnifiedApiClient implements BackendApiGateway {
             'auth.otp.login.complete': '/auth/otp/login/complete',
             'auth.social.google': '/auth/social/google',
             'auth.social.apple': '/auth/social/apple',
+            // RC240: public passkey verification also issues a Flutter session.
+            // Backend must bind it to the same hardware-held DPoP key.
+            'passkeys.authentication.verify': '/auth/passkeys/authentication/verify',
           };
           final publicPath = publicBootstrap[op.id];
           final bootstrap = publicPath != null &&
