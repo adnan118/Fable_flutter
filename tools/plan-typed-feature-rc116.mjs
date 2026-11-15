@@ -90,6 +90,16 @@ function checkSignedResponseShape(op,schema,fields){
  * boolean/date/currency behavior, secrets or a PATCH concurrency policy.
  */
 function validatedCreateFields(op,route,id,featureId){
+  // A generic typed form cannot invent fresh OTP/Idempotency-Key headers,
+  // managed-entity scope, URL query binding, or server-issued revisions.
+  // Such operations need reviewed dedicated adapters and flow evidence.
+  if(op.idempotency?.required===true ||
+     (op.request?.headers??[]).length>0 ||
+     (op.request?.query??[]).length>0 ||
+     (op.recordAccess && !['global','none'].includes(op.recordAccess.mode)) ||
+     (op.permissions??[]).some(p=>typeof p!=='string'||!p.trim()||
+       /(?:^|[._-])(admin|manage|billing|payment|security|revoke|transfer)(?:$|[._-])/i.test(p)))
+    fail('create POST needs a reviewed idempotency, context or privileged write adapter: '+id);
   if(!/(?:^|[._-])create$/i.test(id))
     fail('POST operation must declare an explicit create role: '+id);
   const restricted=new Set(['auth','payments','biometrics','access_control',
@@ -118,6 +128,8 @@ function validatedCreateFields(op,route,id,featureId){
     fail('OpenAPI POST body lacks independently signed operation field evidence: '+id);
   const signed=new Map();
   for(const field of body.fields){
+    if(field?.protectedAuth===true||field?.sensitiveFilterSort===true)
+      fail('protected or sensitive Backend field requires a dedicated creator: '+id);
     if(!field||typeof field.name!=='string'||signed.has(field.name)||
        field.optional===true||!['string','text','uuid'].includes(field.type))
       fail('unsupported signed create POST field: '+id);
