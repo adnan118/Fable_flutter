@@ -397,17 +397,22 @@ function infiniteListController(op){
     '  bool _loading=false,_completed=false,_closed=false;',
     '  int _epoch=0,_nextPage=1,_total=0;',
     ...(op.supportsSearch?['  String _search="";']:[]),
+    ...pagedFilters(op).map(f=>'  String? _'+f.name+';'),
     '  TypedReadFailureKind? _error;',
     '  bool get isLoading=>_loading;',
     '  bool get hasMore=>!_completed;',
     '  int get total=>_total;',
     '  TypedReadFailureKind? get error=>_error;',
-    '  void reset('+ (op.supportsSearch?'{String search=""}':'') +'){',
+    '  void reset('+ ((op.supportsSearch||pagedFilters(op).length)
+      ?'{'+[...(op.supportsSearch?['String search=""']:[]),
+        ...pagedFilters(op).map(f=>'String? '+f.name)].join(', ')+'}'
+      :'') +'){',
     '    if(_closed)return;',
     '    _epoch++;_items.clear();',
     '    _nextPage=1;_total=0;_loading=false;_completed=false;',
     '    _error=null;',
     ...(op.supportsSearch?['    _search=search.trim();']:[]),
+    ...pagedFilters(op).map(f=>'    _'+f.name+'='+f.name+'?.trim();'),
     '    notifyListeners();',
     '  }',
     '  Future<void> loadNext()async{',
@@ -416,7 +421,8 @@ function infiniteListController(op){
     '    _loading=true;notifyListeners();',
     '    try{',
     '      final result=await _read.call(page:requested'+
-      (op.supportsSearch?',search:_search':'')+');',
+      (op.supportsSearch?',search:_search':'')+
+      pagedFilters(op).map(f=>','+f.name+':_'+f.name).join('')+');',
     '      if(_closed || _epoch!=epoch)return;',
     '      switch(result){',
     '        case TypedReadSuccess<'+name+'Entity> ok:',
