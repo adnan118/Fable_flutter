@@ -125,6 +125,8 @@ function validatedCreateFields(op,route,id,featureId){
   }
   const fields=[];
   for(const [name,definition] of Object.entries(schema.properties)){
+    if(/(?:password|secret|token|otp|pin|cvv|card|bank|private|credential|session|amount|price|currency|balance|payment|billing|accesskey)/i.test(name))
+      fail('sensitive or financial create field requires a reviewed feature workflow: '+id);
     if(!safeIdent(name)||!schema.required.includes(name)||
        !definition||definition.type!=='string'||
        Object.keys(definition).some(key=>!['type','format','description',
