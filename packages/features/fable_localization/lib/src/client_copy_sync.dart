@@ -30,12 +30,17 @@ class FableClientCopySync {
      origin.hasQuery||origin.hasFragment||(origin.path.isNotEmpty&&origin.path!='/')){
    throw ArgumentError('Public copy cache must be scoped to a bare trusted HTTPS origin');
   }
+  if(minCheckInterval.isNegative){
+   throw ArgumentError('Public copy check interval cannot be negative');
+  }
  }
  final BackendApiGateway gateway;
  final String namespace;
  final SharedPreferencesAsync _storage;
  final Duration minCheckInterval;
  final DateTime Function() _clock;
+ // عمليات متزامنة لنفس اللغة تشارك نفس الاستجابة؛ لا تُكتب نسخة أقدم فوق أحدث.
+ final Map<String,Future<FableClientCopySnapshot>> _inFlight={};
  static const _maxEntries=600;
  static final _keyPattern=RegExp(r'^[A-Za-z][A-Za-z0-9_.-]{0,95}$');
  static final _localePattern=RegExp(r'^[a-z]{2,3}(?:-[a-zA-Z0-9]{2,8}){0,3}$');
@@ -65,9 +70,22 @@ class FableClientCopySync {
   }
   return Map.unmodifiable(result);
  }
- Future<FableClientCopySnapshot> sync(String locale,{bool force=false})async{
+ Future<FableClientCopySnapshot> sync(String locale,{bool force=false}){
   final normalized=locale.replaceAll('_','-').toLowerCase();
-  if(!_localePattern.hasMatch(normalized)||normalized.length>35)throw ArgumentError('Invalid locale');
+  if(!_localePattern.hasMatch(normalized)||normalized.length>35){
+   throw ArgumentError('Invalid locale');
+  }
+  // حتى الاستدعاء الإجباري يلتحق بالطلب الجاري بدل سباق كتابة الكاش.
+  final existing=_inFlight[normalized];
+  if(existing!=null)return existing;
+  late final Future<FableClientCopySnapshot> pending;
+  pending=_syncSingle(normalized,force:force).whenComplete((){
+   if(identical(_inFlight[normalized],pending))_inFlight.remove(normalized);
+  });
+  _inFlight[normalized]=pending;
+  return pending;
+ }
+ Future<FableClientCopySnapshot> _syncSingle(String normalized,{required bool force})async{
   final old=await _cached(normalized);final now=_clock().toUtc();
   if(!force&&old!=null&&now.difference(old.checkedAt)>=Duration.zero&&now.difference(old.checkedAt)<minCheckInterval)return old;
   try{
@@ -88,7 +106,9 @@ class FableClientCopySync {
     entries:entries,checkedAt:now,fromCache:unchanged,offlineFallback:false);
    final serialized=jsonEncode({'requestedLocale':normalized,'locale':effectiveLocale,'revision':revision,'entries':entries,'checkedAt':now.toIso8601String()});
    if(serialized.length>600000)throw const FormatException('Remote catalog exceeds cache limit');
-   await _storage.setString(_key(normalized),serialized);
+   // تعطّل التخزين لا يُحوّل رد الشبكة الناجح إلى محتوى قديم.
+   try{await _storage.setString(_key(normalized),serialized);}
+   catch(_){/* Validated online snapshot still wins over stale local copy. */}
    return next;
   }catch(_){
    // Old *validated public copy* is still useful offline; do not erase it.
