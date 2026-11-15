@@ -142,3 +142,74 @@ test('RC278 older signed Backend pagination remains unchanged without filter con
   assert.doesNotMatch(page,/Exact filter:/);
   assert.match(page,/ListView\.builder/);
 });
+
+function numericRangeFixture({type='int'}={}){
+  const f=fixture(),name='quantity';
+  const signed=f.contract.operations[0];
+  const route=f.openapi.paths['/catalog'].get;
+  const items=route.responses['200'].content['application/json']
+    .schema.properties.data.properties.items.items;
+  signed.response.data.item.fields.push({name,type,optional:false});
+  items.properties[name]={type:type==='int'?'integer':'number'};
+  items.required.push(name);
+  for(const key of [name,name+'Min',name+'Max']){
+    signed.request.query.push({key,type:'number'});
+    route.parameters.push({name:key,in:'query',required:false,
+      schema:{type:'number'}});
+  }
+  return f;
+}
+
+test('RC280 signed integer range has atomic min/max filtering throughout infinite scroll',()=>{
+  const plan=planTypedFeature(numericRangeFixture());
+  assert.deepEqual(plan.operations[0].filters,[
+    {name:'quantityMin',type:'int'},{name:'quantityMax',type:'int'}]);
+  const out=renderTypedFeature(plan);
+  const base='packages/features/fable_catalog/lib/src/';
+  const port=out.get(base+'domain/catalog_list_paginated_repository.dart');
+  const adapter=out.get(base+'data/fable_catalog_list_paginated_repository.dart');
+  const state=out.get(base+'presentation/catalog_list_paginated_controller.dart');
+  const page=out.get(base+'presentation/catalog_list_paginated_page.dart');
+  const widgetTest=out.get('packages/features/fable_catalog/test/catalog_list_paginated_page_test.dart');
+  assert.match(port,/String\? quantityMin, String\? quantityMax/);
+  assert.match(adapter,/int\.tryParse\(quantityMin\.trim\(\)\)/);
+  assert.match(adapter,/parsed < -2147483648 \|\| parsed > 2147483647/);
+  assert.match(adapter,/double\.parse\(quantityMin\.trim\(\)\)>double\.parse\(quantityMax\.trim\(\)\)/);
+  assert.match(adapter,/"quantityMin":quantityMin\.trim\(\)/);
+  assert.match(adapter,/"quantityMax":quantityMax\.trim\(\)/);
+  assert.match(state,/quantityMin:_quantityMin,quantityMax:_quantityMax/);
+  assert.match(page,/Minimum: quantity/);
+  assert.match(page,/Maximum: quantity/);
+  assert.match(page,/TextInputType\.numberWithOptions\(signed:true,decimal:false\)/);
+  assert.match(widgetTest,/String\? quantityMin,String\? quantityMax/);
+  assert.doesNotMatch(page,/Map<String,dynamic>|Dio|package:fable_core/);
+});
+
+test('RC280 signed decimal filters require finite numbers and use decimal input',()=>{
+  const plan=planTypedFeature(numericRangeFixture({type:'decimal'}));
+  assert.deepEqual(plan.operations[0].filters,[
+    {name:'quantityMin',type:'decimal'},{name:'quantityMax',type:'decimal'}]);
+  const files=renderTypedFeature(plan),root='packages/features/fable_catalog/lib/src/';
+  assert.match(files.get(root+'data/fable_catalog_list_paginated_repository.dart'),
+    /double\.tryParse\(quantityMin\.trim\(\)\)/);
+  assert.match(files.get(root+'data/fable_catalog_list_paginated_repository.dart'),/!parsed\.isFinite/);
+  assert.match(files.get(root+'presentation/catalog_list_paginated_page.dart'),
+    /TextInputType\.numberWithOptions\(signed:true,decimal:true\)/);
+});
+
+test('RC280 refuses missing, drifted and sensitive numeric range pairs',()=>{
+  const missing=numericRangeFixture();
+  missing.contract.operations[0].request.query.pop();
+  missing.openapi.paths['/catalog'].get.parameters.pop();
+  assert.deepEqual(planTypedFeature(missing).operations[0].filters,[]);
+  const hidden=numericRangeFixture();
+  hidden.contract.operations[0].response.data.item.fields.at(-1).protectedAuth=true;
+  assert.deepEqual(planTypedFeature(hidden).operations[0].filters,[]);
+  const changed=numericRangeFixture();
+  changed.openapi.paths['/catalog'].get.parameters.at(-1).schema.type='string';
+  assert.throws(()=>planTypedFeature(changed),/RC116 typed feature/);
+  const unknown=numericRangeFixture();
+  unknown.contract.operations[0].request.query.at(-1).type='string';
+  unknown.openapi.paths['/catalog'].get.parameters.at(-1).schema.type='string';
+  assert.deepEqual(planTypedFeature(unknown).operations[0].filters,[]);
+});
