@@ -13,6 +13,10 @@ const numericRangePairs=op=>pagedFilters(op).filter(f=>
   ['int','decimal'].includes(f.type) && f.name.endsWith('Min') &&
   pagedFilters(op).some(g=>g.name===f.name.slice(0,-3)+'Max' && g.type===f.type)
 ).map(f=>[f.name,f.name.slice(0,-3)+'Max']);
+const datetimeRangePairs=op=>pagedFilters(op).filter(f=>
+  f.type==='datetime' && f.name.endsWith('From') &&
+  pagedFilters(op).some(g=>g.name===f.name.slice(0,-4)+'To' && g.type==='datetime')
+).map(f=>[f.name,f.name.slice(0,-4)+'To']);
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name),
   ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[]),
@@ -305,6 +309,23 @@ function adapter(op,projectHash){
       '    if('+min+'!=null && '+max+'!=null &&',
       '       '+min+'.trim().isNotEmpty && '+max+'.trim().isNotEmpty &&',
       '       double.parse('+min+'.trim())>double.parse('+max+'.trim()))',
+      '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    ]),
+    // RC281: accept only canonical UTC ISO-8601 strings as produced by the
+    // date-picker. Dart DateTime.tryParse alone normalizes impossible dates.
+    ...pagedFilters(op).filter(f=>f.type==='datetime').flatMap(f=>[
+      '    if('+f.name+'!=null && '+f.name+'.trim().isNotEmpty){',
+      '      final iso='+f.name+'.trim();',
+      '      final parsed=DateTime.tryParse(iso);',
+      '      if(parsed==null || !iso.endsWith("Z") ||',
+      '         parsed.toUtc().toIso8601String()!=iso)',
+      '        throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      '    }',
+    ]),
+    ...datetimeRangePairs(op).flatMap(([from,to])=>[
+      '    if('+from+'!=null && '+to+'!=null &&',
+      '       '+from+'.trim().isNotEmpty && '+to+'.trim().isNotEmpty &&',
+      '       DateTime.parse('+from+'.trim()).isAfter(DateTime.parse('+to+'.trim())))',
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
     ]),
     '    final identity=gateway.session.identityRevision;',
@@ -662,7 +683,27 @@ function infiniteListPage(op){
       '              tooltip:"Search all results",icon:const Icon(Icons.search)),',
       '          ])),',
     ]:[]),
-    ...pagedFilters(op).flatMap(f=>f.type!=='boolean'?[
+    ...pagedFilters(op).flatMap(f=>f.type==='datetime'?[
+      '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+      '          child:TextField(controller:_filter'+f.name+',readOnly:true,',
+      '            decoration:InputDecoration(labelText:'+dart(
+        (f.name.endsWith('From')?'From: ':'To: ')+
+        f.name.slice(0,f.name.endsWith('From')?-4:-2))+',',
+      '              suffixIcon:IconButton(icon:const Icon(Icons.clear),',
+      '                onPressed:(){_filter'+f.name+'.clear();_refresh();})),',
+      '            onTap:()async{',
+      '              final epoch=_identityEpoch;',
+      '              final chosen=await showDatePicker(context:context,',
+      '                initialDate:DateTime.now(),',
+      '                firstDate:DateTime(1900),lastDate:DateTime(2100));',
+      '              if(!mounted || epoch!=_identityEpoch || chosen==null)return;',
+      '              final utc=DateTime.utc(chosen.year,chosen.month,chosen.day,'+
+        (f.name.endsWith('From')?'0,0,0,0':'23,59,59,999')+');',
+      '              _filter'+f.name+'.text=utc.toIso8601String();',
+      '              _refresh();',
+      '            },',
+      '          )),',
+    ]:f.type!=='boolean'?[
       '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
       '          child:TextField(controller:_filter'+f.name+',maxLength:'+
         (f.type==='text'?'191':'32')+',',

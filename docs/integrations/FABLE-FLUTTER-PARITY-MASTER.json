@@ -1353,7 +1353,7 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC280",
+    "lastSourceUpdate": "RC281",
     "date": "2026-11-15",
     "backendReferenceCommit": "b61e7d6bb69f4d330a16dc045bc7428a07f8be46",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
@@ -1361,14 +1361,16 @@
       "RC274 signed global search DB pagination with server-side filtering",
       "RC278 signed non-sensitive text/boolean equality filters",
       "RC279 Backend numeric/datetime invalid-range guards",
-      "RC280 Flutter atomic signed integer/decimal Min/Max filters and infinite-scroll reset"
+      "RC280 Flutter atomic signed integer/decimal Min/Max filters and infinite-scroll reset",
+      "RC281 Flutter signed datetime From/To UTC calendar filters with identity-fenced selection and canonical date checks"
     ],
-    "sourceTestEvidence": "6/6 isolated JavaScript test callbacks executed against actual current planner/renderer source; no full Node/Flutter SDK run",
+    "sourceTestEvidence": "8/8 isolated JavaScript test callbacks executed against actual current planner/renderer source; full Node and Flutter SDK not run",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
       "Android/iOS native E2E",
-      "real role/tenant/scope authorization"
+      "real role/tenant/scope authorization",
+      "Native calendar picker widget rendering and date locale integration"
     ],
     "w5Closed": false,
     "w6Closed": false,

@@ -213,3 +213,61 @@ test('RC280 refuses missing, drifted and sensitive numeric range pairs',()=>{
   unknown.openapi.paths['/catalog'].get.parameters.at(-1).schema.type='string';
   assert.deepEqual(planTypedFeature(unknown).operations[0].filters,[]);
 });
+
+function signedDateRangeFixture(){
+  const f=fixture(),name='publishedAt';
+  const signed=f.contract.operations[0];
+  const route=f.openapi.paths['/catalog'].get;
+  const items=route.responses['200'].content['application/json']
+    .schema.properties.data.properties.items.items;
+  signed.response.data.item.fields.push({name,type:'datetime',optional:false});
+  items.properties[name]={type:'string',format:'date-time'};
+  items.required.push(name);
+  for(const key of [name,name+'From',name+'To']){
+    signed.request.query.push({key,type:'string',format:'date-time'});
+    route.parameters.push({name:key,in:'query',required:false,
+      schema:{type:'string',format:'date-time'}});
+  }
+  return f;
+}
+
+test('RC281 fully signed datetime bounds generate real calendar controls and UTC inputs',()=>{
+  const plan=planTypedFeature(signedDateRangeFixture());
+  assert.deepEqual(plan.operations[0].filters,[
+    {name:'publishedAtFrom',type:'datetime'},
+    {name:'publishedAtTo',type:'datetime'}]);
+  const files=renderTypedFeature(plan),base='packages/features/fable_catalog/lib/src/';
+  const adapter=files.get(base+'data/fable_catalog_list_paginated_repository.dart');
+  const controller=files.get(base+'presentation/catalog_list_paginated_controller.dart');
+  const page=files.get(base+'presentation/catalog_list_paginated_page.dart');
+  assert.match(adapter,/DateTime\.tryParse\(iso\)/);
+  assert.match(adapter,/parsed\.toUtc\(\)\.toIso8601String\(\)!=iso/);
+  assert.match(adapter,/DateTime\.parse\(publishedAtFrom\.trim\(\)\)\.isAfter/);
+  assert.match(adapter,/"publishedAtFrom":publishedAtFrom\.trim\(\)/);
+  assert.match(adapter,/"publishedAtTo":publishedAtTo\.trim\(\)/);
+  assert.match(controller,/publishedAtFrom:_publishedAtFrom,publishedAtTo:_publishedAtTo/);
+  assert.match(page,/showDatePicker\(context:context/);
+  assert.match(page,/From: publishedAt/);
+  assert.match(page,/To: publishedAt/);
+  assert.match(page,/DateTime\.utc\(chosen\.year,chosen\.month,chosen\.day,0,0,0,0\)/);
+  assert.match(page,/DateTime\.utc\(chosen\.year,chosen\.month,chosen\.day,23,59,59,999\)/);
+  assert.match(page,/epoch!=_identityEpoch/);
+  assert.doesNotMatch(page,/Dio|package:fable_core|Map<String,dynamic>/);
+});
+
+test('RC281 missing or unsafe date bounds never become generic filters',()=>{
+  const noTo=signedDateRangeFixture();
+  noTo.contract.operations[0].request.query.pop();
+  noTo.openapi.paths['/catalog'].get.parameters.pop();
+  assert.deepEqual(planTypedFeature(noTo).operations[0].filters,[]);
+  const sensitive=signedDateRangeFixture();
+  sensitive.contract.operations[0].response.data.item.fields.at(-1).sensitiveFilterSort=true;
+  assert.deepEqual(planTypedFeature(sensitive).operations[0].filters,[]);
+  const noFormat=signedDateRangeFixture();
+  delete noFormat.contract.operations[0].request.query.at(-1).format;
+  delete noFormat.openapi.paths['/catalog'].get.parameters.at(-1).schema.format;
+  assert.deepEqual(planTypedFeature(noFormat).operations[0].filters,[]);
+  const drift=signedDateRangeFixture();
+  drift.openapi.paths['/catalog'].get.parameters.at(-1).schema.format='date';
+  assert.throws(()=>planTypedFeature(drift),/RC116 typed feature/);
+});
