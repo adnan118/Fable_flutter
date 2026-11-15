@@ -8,12 +8,25 @@ const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
 const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
+const pagedFilters=op=>op.resultKind==='paginated-list'?(op.filters??[]):[];
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name),
-  ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[])]:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[]),
+    ...pagedFilters(op).map(f=>'String? '+f.name)]:[])].join(', ');
 const named=op=>(argsOf(op).length||op.resultKind==='paginated-list')?'{'+params(op)+'}':'';
 const callArgs=op=>[...argsOf(op).map(x=>x+': '+x),
-  ...(op.resultKind==='paginated-list'?['page: page',...(op.supportsSearch?['search: search']:[])]:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['page: page',...(op.supportsSearch?['search: search']:[]),
+    ...pagedFilters(op).map(f=>f.name+': '+f.name)]:[])].join(', ');
+function signedPageQuery(op){
+  if(op.resultKind!=='paginated-list')return '';
+  const parts=['"page":page','"limit":20',
+    '"mode":'+(op.supportsSearch?'search!=null && search.trim().isNotEmpty?"search":"page"':'"page"')];
+  if(op.supportsSearch)parts.push('if(search!=null && search.trim().isNotEmpty)"q":search.trim()');
+  for(const filter of pagedFilters(op))
+    parts.push('if('+filter.name+'!=null && '+filter.name+'.trim().isNotEmpty)'+
+      dart(filter.name)+':'+filter.name+'.trim()');
+  return ',query:<String,dynamic>{'+parts.join(',')+'}';
+}
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
   if(!plan||!Array.isArray(plan.operations)||!plan.operations.length||
@@ -264,17 +277,21 @@ function adapter(op,projectHash){
         '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
       ]:[]),
     ]:[]),
+    ...pagedFilters(op).flatMap(f=>[
+      '    if('+f.name+'!=null && '+f.name+'.trim().isNotEmpty && ('+
+        f.name+'.trim().length>191 || '+
+        f.name+'.codeUnits.any((c)=>c<32||c==127)'+
+        (f.type==='boolean'?' || ('+f.name+'.trim()!="true" && '+f.name+'.trim()!="false")':'')+
+        '))',
+      '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    ]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
       (op.method==='POST'?',body:'+name+'CreateRequest('+
         (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+
-      (op.resultKind==='paginated-list'
-        ?(op.supportsSearch
-          ?',query:<String,dynamic>{"page":page,"limit":20,"mode":search!=null && search.trim().isNotEmpty?"search":"page",if(search!=null && search.trim().isNotEmpty)"q":search.trim()}'
-          :',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}')
-        :'')+');',
+      signedPageQuery(op)+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
