@@ -31,11 +31,15 @@ function listEntity(op){
     '  const '+item+'({'+op.fields.map(f=>(f.required?'required this.':'this.')+f.name).join(', ')+'});',
     ...op.fields.map(f=>'  final '+fieldType(f)+' '+f.name+';'),
     '}',
+    ...(op.resultKind==='paginated-list'?[
+      'enum '+name+'ListMode { page, search }',
+    ]:[]),
     'final class '+name+'Entity {',
     ...(op.resultKind==='paginated-list'?[
-      '  const '+name+'Entity({required this.items,required this.page,',
+      '  const '+name+'Entity({required this.items,required this.mode,required this.page,',
       '    required this.limit,required this.total,required this.totalPages});',
       '  final List<'+item+'> items;',
+      '  final '+name+'ListMode mode;',
       '  final int page,limit,total,totalPages;',
     ]:[
       '  const '+name+'Entity({required this.items,required this.count,',
@@ -132,6 +136,7 @@ function listDto(op){
     '    return '+name+'Dto('+name+'Entity(',
     '      items:List<'+item+'>.unmodifiable(items),',
     ...(op.resultKind==='paginated-list'?[
+      '      mode:meta["mode"]=="search"?'+name+'ListMode.search:'+name+'ListMode.page,',
       "      page:meta['page'] as int,",
       "      limit:meta['limit'] as int,",
       "      total:meta['total'] as int,",
@@ -286,6 +291,15 @@ function adapter(op,projectHash){
     ...(op.resultKind==='paginated-list'?[
       '      if(entity.page!=page)',
       '        throw const FormatException("Unexpected page in Backend response");',
+      ...(op.supportsSearch?[
+        '      final requestedMode=search!=null && search.trim().isNotEmpty',
+        '        ?'+name+'ListMode.search:'+name+'ListMode.page;',
+        '      if(entity.mode!=requestedMode)',
+        '        throw const FormatException("Backend returned a different search mode");',
+      ]:[
+        '      if(entity.mode!='+name+'ListMode.page)',
+        '        throw const FormatException("Unexpected Backend page mode");',
+      ]),
     ]:[]),
     '      return entity;',
     '    } on FableApiException catch(error){',
@@ -943,6 +957,9 @@ function infiniteListPageTest(op,featureId){
     ...fields,
     '        ),',
     '      ],',
+    '      mode:'+(op.supportsSearch
+      ?'(search!=null && search.isNotEmpty?'+name+'ListMode.search:'+name+'ListMode.page)'
+      :name+'ListMode.page')+',',
     '      page:page,limit:20,total:40,totalPages:2,',
     '    );',
     '  }',
@@ -1028,6 +1045,7 @@ function readPageTest(op,featureId){
       '        ),',
       '      ],',
       ...(op.resultKind==='paginated-list'?[
+        '      mode:'+name+'ListMode.page,',
         '      page:1,limit:20,total:1,totalPages:1,',
       ]:['      count:1,maxRows:100,limitExceeded:false,']),
     ]:op.fields.filter(f=>f.required)
@@ -1108,8 +1126,20 @@ function listDtoTest(op,featureId){
     '    expect(parsed.items.length,1);',
     '    expect(parsed.items.single.'+op.fields[0].name+',isNotNull);',
     ...(op.resultKind==='paginated-list'?[
+      '    expect(parsed.mode.name,"page");',
       '    expect(parsed.page,1);',
       '    expect(parsed.totalPages,1);',
+      ...(op.supportsSearch?[
+        '    final searchMeta=<String,Object?>{',
+        '      "mode":"search","page":1,"limit":20,',
+        '      "total":1,"totalPages":1,"count":1,',
+        '    };',
+        '    json["meta"]=searchMeta;',
+        '    expect('+name+'Dto.fromJson(json).toDomain().mode.name,"search");',
+        '    searchMeta["count"]=2;',
+        '    expect(()=>'+name+'Dto.fromJson(json),throwsFormatException);',
+        '    json["meta"]=<String,Object?>{"mode":"page","page":1,"limit":20,"total":1,"totalPages":1};',
+      ]:[]),
     ]:['    expect(parsed.limitExceeded,isFalse);']),
     '    json.remove("meta");',
     '    expect(()=>'+name+'Dto.fromJson(json),throwsFormatException);',
