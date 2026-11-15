@@ -8,7 +8,7 @@
  */
 import {
   existsSync,readFileSync,mkdirSync,mkdtempSync,writeFileSync,
-  renameSync,rmSync,lstatSync,
+  renameSync,rmSync,lstatSync,copyFileSync,
 } from 'node:fs';
 import {resolve,join,relative,dirname,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -16,6 +16,7 @@ import {verifyFableContract} from './verify-fable-contract.mjs';
 import {planTypedFeature} from './plan-typed-feature-rc116.mjs';
 import {renderTypedFeature} from './render-typed-feature-rc116.mjs';
 import {checkLayerSource} from './enforce-feature-architecture-rc115.mjs';
+import {planW5AppFeatureBinding} from './w5-app-feature-binding.mjs';
 
 const HASH=/^[a-f0-9]{64}$/;
 const ID=/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
