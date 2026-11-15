@@ -8,8 +8,8 @@
  */
 import {existsSync,readFileSync,realpathSync,mkdirSync,mkdtempSync,writeFileSync,renameSync,rmSync} from 'node:fs';
 import {resolve,dirname,join,sep,isAbsolute,relative} from 'node:path';
-import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
+import {verifyFableContract} from './verify-fable-contract.mjs';
 
 const hexByte='[0-9A-F]{2}';
 const fingerprint=new RegExp('^'+hexByte+(':'+hexByte).repeat(31)+'$');
@@ -135,6 +135,13 @@ export function exportPasskeyAssociations({root,configFile,outDir}){
   if(imported?.contractHash!==config.backendContractHash||
       imported?.project?.id!==config.projectId)
     fail('Association config is stale or does not match the imported Fable Backend contract');
+  const verification=verifyFableContract(project,{
+    mode:'project',
+    expectedProjectId:config.projectId,
+    expectedContractHash:config.backendContractHash,
+  });
+  if(!verification.ok)
+    fail('Generated-project Backend provenance invalid; reimport Fable handoff and verify project pins');
   const files=createPasskeyAssociationBundle(config);
   const temp=mkdtempSync(join(parent,'.fable-passkeys-'));
   try{
