@@ -1010,10 +1010,13 @@ function infiniteListPageTest(op,featureId){
     '  final calls=<int>[];',
     '  bool emptyIntermediate=false;',
     ...(op.supportsSearch?['  final searches=<String?>[];']:[]),
+    ...pagedFilters(op).map(f=>'  final seen'+f.name+'=<String?>[];'),
     '  @override Future<'+name+'Entity> load({required int page'+
-      (op.supportsSearch?',String? search':'')+'})async{',
+      (op.supportsSearch?',String? search':'')+
+      pagedFilters(op).map(f=>',String? '+f.name).join('')+'})async{',
     '    calls.add(page);',
     ...(op.supportsSearch?['    searches.add(search);']:[]),
+    ...pagedFilters(op).map(f=>'    seen'+f.name+'.add('+f.name+');'),
     '    return '+name+'Entity(',
     '      items:emptyIntermediate?<'+name+'Item>[]:<'+name+'Item>[',
     '        '+name+'Item(',
