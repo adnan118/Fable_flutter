@@ -119,19 +119,22 @@ function validatedCreateFields(op,route,id,featureId){
       !Array.isArray(schema.required)||
       Object.keys(schema.properties).length<1||
       Object.keys(schema.properties).length>16||
-      schema.required.length!==Object.keys(schema.properties).length||
-      new Set(schema.required).size!==schema.required.length)
-    fail('create POST requires a bounded all-required flat object: '+id);
+      schema.required.length<1||
+      schema.required.length>Object.keys(schema.properties).length||
+      new Set(schema.required).size!==schema.required.length ||
+      schema.required.some(name=>!Object.hasOwn(schema.properties,name)))
+    fail('create POST requires a bounded flat object with at least one required field: '+id);
   const body=op.request?.body;
   if(body?.type!=='object'||!Array.isArray(body.fields)||
-      body.fields.length!==schema.required.length)
+      body.fields.length!==Object.keys(schema.properties).length)
     fail('OpenAPI POST body lacks independently signed operation field evidence: '+id);
   const signed=new Map();
   for(const field of body.fields){
     if(field?.protectedAuth===true||field?.sensitiveFilterSort===true)
       fail('protected or sensitive Backend field requires a dedicated creator: '+id);
     if(!field||typeof field.name!=='string'||signed.has(field.name)||
-       field.optional===true||!['string','text','uuid'].includes(field.type))
+       typeof field.optional!=='boolean'||
+       !['string','text','uuid'].includes(field.type))
       fail('unsupported signed create POST field: '+id);
     signed.set(field.name,field);
   }
@@ -139,7 +142,7 @@ function validatedCreateFields(op,route,id,featureId){
   for(const [name,definition] of Object.entries(schema.properties)){
     if(/(?:password|secret|token|otp|pin|cvv|card|bank|private|credential|session|amount|price|currency|balance|payment|billing|accesskey)/i.test(name))
       fail('sensitive or financial create field requires a reviewed feature workflow: '+id);
-    if(!safeIdent(name)||!schema.required.includes(name)||
+    if(!safeIdent(name)||
        !definition||definition.type!=='string'||
        Object.keys(definition).some(key=>!['type','format','description',
          'minLength','maxLength'].includes(key))||
@@ -149,10 +152,11 @@ function validatedCreateFields(op,route,id,featureId){
           definition.maxLength>512))
       fail('unsafe or ambiguous create POST request field: '+id);
     const signedField=signed.get(name);
-    if(!signedField ||
+    const required=schema.required.includes(name);
+    if(!signedField || signedField.optional===required ||
        (definition.format??null)!==(signedField.type==='uuid'?'uuid':null))
-      fail('OpenAPI POST body does not match signed operation request fields: '+id);
-    fields.push({name,type:'String',required:true,
+      fail('OpenAPI POST body does not match signed required/optional request fields: '+id);
+    fields.push({name,type:'String',required,
       maxLength:definition.maxLength??512,uuid:signedField.type==='uuid'});
   }
   return fields;
