@@ -906,7 +906,66 @@ function projectNavigation(plan){
   return {source:line(...parts),value};
 }
 
+
+function infiniteListPageTest(op,featureId){
+  const name=op.className,file=snake(op.operationId);
+  const fields=op.fields.filter(f=>f.required).map(f=>
+    '          '+f.name+': '+(
+      f.type==='String'?dart('sample'):
+      f.type==='int'?'7':f.type==='double'?'2.5':'true')+',');
+  return line(
+    "import 'dart:async';",
+    "import 'package:flutter_test/flutter_test.dart';",
+    "import 'package:material_ui/material_ui.dart';",
+    "import 'package:fable_"+featureId+"/src/domain/"+file+"_repository.dart';",
+    "import 'package:fable_"+featureId+"/src/domain/"+file+"_entity.dart';",
+    "import 'package:fable_"+featureId+"/src/presentation/"+file+"_page.dart';",
+    'final class _FakeRepository implements '+name+'Repository {',
+    '  final calls=<int>[];',
+    ...(op.supportsSearch?['  final searches=<String?>[];']:[]),
+    '  @override Future<'+name+'Entity> load({required int page'+
+      (op.supportsSearch?',String? search':'')+'})async{',
+    '    calls.add(page);',
+    ...(op.supportsSearch?['    searches.add(search);']:[]),
+    '    return '+name+'Entity(',
+    '      items:<'+name+'Item>[',
+    '        '+name+'Item(',
+    ...fields,
+    '        ),',
+    '      ],',
+    '      page:page,limit:20,total:40,totalPages:2,',
+    '    );',
+    '  }',
+    '}',
+    'void main(){',
+    '  testWidgets("RC273 lazy infinite scroll uses signed repository and session fencing",',
+    '    (tester)async{',
+    '      final events=StreamController<Object?>.broadcast(sync:true);',
+    '      final repository=_FakeRepository();',
+    '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
+    '        repository:repository,identityEvents:events.stream)));',
+    '      await tester.pumpAndSettle();',
+    '      expect(repository.calls,contains(1));',
+    '      expect(find.byType(ListView),findsOneWidget);',
+    '      expect(find.text("Previous page"),findsNothing);',
+    '      expect(find.text("Next page"),findsNothing);',
+    ...(op.supportsSearch?[
+      '      await tester.enterText(find.byType(TextField).first,"needle");',
+      '      await tester.testTextInput.receiveAction(TextInputAction.search);',
+      '      await tester.pumpAndSettle();',
+      '      expect(repository.searches,contains("needle"));',
+    ]:[]),
+    '      events.add(Object());',
+    '      await tester.pump();',
+    '      await tester.pumpWidget(const SizedBox.shrink());',
+    '      await events.close();',
+    '    });',
+    '}',
+  );
+}
+
 function readPageTest(op,featureId){
+  if(op.resultKind==='paginated-list')return infiniteListPageTest(op,featureId);
   const name=op.className,file=snake(op.operationId);
   const sample=type=>type==='String'?dart('example'):
     type==='int'?'7':type==='double'?'1.5':'true';
