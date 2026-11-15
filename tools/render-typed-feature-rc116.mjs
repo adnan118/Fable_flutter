@@ -7,6 +7,7 @@ const line=(...parts)=>parts.join('\n')+'\n';
 const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
+const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name)].join(', ');
 const named=op=>argsOf(op).length?'{'+params(op)+'}':'';
@@ -186,7 +187,7 @@ function application(op){
     '  Future<TypedReadResult<'+name+'Entity>> call('+named(op)+') async {',
     '    try {',
   ];
-  for(const p of argsOf(op)){
+  for(const p of requiredArgsOf(op)){
     parts.push('      if('+p+'.trim().isEmpty){',
       '        return const TypedReadFailed<'+name+'Entity>(',
       '          TypedReadFailure(TypedReadFailureKind.invalidInput));',
@@ -322,7 +323,11 @@ function readPage(op){
       '          FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text("Confirm create")),',
       '        ]));',
       '    if(confirmed!=true || !mounted || originalIdentity!=_identityEpoch)return;',
-      '    _controller.submit('+argsOf(op).map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
+      '    _controller.submit('+argsOf(op).map(p=>{
+        const field=(op.bodyFields??[]).find(f=>f.name===p);
+        const value='_'+p+'.text.trim()';
+        return p+': '+(field&&!field.required? '('+value+'.isEmpty?null:'+value+')':value);
+      }).join(', ')+');',
       '    } finally {_confirming=false;}',
       '  }',
     ]:[
