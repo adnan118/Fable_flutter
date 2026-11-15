@@ -489,7 +489,7 @@ function readPage(op){
   }
   parts.push(
     '          ],',
-    '        ],
+    '        ],',
     '      )),',
     '    );',
     '  }',
