@@ -181,7 +181,7 @@ test('RC116 no mutation for planning or rejected source and no fabricated APIs',
   const x=mockTypedFeatureInput();
   const plan=planTypedFeature(x);
   assert.equal(plan.liveE2EVerified,false);
-  assert.match(plan.unsupportedMethods,/POST/);
+  assert.match(plan.unsupportedMethods,/PUT\/PATCH\/DELETE/);
   const files=renderTypedFeature(plan);
   for(const source of files.values()){
     assert.doesNotMatch(source,/token=|playbackToken|FirebaseAuth/);
