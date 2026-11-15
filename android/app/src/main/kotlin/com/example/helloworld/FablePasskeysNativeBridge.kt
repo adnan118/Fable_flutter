@@ -49,7 +49,7 @@ internal class FablePasskeysNativeBridge(
                    else json.optString("rpId","")) ?: ""
             if(json.toString().length>131072||
                 !Regex("^[A-Za-z0-9_-]{16,1024}$").matches(challenge)||
-                rp.isNullOrEmpty()||rp.length>253||!rp.contains('.')||
+                rp.isEmpty()||rp.length>253||!rp.contains('.')||
                 rp.contains("..")||!rp.all{it.isLetterOrDigit()||it=='.'||it=='-'}){
                 result.error("PASSKEY_OPTIONS_INVALID","Untrusted WebAuthn challenge or relying party",null)
                 return@setMethodCallHandler
