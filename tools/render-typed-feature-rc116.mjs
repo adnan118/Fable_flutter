@@ -686,7 +686,7 @@ function readPageTest(op,featureId){
   for(const [i,p] of argsOf(op).entries())
     parts.push('    await tester.enterText(find.byType(TextField).at('+i+'),'+dart('safe-'+p)+');');
   parts.push(
-    '    await tester.tap(find.text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+');',
+    '    await tester.tap(find.text('+(op.method==='GET'?dart('Load verified data'):dart('Create verified record'))+'));',
     ...(op.method==='POST'?[
       '    await tester.pumpAndSettle();',
       '    await tester.tap(find.text("Confirm create"));',
@@ -762,7 +762,7 @@ function listDtoTest(op,featureId){
     "import 'package:flutter_test/flutter_test.dart';",
     "import 'package:fable_"+featureId+"/src/data/"+file+"_dto.dart';",
     'void main(){',
-    "  test('RC271 source-verified unpaginated list DTO rejects invalid meta and rows',(){",
+    "  test('RC272 source-verified "+(op.resultKind==='paginated-list'?'paginated':'unpaginated')+" list DTO rejects invalid meta and rows',(){",
     '    final json=<String,Object?>{',
     '      "items":<Object?>[<String,Object?>{',
     ...fields,
