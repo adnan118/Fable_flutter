@@ -41,6 +41,37 @@ class FablePasskeyRegistrationRepository {
   FablePasskeyRegistrationRepository({required this.gateway,required this.operations,
     required this.creator,required this.session,required this.decodeOptions,
     required this.decodeVerify});
+  /// Import exactly the current project's signed Fable operations. This
+  /// factory cannot infer endpoints for Other Backend and cannot mix sessions.
+  factory FablePasskeyRegistrationRepository.forFable({
+    required UnifiedApiClient client,
+    required FablePasskeyCreator creator,
+  }){
+    final catalog=client.contract;
+    if(catalog is! FableContract ||
+        client.adapter is! FableTransportAdapter){
+      throw ArgumentError('Verified Fable contract and transport required');
+    }
+    return FablePasskeyRegistrationRepository(
+      gateway:client,
+      operations:FablePasskeyRegistrationOperations.fable(catalog),
+      creator:creator,
+      session:client.session,
+      decodeOptions:(response)=>Map<String,dynamic>.from(
+        _verifiedFableData(response)),
+      decodeVerify:(response)=>Map<String,dynamic>.from(
+        _verifiedFableData(response)),
+    );
+  }
+
+  static Map _verifiedFableData(Object? response){
+    if(response is! Map || response['success']!=true ||
+        response['data'] is! Map){
+      throw const FormatException('Invalid Fable WebAuthn response envelope');
+    }
+    return response['data'] as Map;
+  }
+
   final BackendApiGateway gateway;
   final FablePasskeyRegistrationOperations operations;
   final FablePasskeyCreator creator;
