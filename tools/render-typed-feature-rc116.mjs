@@ -85,7 +85,7 @@ function adapter(op,projectHash){
     '    if(contract.contractHash!='+dart(projectHash)+' || op==null ||',
     '       op.method!='+dart(op.method)+' || op.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
     '       op.contractHash!='+dart(op.contractHash)+' || !op.requiresAuth ||',
-    '       !op.enforceAuth){',
+    '       !op.enforceAuth || op.credentialHeader!=null){'
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    }',
   ];
@@ -327,7 +327,8 @@ function projectNavigation(plan){
       '    if('+v+'==null || '+v+'.method!="GET" ||',
       '        '+v+'.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
       '        '+v+'.contractHash!='+dart(op.contractHash)+' ||',
-      '        !'+v+'.requiresAuth || !'+v+'.enforceAuth)return false;',
+      '        !'+v+'.requiresAuth || !'+v+'.enforceAuth ||',
+      '        '+v+'.credentialHeader!=null)return false;',
     );
   }
   parts.push(
@@ -350,9 +351,7 @@ function projectNavigation(plan){
     '    super.initState();',
     "    const raw=String.fromEnvironment('FABLE_API_BASE_URL');",
     '    final base=Uri.tryParse(raw);',
-    '    if(base!=null && base.hasAuthority &&',
-    '        (base.scheme=="https" ||',
-    '         (base.scheme=="http" && base.host=="localhost"))){',
+    '    if(base!=null && base.hasAuthority && base.scheme=="https"){',
     '      _gateway=FableAuthGateway(baseUri:base,contract:widget.contract);',
     '    }',
     '  }',
