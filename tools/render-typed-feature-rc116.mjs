@@ -693,14 +693,16 @@ function readPageTest(op,featureId){
     ]:[]),
     '    await tester.pump();',
     '    repository.pending.complete('+entity+'(',
-    ...(op.resultKind==='unpaginated-list'?[
+    ...(['unpaginated-list','paginated-list'].includes(op.resultKind)?[
       '      items:<'+name+'Item>[',
       '        '+name+'Item(',
       ...op.fields.filter(f=>f.required)
         .map(f=>'          '+f.name+': '+sample(f.type)+','),
       '        ),',
       '      ],',
-      '      count:1,maxRows:100,limitExceeded:false,',
+      ...(op.resultKind==='paginated-list'?[
+        '      page:1,limit:20,total:1,totalPages:1,',
+      ]:['      count:1,maxRows:100,limitExceeded:false,']),
     ]:op.fields.filter(f=>f.required)
       .map(f=>'      '+f.name+': '+sample(f.type)+',')),
     '    ));',
@@ -766,17 +768,29 @@ function listDtoTest(op,featureId){
     ...fields,
     '      }],',
     '      "meta":<String,Object?>{',
-    '        "mode":"unpaginated","count":1,',
-    '        "maxRows":100,"limitExceeded":false,',
+    ...(op.resultKind==='paginated-list'?[
+      '        "mode":"page","page":1,"limit":20,',
+      '        "total":1,"totalPages":1,',
+    ]:[
+      '        "mode":"unpaginated","count":1,',
+      '        "maxRows":100,"limitExceeded":false,',
+    ]),
     '      },',
     '    };',
     '    final parsed='+name+'Dto.fromJson(json).toDomain();',
     '    expect(parsed.items.length,1);',
     '    expect(parsed.items.single.'+op.fields[0].name+',isNotNull);',
-    '    expect(parsed.limitExceeded,isFalse);',
+    ...(op.resultKind==='paginated-list'?[
+      '    expect(parsed.page,1);',
+      '    expect(parsed.totalPages,1);',
+    ]:['    expect(parsed.limitExceeded,isFalse);']),
     '    json.remove("meta");',
     '    expect(()=>'+name+'Dto.fromJson(json),throwsFormatException);',
-    '    json["meta"]={"mode":"unpaginated","count":-1,"maxRows":100,"limitExceeded":false};',
+    ...(op.resultKind==='paginated-list'?[
+      '    json["meta"]={"mode":"page","page":-1,"limit":20,"total":1,"totalPages":1};',
+    ]:[
+      '    json["meta"]={"mode":"unpaginated","count":-1,"maxRows":100,"limitExceeded":false};',
+    ]),
     '    expect(()=>'+name+'Dto.fromJson(json),throwsFormatException);',
     '  });',
     '}',
@@ -784,7 +798,7 @@ function listDtoTest(op,featureId){
 }
 
 function dtoTest(op,featureId){
-  if(op.resultKind==='unpaginated-list')return listDtoTest(op,featureId);
+  if(['unpaginated-list','paginated-list'].includes(op.resultKind))return listDtoTest(op,featureId);
   const file=snake(op.operationId),name=op.className;
   const valid=op.fields.map(f=>{
     const value=f.type==='String'?dart('example'):f.type==='int'?'7':
