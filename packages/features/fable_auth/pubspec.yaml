@@ -12,6 +12,8 @@ dependencies:
     path: ../../fable_feature_contract
   fable_core:
     path: ../../fable_core
+  fable_biometrics:
+    path: ../fable_biometrics
   fable_design_system:
     path: ../../fable_design_system
 

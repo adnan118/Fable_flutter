@@ -148,6 +148,89 @@ class FableAuthGateway implements BackendApiGateway {
     return FableLoginOutcome.authenticated(mustChangePassword: mandatoryChange);
   }
 
+  bool get canUseNativePasskeys =>
+    _contract.isFeatureAvailable('biometrics') &&
+    _supportsAuthOperation('passkeys.authentication.options','POST',
+      '/auth/passkeys/authentication/options',requiresAuth:false) &&
+    _supportsAuthOperation('passkeys.authentication.verify','POST',
+      '/auth/passkeys/authentication/verify',requiresAuth:false);
+
+  /// Fable's native WebAuthn login is completed by the SAME Auth gateway
+  /// that persists password/OTP credentials. No arbitrary caller-supplied
+  /// "login result" can be injected to replace a verified session.
+  ///
+  /// The platform callback is only the OS credential assertion; Backend
+  /// independently verifies the RP, challenge, signature and DPoP device key.
+  Future<FableLoginOutcome?> loginWithNativePasskey({
+    required Future<Map<String,dynamic>?> Function(Map<String,dynamic>)
+      assertCredential,
+  }) async {
+    if(!canUseNativePasskeys){
+      throw StateError('Native Passkeys are disabled or not exported by this Fable project');
+    }
+    _requireAuthOperation('passkeys.authentication.options','POST',
+      '/auth/passkeys/authentication/options',requiresAuth:false);
+    _requireAuthOperation('passkeys.authentication.verify','POST',
+      '/auth/passkeys/authentication/verify',requiresAuth:false);
+    final identity=session.identityRevision;
+    final issued=await _api.request('passkeys.authentication.options',
+      authorized:false,body:<String,dynamic>{});
+    if(session.identityRevision!=identity)
+      throw FableApiException(409,'session_changed_discard_response');
+    final raw=_payload(issued.data);
+    final challengeId=raw['challengeId'],options=raw['options'];
+    final uuid=RegExp(
+      r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+      caseSensitive:false);
+    if(challengeId is! String||!uuid.hasMatch(challengeId)||
+        options is! Map||options['challenge'] is! String||
+        !RegExp(r'^[A-Za-z0-9_-]{16,1024}$')
+          .hasMatch(options['challenge'] as String)||
+        options['rpId'] is! String||
+        (options['rpId'] as String).isEmpty){
+      throw const FormatException('Invalid Fable native WebAuthn challenge');
+    }
+    final publicOptions=Map<String,dynamic>.unmodifiable(
+      Map<String,dynamic>.from(options));
+    final assertion=await assertCredential(publicOptions);
+    if(assertion==null)return null; // User cancelled the native platform UI.
+    if(session.identityRevision!=identity)
+      throw FableApiException(409,'session_changed_discard_response');
+    final response=assertion['response'];
+    if(assertion['id'] is! String||
+       assertion['rawId'] is! String||
+       assertion['type']!='public-key'||
+       response is! Map||
+       response['clientDataJSON'] is! String||
+       response['authenticatorData'] is! String||
+       response['signature'] is! String){
+      throw const FormatException('Invalid OS WebAuthn assertion result');
+    }
+    final installationId=await session.installationId();
+    if(session.identityRevision!=identity)
+      throw FableApiException(409,'session_changed_discard_response');
+    final result=await _api.request('passkeys.authentication.verify',
+      authorized:false,body:{
+        'challengeId':challengeId,
+        'response':Map<String,dynamic>.from(assertion),
+        'clientType':'flutter',
+        'installationId':installationId,
+      });
+    if(session.identityRevision!=identity)
+      throw FableApiException(409,'session_changed_discard_response');
+    final data=_payload(result.data);
+    // A pending additional challenge is not a completed authentication.
+    if(data['requiresTwoFactor']==true)
+      throw const FormatException('Passkey authentication is not finalized');
+    final mustChangePassword=_requiredPasswordChangeState(data);
+    final saved=await _saveNewSession(data,
+      newLogin:true,expectedIdentity:identity);
+    if(!saved)
+      throw FableApiException(409,'session_changed_discard_response');
+    return FableLoginOutcome.authenticated(
+      mustChangePassword:mustChangePassword);
+  }
+
   /// Request an OTP bound to the pending first-factor challenge. The challenge
   /// is transient memory-only data; it must never be persisted or logged.
   Future<String> requestSecondFactor(FableSecondFactorChallenge pending,
