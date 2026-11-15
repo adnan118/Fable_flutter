@@ -11,6 +11,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         nativeDpop = FableDpopNativeBridge(flutterEngine.dartExecutor.binaryMessenger)
+        nativePasskeys = FablePasskeysNativeBridge(
+            this,flutterEngine.dartExecutor.binaryMessenger
+        )
         nativeMedia = FableProtectedMediaBridge(
             flutterEngine.dartExecutor.binaryMessenger
         ).also { it.register(flutterEngine.platformViewsController.registry, this) }
