@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:fable_core/fable_core.dart';
+import 'package:fable_biometrics/fable_biometrics.dart';
 import 'sessions_page.dart';
 import 'change_password_page.dart';
 import 'password_reset_page.dart';
@@ -202,6 +203,45 @@ class _FableLoginPageState extends State<FableLoginPage> {
         setState(() => _message = 'Sign-in failed. Check contract and backend connection.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _loginWithPasskey() async {
+    if(_busy || _signedIn || _challenge!=null)return;
+    final auth=_client();
+    if(!auth.canUseNativePasskeys)return;
+    final identity=auth.session.identityRevision;
+    setState((){_busy=true;_message=null;});
+    try{
+      // The OS owns the passkey UX and private material. Only its signed
+      // WebAuthn assertion returns to Fable Auth's contract-checked gateway.
+      final outcome=await auth.loginWithNativePasskey(
+        assertCredential:FableNativePasskeys().getAssertion);
+      if(!mounted)return;
+      if(outcome==null){
+        if(auth.session.identityRevision==identity)
+          setState(()=>_message='Passkey authentication was cancelled.');
+        return;
+      }
+      if(!outcome.authenticated)throw const FormatException(
+        'Native passkey login did not complete authentication');
+      _password.clear();
+      setState((){
+        _signedIn=true;
+        _passwordChangeRequired=outcome.mustChangePassword;
+        _savedSessionAvailable=false;
+        _message=outcome.mustChangePassword
+          ?'Passkey verified. Backend requires a password change.'
+          :'Passkey verified and session securely saved.';
+      });
+    }on FableApiException catch(error){
+      if(mounted && auth.session.identityRevision==identity)
+        setState(()=>_message='Passkey login rejected: ${error.code}');
+    }catch(_){
+      if(mounted && auth.session.identityRevision==identity)
+        setState(()=>_message='Passkey login requires a verified app domain and supported device.');
+    }finally{
+      if(mounted)setState(()=>_busy=false);
     }
   }
 
@@ -409,6 +449,17 @@ class _FableLoginPageState extends State<FableLoginPage> {
             child:_busy?const SizedBox(height:18,width:18,child:CircularProgressIndicator(strokeWidth:2)):
               const Text('Sign in')),
         ]))),
+        if(!_signedIn&&_challenge==null&&!kIsWeb&&
+            (defaultTargetPlatform==TargetPlatform.android ||
+             defaultTargetPlatform==TargetPlatform.iOS)&&
+            (_url.isNotEmpty||widget.gateway!=null)&&
+            _client().canUseNativePasskeys)
+          Padding(padding:const EdgeInsets.only(top:14),
+            child:OutlinedButton.icon(
+              onPressed:_busy?null:_loginWithPasskey,
+              icon:const Icon(Icons.fingerprint),
+              label:const Text('Sign in with a passkey'),
+            )),
         if(!_signedIn&&_challenge==null&&
             (_url.isNotEmpty||widget.gateway!=null)&&
             _client().canLoginWithPublicOtp)
