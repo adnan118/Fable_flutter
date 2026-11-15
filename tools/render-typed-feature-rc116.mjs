@@ -244,12 +244,18 @@ function adapter(op,projectHash){
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);','    }');
   }
   parts.push(
+    ...(op.resultKind==='paginated-list'?[
+      '    if(page<1||page>100000)',
+      '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    ]:[]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
       (op.method==='POST'?',body:'+name+'CreateRequest('+
-        (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+');',
+        (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+
+      (op.resultKind==='paginated-list'
+        ?',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}':'')+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
@@ -262,7 +268,12 @@ function adapter(op,projectHash){
     "        throw const FormatException('Non-string DTO keys');",
     '      }',
     '      final data=Map<String,Object?>.from(raw);',
-    '      return '+name+'Dto.fromJson(data).toDomain();',
+    '      final entity='+name+'Dto.fromJson(data).toDomain();',
+    ...(op.resultKind==='paginated-list'?[
+      '      if(entity.page!=page)',
+      '        throw const FormatException("Unexpected page in Backend response");',
+    ]:[]),
+    '      return entity;',
     '    } on FableApiException catch(error){',
     '      final kind=switch(error.status){',
     '        401=>TypedReadFailureKind.unauthenticated,',
@@ -294,6 +305,11 @@ function application(op){
     '  Future<TypedReadResult<'+name+'Entity>> call('+named(op)+') async {',
     '    try {',
   ];
+  if(op.resultKind==='paginated-list'){
+    parts.push('      if(page<1 || page>100000)',
+      '        return const TypedReadFailed<'+name+'Entity>(',
+      '          TypedReadFailure(TypedReadFailureKind.invalidInput));');
+  }
   for(const p of requiredArgsOf(op)){
     parts.push('      if('+p+'.trim().isEmpty){',
       '        return const TypedReadFailed<'+name+'Entity>(',
