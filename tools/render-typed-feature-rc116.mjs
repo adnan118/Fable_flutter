@@ -66,6 +66,41 @@ function dto(op){
     '  );','}');
   return line(...parts);
 }
+// RC267: only independently signed, all-required bounded text fields.
+// The Data DTO is the single Map/JSON boundary for created entities.
+function createRequestDto(op){
+  const name=op.className,fs=op.bodyFields??[];
+  if(op.method!=='POST'||!fs.length)
+    throw Error('RC267 requires a verified POST request schema');
+  const parts=[
+    '// GENERATED: validated create payload; no raw UI Map or private credentials.',
+    'final class '+name+'CreateRequest {',
+    '  const '+name+'CreateRequest({'+fs.map(f=>'required this.'+f.name).join(', ')+'});',
+    ...fs.map(f=>'  final String '+f.name+';'),
+    '  Map<String,Object?> toJson(){',
+  ];
+  for(const field of fs){
+    const val=field.name;
+    parts.push(
+      '    if('+val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+' ||',
+      '        '+val+'.codeUnits.any((c)=>c<32||c==127))',
+      '      throw const FormatException('+dart('Invalid '+val+' create field')+');',
+    );
+    if(field.uuid)parts.push(
+      '    if(!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+val+'))',
+      '      throw const FormatException('+dart('Invalid '+val+' UUID')+');',
+    );
+  }
+  parts.push(
+    '    return <String,Object?>{',
+    ...fs.map(f=>'      '+dart(f.name)+': '+f.name+','),
+    '    };',
+    '  }',
+    '}',
+  );
+  return line(...parts);
+}
+
 function adapter(op,projectHash){
   const name=op.className,file=snake(op.operationId);
   const className='Fable'+name+'Repository';
@@ -77,6 +112,7 @@ function adapter(op,projectHash){
     "import '../domain/"+file+"_repository.dart';",
     "import '../domain/typed_read_result.dart';",
     "import '"+file+"_dto.dart';",
+    ...(op.method==='POST'?["import '"+file+"_create_request.dart';"]:[]),
     'final class '+className+' implements '+name+'Repository {',
     '  const '+className+'(this.gateway);',
     '  final FableAuthGateway gateway;',
@@ -99,7 +135,9 @@ function adapter(op,projectHash){
     '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
-      (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+');',
+      (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
+      (op.method==='POST'?',body:'+name+'CreateRequest('+
+        (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
@@ -528,6 +566,7 @@ export function renderTypedFeature(plan){
     put('lib/src/domain/'+slug+'_repository.dart',port(op));
     put('lib/src/application/'+slug+'_use_case.dart',application(op));
     put('lib/src/data/'+slug+'_dto.dart',dto(op));
+    if(op.method==='POST')put('lib/src/data/'+slug+'_create_request.dart',createRequestDto(op));
     put('lib/src/data/fable_'+slug+'_repository.dart',adapter(op,plan.contractHash));
     put('lib/src/presentation/'+slug+'_controller.dart',presentation(op));
     put('lib/src/presentation/'+slug+'_page.dart',readPage(op));
