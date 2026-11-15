@@ -117,6 +117,9 @@ export function generatePinnedTypedFeature(root,options={}){
   root=resolve(root);
   const {plan,files}=planPinnedTypedFeature(root,options);
   const destination=join(root,'packages/features/fable_'+plan.featureId);
+  const binding=options.wireApp===true
+    ?prepareAppBinding(root,plan.featureId):null;
+  let backup=null;
   if(options.apply===true){
     const parent=join(root,'packages/features');
     checkSourceDir(root);checkSourceDir(join(root,'packages'));
@@ -126,10 +129,24 @@ export function generatePinnedTypedFeature(root,options={}){
     }
     const stage=mkdtempSync(join(parent,'.rc116-'+plan.featureId+'-'));
     const prefix='packages/features/fable_'+plan.featureId+'/';
+    let created=false;
     try{
-      for(const [path,source] of files){
-        if(!path.startsWith(prefix))throw Error('RC116 output escaped target package');
-        const relativePath=path.slice(prefix.length);
+      // Durable source backups before any pubspec/registry overwrite.
+      if(binding){
+        checkSourceDir(join(root,'.fable'));
+        const backupParent=join(root,'.fable/feature-backups');
+        mkdirSync(backupParent,{recursive:true});
+        checkSourceDir(backupParent);
+        backup=mkdtempSync(join(backupParent,'rc266-'+plan.featureId+'-'));
+        writeFileSync(join(backup,'pubspec.yaml'),binding.originalYaml,{
+          encoding:'utf8',flag:'wx',
+        });
+        writeFileSync(join(backup,'feature_registry.dart'),
+          binding.originalRegistry,{encoding:'utf8',flag:'wx'});
+      }
+      for(const [name,source] of files){
+        if(!name.startsWith(prefix))throw Error('RC116 output escaped target package');
+        const relativePath=name.slice(prefix.length);
         if(!relativePath||relativePath.split('/').some(x=>!x||x==='..'||x==='.')){
           throw Error('RC116 path traversal rejected');
         }
@@ -139,6 +156,32 @@ export function generatePinnedTypedFeature(root,options={}){
       }
       if(existsSync(destination))throw Error('RC116 package appeared while staging');
       renameSync(stage,destination);
+      created=true;
+      if(binding){
+        // Fail rather than overwrite an independent concurrent app edit.
+        if(readFileSync(binding.yamlPath,'utf8')!==binding.originalYaml||
+           readFileSync(binding.registryPath,'utf8')!==binding.originalRegistry){
+          throw Error('RC266 app source changed during generation; sources not overwritten');
+        }
+        writeFileSync(binding.yamlPath,binding.pubspec,'utf8');
+        writeFileSync(binding.registryPath,binding.registry,'utf8');
+      }
+    }catch(error){
+      if(binding){
+        // Roll back only the exact bytes we authored; never erase a
+        // concurrent developer change. Durable copies remain in backup.
+        for(const [path,updated,original] of [
+          [binding.yamlPath,binding.pubspec,binding.originalYaml],
+          [binding.registryPath,binding.registry,binding.originalRegistry],
+        ]){
+          try{
+            if(readFileSync(path,'utf8')===updated)
+              writeFileSync(path,original,'utf8');
+          }catch{/* backup retained for manual recovery */}
+        }
+      }
+      if(created)rmSync(destination,{recursive:true,force:false});
+      throw error;
     }finally{
       if(existsSync(stage))rmSync(stage,{recursive:true,force:true});
     }
@@ -148,8 +191,12 @@ export function generatePinnedTypedFeature(root,options={}){
     contractHash:plan.contractHash,
     operations:plan.operations.map(op=>op.operationId),
     files:files.size,applied:options.apply===true,
+    appWired:options.apply===true&&binding!==null,
+    backup:backup?relative(root,backup):null,
     destination:'packages/features/fable_'+plan.featureId,
-    integrationStatus:'typed-package-generated; project DI/routes/pubspec review required',
+    integrationStatus:binding
+      ?'typed GET source + app registry/pubspec connected; real E2E pending'
+      :'typed GET source generated; host app registry/pubspec still require explicit binding',
     liveE2EVerified:false,
   };
 }
