@@ -55,9 +55,13 @@ class FablePasskeyManagementRepository {
     if(catalog is! FableContract||client.adapter is! FableTransportAdapter){
       throw ArgumentError('Passkey management requires a verified Fable transport');
     }
+    // RC242: استخدم عملية Passkey List فقط إن صدّرها عقد المشروع بالفعل.
+    // عقود Fable القديمة تبقى متوافقة ولا تحصل على مسار متخيّل.
+    final exportedList=listOperationId ??
+      (catalog.supports('passkeys.list')?'passkeys.list':null);
     return FablePasskeyManagementRepository._(client,
       FablePasskeyManagementOperations.fromFable(catalog,
-        listOperationId:listOperationId));
+        listOperationId:exportedList));
   }
 
   Future<int> _signedInEpoch() async {
