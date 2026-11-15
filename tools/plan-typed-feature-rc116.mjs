@@ -83,6 +83,69 @@ function checkSignedResponseShape(op,schema,fields){
   }
 }
 
+/**
+ * RC267: explicit, signed, narrow create-POST only. We do NOT invent fields
+ * from OpenAPI and we refuse security-sensitive/financial operations.
+ * Only all-required text fields are supported so generated UI never guesses
+ * boolean/date/currency behavior, secrets or a PATCH concurrency policy.
+ */
+function validatedCreateFields(op,route,id,featureId){
+  if(!/(?:^|[._-])create$/i.test(id))
+    fail('POST operation must declare an explicit create role: '+id);
+  const restricted=new Set(['auth','payments','biometrics','access_control',
+    'social','media','messaging','support']);
+  if(restricted.has(featureId)||
+     /(?:^|[.\/_-])(admin|security|billing|payment|delete|revoke|transfer|refund|token|otp|execute|purge|rotate|sync|cancel|disable|approve|send|charge|settle|run)(?:$|[.\/_-])/i.test(id+' '+op.path))
+    fail('sensitive POST operation requires a dedicated reviewed workflow: '+id);
+  const spec=route.requestBody;
+  if(!spec||spec.required!==true ||
+      !spec.content||Object.keys(spec.content).join(',')!=='application/json')
+    fail('signed create POST requires an explicit JSON request body: '+id);
+  const schema=spec.content['application/json']?.schema;
+  if(!schema||schema.type!=='object' ||
+      schema.additionalProperties!==false||
+      !schema.properties||typeof schema.properties!=='object'||
+      Array.isArray(schema.properties)||
+      !Array.isArray(schema.required)||
+      Object.keys(schema.properties).length<1||
+      Object.keys(schema.properties).length>16||
+      schema.required.length!==Object.keys(schema.properties).length||
+      new Set(schema.required).size!==schema.required.length)
+    fail('create POST requires a bounded all-required flat object: '+id);
+  const body=op.request?.body;
+  if(body?.type!=='object'||!Array.isArray(body.fields)||
+      body.fields.length!==schema.required.length)
+    fail('OpenAPI POST body lacks independently signed operation field evidence: '+id);
+  const signed=new Map();
+  for(const field of body.fields){
+    if(!field||typeof field.name!=='string'||signed.has(field.name)||
+       field.optional===true||!['string','text','uuid'].includes(field.type))
+      fail('unsupported signed create POST field: '+id);
+    signed.set(field.name,field);
+  }
+  const fields=[];
+  for(const [name,definition] of Object.entries(schema.properties)){
+    if(/(?:password|secret|token|otp|pin|cvv|card|bank|private|credential|session|amount|price|currency|balance|payment|billing|accesskey)/i.test(name))
+      fail('sensitive or financial create field requires a reviewed feature workflow: '+id);
+    if(!safeIdent(name)||!schema.required.includes(name)||
+       !definition||definition.type!=='string'||
+       Object.keys(definition).some(key=>!['type','format','description',
+         'minLength','maxLength'].includes(key))||
+       definition.minLength!==undefined && definition.minLength!==1 ||
+       definition.maxLength!==undefined &&
+         (!Number.isSafeInteger(definition.maxLength)||definition.maxLength<1||
+          definition.maxLength>512))
+      fail('unsafe or ambiguous create POST request field: '+id);
+    const signedField=signed.get(name);
+    if(!signedField ||
+       (definition.format??null)!==(signedField.type==='uuid'?'uuid':null))
+      fail('OpenAPI POST body does not match signed operation request fields: '+id);
+    fields.push({name,type:'String',required:true,
+      maxLength:definition.maxLength??512,uuid:signedField.type==='uuid'});
+  }
+  return fields;
+}
+
 export function planTypedFeature({featureId,contract,openapi,requirements,selectedFeatures}){
   if(typeof featureId!=='string'||!FEATURE.test(featureId)||featureId.length>64)
     fail('unsafe project feature identifier');
@@ -99,30 +162,31 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   const specs=requirements.features[featureId];
   if(!specs||specs.needsBackend!==true||!Array.isArray(specs.operations)||
       specs.operations.length===0||specs.operations.length>8)
-    fail('1..8 explicitly selected backend read operations required');
+    fail('1..8 explicitly selected signed GET/POST operations required');
   const seen=new Set(),names=new Set(),out=[];
   for(const spec of specs.operations){
     const id=spec?.operationId;
     if(typeof id!=='string'||!OP_ID.test(id)||seen.has(id))fail('unsafe/duplicate operation ID');
     seen.add(id);
-    if(spec.method!=='GET'||typeof spec.path!=='string'||!PATH.test(spec.path))
-      fail('read-only GET with a safe explicit contract path required for '+id);
+    if(!['GET','POST'].includes(spec.method)||typeof spec.path!=='string'||!PATH.test(spec.path))
+      fail('GET or reviewed create POST with a safe explicit contract path required for '+id);
     const candidates=contract.operations.filter(op=>op.operationId===id);
     if(candidates.length!==1)fail('operation not unique in project export: '+id);
     const op=candidates[0];
-    if(op.method!=='GET'||op.path!==spec.path||op.feature!==featureId||
+    if(op.method!==spec.method||op.path!==spec.path||op.feature!==featureId||
        op.public!==false||!HASH.test(op.contractHash)||
        !Array.isArray(op.permissions)||op.permissions.length===0)
       fail('operation/method/path/permission not pinned to Fable source: '+id);
     const normalized=spec.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}');
-    const route=openapi.paths[normalized]?.get;
+    const route=openapi.paths[normalized]?.[spec.method.toLowerCase()];
     if(!route||route.operationId!==id||
        route['x-fable-contract-hash']!==op.contractHash||
        route['x-fable-public']!==false||
        !Array.isArray(route.security)||route.security.length!==1||
        !Object.hasOwn(route.security[0],'bearerAuth'))
       fail('OpenAPI route/security/hash differs from Fable project contract: '+id);
-    if(route.requestBody!==undefined)fail('GET with request body is unsupported: '+id);
+    if(spec.method==='GET'&&route.requestBody!==undefined)
+      fail('GET with request body is unsupported: '+id);
     const params=[...spec.path.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(x=>x[1]);
     if(new Set(params).size!==params.length||params.some(x=>!safeIdent(x)))
       fail('unsafe path parameters: '+id);
@@ -159,11 +223,15 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     names.add(className);
     if(typeof op.contractHash!=='string')fail('missing operation hash');
     for(const value of [id,spec.path,op.contractHash])safeString(value);
-    out.push({operationId:id,method:'GET',path:spec.path,contractHash:op.contractHash,
-      className,fields,params});
+    const bodyFields=spec.method==='POST'
+      ?validatedCreateFields(op,route,id,featureId):[];
+    if(bodyFields.some(f=>params.includes(f.name)))
+      fail('request/body/path parameter name conflicts with response fields: '+id);
+    out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
+      className,fields,params,bodyFields});
   }
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'POST/PUT/PATCH/DELETE and ambiguous schemas deliberately rejected'};
+    unsupportedMethods:'PUT/PATCH/DELETE and unsupported POST schemas deliberately rejected'};
 }
