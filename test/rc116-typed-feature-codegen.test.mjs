@@ -100,6 +100,32 @@ test('RC116 generates two independent typed GET contracts with required and opti
   assert.match(presenter,/extends ChangeNotifier/);
   assert.doesNotMatch(presenter,/Dio|Map<String,dynamic>|FableAuthGateway/);
 });
+test('RC265 W5 emits real typed screens, navigation and a session-fenced repository',()=>{
+  const plan=planTypedFeature(mockTypedFeatureInput());
+  const files=renderTypedFeature(plan);
+  const base='packages/features/fable_orders_ci/';
+  const page=files.get(base+'lib/src/presentation/orders_ci_item_get_page.dart');
+  const repo=files.get(base+'lib/src/data/fable_orders_ci_item_get_repository.dart');
+  const nav=files.get(base+'lib/src/project_feature.dart');
+  const widgetTest=files.get(base+'test/orders_ci_item_get_page_test.dart');
+  const yaml=files.get(base+'pubspec.yaml');
+  assert.ok(page&&repo&&nav&&widgetTest);
+  assert.match(page,/OrdersCiItemGetPage extends StatefulWidget/);
+  assert.match(page,/Stream<Object\?> identityEvents/);
+  assert.match(page,/OrdersCiItemGetRepository repository/);
+  assert.match(page,/OrdersCiItemGetController/);
+  assert.doesNotMatch(page,/FableAuthGateway|Dio|BackendApiGateway|package:fable_core/);
+  assert.match(repo,/gateway.session.identityRevision!=identity/);
+  assert.match(nav,/extends FableFeature/);
+  assert.match(nav,/contract.contractHash/);
+  assert.match(nav,/FableOrdersCiItemGetRepository/);
+  assert.match(nav,/OrdersCiItemGetPage/);
+  assert.match(widgetTest,/events.add\(Object\(\)\)/);
+  assert.match(yaml,/fable_feature_contract:/);
+  assert.match(yaml,/material_ui:/);
+  assert.match(files.get(base+'lib/fable_orders_ci.dart'),/project_feature.dart/);
+});
+
 test('RC116 generated source passes generic RC115 dependency gate for any custom feature',()=>{
   withTemp(root=>{
     const plan=planTypedFeature(mockTypedFeatureInput());

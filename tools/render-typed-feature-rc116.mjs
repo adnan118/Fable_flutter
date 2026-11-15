@@ -85,7 +85,7 @@ function adapter(op,projectHash){
     '    if(contract.contractHash!='+dart(projectHash)+' || op==null ||',
     '       op.method!='+dart(op.method)+' || op.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
     '       op.contractHash!='+dart(op.contractHash)+' || !op.requiresAuth ||',
-    '       !op.enforceAuth){',
+    '       !op.enforceAuth || op.credentialHeader!=null){',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    }',
   ];
@@ -95,9 +95,13 @@ function adapter(op,projectHash){
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);','    }');
   }
   parts.push(
+    '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+');',
+    '      if(gateway.session.identityRevision!=identity){',
+    '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
+    '      }',
     '      final envelope=response.data;',
     "      if(envelope is! Map || envelope['success']!=true || envelope['data'] is! Map){",
     "        throw const FormatException('Invalid typed read success envelope');",
@@ -210,6 +214,232 @@ function presentation(op){
     '  }','}'];
   return line(...parts);
 }
+// RC265: real authenticated GET pages. The Controller remains responsible
+// for state, while the platform session event invalidates old-account results.
+function readPage(op){
+  const name=op.className,file=snake(op.operationId),parts=[
+    '// GENERATED W5: usable typed Fable read screen (live E2E pending).',
+    "import 'dart:async';",
+    "import 'package:material_ui/material_ui.dart';",
+    "import '../application/"+file+"_use_case.dart';",
+    "import '../domain/"+file+"_repository.dart';",
+    "import '"+file+"_controller.dart';",
+    'final class '+name+'Page extends StatefulWidget {',
+    '  const '+name+'Page({super.key,required this.repository,required this.identityEvents});',
+    '  final '+name+'Repository repository;',
+    '  final Stream<Object?> identityEvents;',
+    '  @override State<'+name+'Page> createState()=>_'+name+'PageState();',
+    '}',
+    'final class _'+name+'PageState extends State<'+name+'Page> {',
+    '  late '+name+'Controller _controller;',
+    '  StreamSubscription<Object?>? _identity;',
+  ];
+  for(const p of op.params)parts.push('  final _'+p+'=TextEditingController();');
+  parts.push(
+    '  void _redraw(){if(mounted)setState((){});}',
+    '  void _bind(){',
+    '    _controller='+name+'Controller('+name+'UseCase(widget.repository));',
+    '    _controller.addListener(_redraw);',
+    '    _identity=widget.identityEvents.listen((_){',
+    '      if(mounted)_controller.invalidate();',
+    '    });',
+    '  }',
+    '  @override void initState(){super.initState();_bind();}',
+    '  @override void didUpdateWidget(covariant '+name+'Page old){',
+    '    super.didUpdateWidget(old);',
+    '    if(!identical(old.repository,widget.repository) ||',
+    '        !identical(old.identityEvents,widget.identityEvents)){',
+    '      unawaited(_identity?.cancel());',
+    '      _controller.removeListener(_redraw);_controller.dispose();',
+    '      _bind();',
+    '    }',
+    '  }',
+    '  @override void dispose(){',
+    '    unawaited(_identity?.cancel());',
+    '    _controller.removeListener(_redraw);_controller.dispose();',
+    ...op.params.map(p=>'    _'+p+'.dispose();'),
+    '    super.dispose();',
+    '  }',
+    '  void _load(){_controller.load('+
+      op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');}',
+    '  @override Widget build(BuildContext context){',
+    '    final state=_controller.state;',
+    '    return Scaffold(',
+    '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
+    '      body:SafeArea(child:ListView(',
+    '        padding:const EdgeInsets.all(20),',
+    '        children:[',
+    '          const Text("Authenticated source-bound GET"),',
+  );
+  for(const p of op.params)parts.push(
+    '          TextField(controller:_'+p+',maxLength:191,',
+    '            decoration:const InputDecoration(labelText:'+dart(p)+'),',
+    '            enabled:state is! '+name+'Loading),');
+  parts.push(
+    '          FilledButton.icon(',
+    '            onPressed:state is '+name+'Loading?null:_load,',
+    '            icon:const Icon(Icons.refresh),',
+    '            label:const Text("Load verified data"),',
+    '          ),',
+    '          if(state is '+name+'Loading)',
+    '            const LinearProgressIndicator(),',
+    '          if(state is '+name+'Failed)',
+    '            Text("Read unavailable: "+state.kind.name),',
+    '          if(state is '+name+'Ready)...[',
+  );
+  for(const f of op.fields)
+    parts.push('            Text('+dart(f.name+': ')+'+state.value.'+f.name+'.toString()),');
+  parts.push(
+    '          ],',
+    '        ],',
+    '      )),',
+    '    );',
+    '  }',
+    '}',
+  );
+  return line(...parts);
+}
+
+// RC265: FableFeature-compatible navigation. The feature is only launched
+// if every signed selected GET is still present in this EXACT backend export.
+function projectNavigation(plan){
+  const pascal=plan.featureId.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join('');
+  const className='Fable'+pascal+'ProjectFeature',home='Fable'+pascal+'Home';
+  const value=plan.featureId.replace(/_([a-z])/g,(_,c)=>c.toUpperCase())+'ProjectFeature';
+  const parts=[
+    '// GENERATED W5: real navigation bound to a single signed Fable project.',
+    "import 'package:material_ui/material_ui.dart';",
+    "import 'package:fable_core/fable_core.dart';",
+    "import 'package:fable_feature_contract/fable_feature_contract.dart';",
+    ...plan.operations.map(op=>"import 'presentation/"+snake(op.operationId)+"_page.dart';"),
+    ...plan.operations.map(op=>"import 'data/fable_"+snake(op.operationId)+"_repository.dart';"),
+    'const '+value+'='+className+'();',
+    'final class '+className+' extends FableFeature {',
+    '  const '+className+'():super(id:'+dart(plan.featureId)+',',
+    '    title:'+dart(pascal)+',icon:Icons.dashboard_outlined);',
+    '  @override bool canLaunchFable(FableContract contract){',
+    '    if(contract.contractHash!='+dart(plan.contractHash)+')return false;',
+  ];
+  for(const [index,op] of plan.operations.entries()){
+    const v='op'+index;
+    parts.push(
+      '    final '+v+'=contract.operations['+dart(op.operationId)+'];',
+      '    if('+v+'==null || '+v+'.method!="GET" ||',
+      '        '+v+'.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
+      '        '+v+'.contractHash!='+dart(op.contractHash)+' ||',
+      '        !'+v+'.requiresAuth || !'+v+'.enforceAuth ||',
+      '        '+v+'.credentialHeader!=null)return false;',
+    );
+  }
+  parts.push(
+    '    return true;',
+    '  }',
+    '  @override Widget screen(FableContract contract){',
+    '    if(!canLaunchFable(contract))',
+    '      throw StateError("Project feature contract mismatch");',
+    '    return '+home+'(contract:contract);',
+    '  }',
+    '}',
+    'final class '+home+' extends StatefulWidget {',
+    '  const '+home+'({super.key,required this.contract});',
+    '  final FableContract contract;',
+    '  @override State<'+home+'> createState()=>_'+home+'State();',
+    '}',
+    'final class _'+home+'State extends State<'+home+'> {',
+    '  FableAuthGateway? _gateway;',
+    '  @override void initState(){',
+    '    super.initState();',
+    "    const raw=String.fromEnvironment('FABLE_API_BASE_URL');",
+    '    final base=Uri.tryParse(raw);',
+    '    if(base!=null && base.hasAuthority && base.scheme=="https"){',
+    '      _gateway=FableAuthGateway(baseUri:base,contract:widget.contract);',
+    '    }',
+    '  }',
+    '  @override void dispose(){_gateway?.dispose();super.dispose();}',
+    '  @override Widget build(BuildContext context)=>Scaffold(',
+    '    appBar:AppBar(title:const Text('+dart(pascal)+')),',
+    '    body:SafeArea(child:ListView(',
+    '      padding:const EdgeInsets.all(20),children:[',
+    '      if(_gateway==null)',
+    '        const Text("A verified Fable API HTTPS endpoint is required."),',
+    '      if(_gateway!=null)...[',
+  );
+  for(const op of plan.operations){
+    parts.push(
+      '        ListTile(',
+      '          title:const Text('+dart(op.operationId)+'),',
+      '          leading:const Icon(Icons.dataset_outlined),',
+      '          trailing:const Icon(Icons.chevron_right),',
+      '          onTap:()=>Navigator.of(context).push(',
+      '            MaterialPageRoute<void>(builder:(_)=>'+op.className+'Page(',
+      '              repository:Fable'+op.className+'Repository(_gateway!),',
+      '              identityEvents:_gateway!.session.identityEvents))),',
+      '        ),',
+    );
+  }
+  parts.push(
+    '      ],',
+    '    ])),',
+    '  );',
+    '}',
+  );
+  return {source:line(...parts),value};
+}
+
+function readPageTest(op,featureId){
+  const name=op.className,file=snake(op.operationId);
+  const sample=type=>type==='String'?dart('example'):
+    type==='int'?'7':type==='double'?'1.5':'true';
+  const entity=name+'Entity',parts=[
+    "import 'dart:async';",
+    "import 'package:flutter_test/flutter_test.dart';",
+    "import 'package:material_ui/material_ui.dart';",
+    "import 'package:fable_"+featureId+"/src/domain/"+file+"_repository.dart';",
+    "import 'package:fable_"+featureId+"/src/domain/"+file+"_entity.dart';",
+    "import 'package:fable_"+featureId+"/src/presentation/"+file+"_page.dart';",
+    'final class _FakeRepository implements '+name+'Repository {',
+    '  final pending=Completer<'+entity+'>();',
+    '  @override Future<'+entity+'> load('+named(op)+')=>pending.future;',
+    '}',
+    'void main(){',
+    '  testWidgets("RC265 signed GET screen uses injected typed repository",',
+    '      (tester)async{',
+    '    final events=StreamController<Object?>.broadcast(sync:true);',
+    '    final repository=_FakeRepository();',
+    '    await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
+    '      repository:repository,identityEvents:events.stream)));',
+  ];
+  for(const [i,p] of op.params.entries())
+    parts.push('    await tester.enterText(find.byType(TextField).at('+i+'),'+dart('safe-'+p)+');');
+  parts.push(
+    '    await tester.tap(find.text("Load verified data"));',
+    '    await tester.pump();',
+    '    repository.pending.complete('+entity+'(',
+    ...op.fields.filter(f=>f.required)
+      .map(f=>'      '+f.name+': '+sample(f.type)+','),
+    '    ));',
+    '    await tester.pumpAndSettle();',
+    '    expect(find.text('+dart(op.fields[0].name+': '+
+      (op.fields[0].required?
+        (op.fields[0].type==='String'?'example':
+          op.fields[0].type==='int'?'7':
+          op.fields[0].type==='double'?'1.5':'true'):'null'))+
+      '),findsOneWidget);',
+    '    events.add(Object());',
+    '    await tester.pump();',
+    '    expect(find.text('+dart(op.fields[0].name+': '+
+      (op.fields[0].required?
+        (op.fields[0].type==='String'?'example':
+          op.fields[0].type==='int'?'7':
+          op.fields[0].type==='double'?'1.5':'true'):'null'))+
+      '),findsNothing);',
+    '    await events.close();',
+    '  });',
+    '}',
+  );
+  return line(...parts);
+}
+
 function failure(){
   return line(
     '// GENERATED by Fable RC116: safe typed failure and result.',
@@ -283,6 +513,9 @@ export function renderTypedFeature(plan){
     '    sdk: flutter',
     '  fable_core:',
     '    path: ../../fable_core',
+    '  material_ui: ^1.0.0',
+    '  fable_feature_contract:',
+    '    path: ../../fable_feature_contract',
     'dev_dependencies:',
     '  flutter_test:',
     '    sdk: flutter'));
@@ -296,23 +529,31 @@ export function renderTypedFeature(plan){
     put('lib/src/data/'+slug+'_dto.dart',dto(op));
     put('lib/src/data/fable_'+slug+'_repository.dart',adapter(op,plan.contractHash));
     put('lib/src/presentation/'+slug+'_controller.dart',presentation(op));
+    put('lib/src/presentation/'+slug+'_page.dart',readPage(op));
     put('test/'+slug+'_dto_test.dart',dtoTest(op,feature));
+    put('test/'+slug+'_page_test.dart',readPageTest(op,feature));
     exports.push("export 'src/domain/"+slug+"_entity.dart';",
       "export 'src/domain/"+slug+"_repository.dart';",
       "export 'src/application/"+slug+"_use_case.dart';",
       "export 'src/data/fable_"+slug+"_repository.dart';",
-      "export 'src/presentation/"+slug+"_controller.dart';");
+      "export 'src/presentation/"+slug+"_controller.dart';",
+      "export 'src/presentation/"+slug+"_page.dart';");
   }
+  const navigation=projectNavigation(plan);
+  put('lib/src/project_feature.dart',navigation.source);
   put('lib/fable_'+feature+'.dart',line(
-    '// GENERATED by Fable RC116: project-bound typed feature exports.',
-    ...exports));
+    '// GENERATED by Fable RC265: typed feature + real read screens.',
+    ...exports,
+    "export 'src/project_feature.dart';"));
   put('FABLE_GENERATED_README.md',line(
     '# Generated read feature: '+feature,
     'Project ID: '+plan.projectId,
     'Pinned Backend Contract SHA-256: '+plan.contractHash,
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
     'Supported: verified authenticated GET with strict flat-object DTO only.',
-    'Other Backend, mutations, runtime-only schemas, and UI/DI wiring are NOT generated.',
+    'Typed read screen, feature navigation, repository and state source are generated.',
+    'Host app still needs an explicit verified feature registry/pubspec binding.',
+    'Other Backend, mutations and runtime-only schemas are NOT generated.',
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
