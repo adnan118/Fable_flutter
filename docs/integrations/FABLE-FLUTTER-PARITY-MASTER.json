@@ -1351,5 +1351,29 @@
       "Existing unbound Fable sessions need controlled migration and actual device login/refresh validation",
       "Other Backend uses separate contract and auth, with Fable DPoP prohibited"
     ]
+  },
+  "w5TypedListMilestone": {
+    "lastSourceUpdate": "RC280",
+    "date": "2026-11-15",
+    "backendReferenceCommit": "b61e7d6bb69f4d330a16dc045bc7428a07f8be46",
+    "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
+    "sourceImplemented": [
+      "RC274 signed global search DB pagination with server-side filtering",
+      "RC278 signed non-sensitive text/boolean equality filters",
+      "RC279 Backend numeric/datetime invalid-range guards",
+      "RC280 Flutter atomic signed integer/decimal Min/Max filters and infinite-scroll reset"
+    ],
+    "sourceTestEvidence": "6/6 isolated JavaScript test callbacks executed against actual current planner/renderer source; no full Node/Flutter SDK run",
+    "unverified": [
+      "generated Nest+Prisma+MySQL E2E",
+      "Dart/Flutter SDK analyze and tests",
+      "Android/iOS native E2E",
+      "real role/tenant/scope authorization"
+    ],
+    "w5Closed": false,
+    "w6Closed": false,
+    "w7Closed": false,
+    "w8Closed": false,
+    "productionReady": false
   }
 }

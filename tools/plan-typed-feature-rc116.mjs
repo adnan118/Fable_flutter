@@ -255,9 +255,27 @@ function signedPaginatedListFields(op,schema,route){
     }
     if(type)filters.push({name,type});
   }
-  // Small verified subset of the eligible signed fields, with no arbitrary
-  // query-map editor exposed to the user.
-  return {fields,searchPageSupported,filters:filters.slice(0,3)};
+  // Keep the existing RC278 exact-match selection. Add at most one paired
+  // numeric range only if both bounds, the numeric base and the visible item
+  // are independently confirmed in the signed contract + OpenAPI.
+  const selected=filters.slice(0,3);
+  for(const item of signed.item.fields){
+    if(selected.length>1)break; // a pair is atomic; never emit a lone bound
+    const name=item?.name,declared=fields.find(f=>f.name===name);
+    if(!['int','decimal'].includes(item?.type)||!safeIdent(name)||
+       /(?:password|secret|token|otp|pin|private|credential|session|payment|billing|accesskey)/i.test(name)||
+       item.protectedAuth===true||item.sensitiveFilterSort===true||
+       declared?.type!==(item.type==='int'?'int':'double'))continue;
+    const min=name+'Min',max=name+'Max';
+    if(!safeIdent(min)||!safeIdent(max)||
+       selected.some(f=>[name,min,max].includes(f.name)))continue;
+    const numeric=[q.get(name),q.get(min),q.get(max)];
+    if(!numeric.every(v=>v?.type==='number' && v.required!==true &&
+       v.format==null && v.enum===undefined &&
+       v.minimum===undefined && v.maximum===undefined))continue;
+    selected.push({name:min,type:item.type},{name:max,type:item.type});
+  }
+  return {fields,searchPageSupported,filters:selected};
 }
 
 function validatedCreateFields(op,route,id,featureId){

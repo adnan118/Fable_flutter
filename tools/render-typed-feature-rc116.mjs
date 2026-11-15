@@ -9,6 +9,10 @@ const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
 const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
 const pagedFilters=op=>op.resultKind==='paginated-list'?(op.filters??[]):[];
+const numericRangePairs=op=>pagedFilters(op).filter(f=>
+  ['int','decimal'].includes(f.type) && f.name.endsWith('Min') &&
+  pagedFilters(op).some(g=>g.name===f.name.slice(0,-3)+'Max' && g.type===f.type)
+).map(f=>[f.name,f.name.slice(0,-3)+'Max']);
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name),
   ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[]),
@@ -285,6 +289,24 @@ function adapter(op,projectHash){
         '))',
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
     ]),
+    // RC280: signed numeric query parameters are emitted as URL query strings,
+    // while the Backend contract determines whether the number is int/decimal.
+    ...pagedFilters(op).filter(f=>['int','decimal'].includes(f.type)).flatMap(f=>[
+      '    if('+f.name+'!=null && '+f.name+'.trim().isNotEmpty){',
+      '      final parsed='+(f.type==='int'?'int.tryParse':'double.tryParse')+
+        '('+f.name+'.trim());',
+      '      if(parsed==null'+(f.type==='int'
+        ?' || parsed < -2147483648 || parsed > 2147483647'
+        :' || !parsed.isFinite')+')',
+      '        throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      '    }',
+    ]),
+    ...numericRangePairs(op).flatMap(([min,max])=>[
+      '    if('+min+'!=null && '+max+'!=null &&',
+      '       '+min+'.trim().isNotEmpty && '+max+'.trim().isNotEmpty &&',
+      '       double.parse('+min+'.trim())>double.parse('+max+'.trim()))',
+      '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    ]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
@@ -547,7 +569,7 @@ function infiniteListPage(op){
     '  late '+name+'Controller _controller;',
     '  final ScrollController _scroll=ScrollController();',
     ...(op.supportsSearch?['  final TextEditingController _search=TextEditingController();']:[]),
-    ...pagedFilters(op).map(f=>f.type==='text'
+    ...pagedFilters(op).map(f=>f.type!=='boolean'
       ?'  final TextEditingController _filter'+f.name+'=TextEditingController();'
       :'  String? _filter'+f.name+';'),
     '  StreamSubscription<Object?>? _identity;',
@@ -571,7 +593,7 @@ function infiniteListPage(op){
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
-    ...pagedFilters(op).map(f=>f.type==='text'
+    ...pagedFilters(op).map(f=>f.type!=='boolean'
       ?'      _filter'+f.name+'.clear();'
       :'      _filter'+f.name+'=null;'),
     '      _controller.invalidate();',
@@ -593,7 +615,7 @@ function infiniteListPage(op){
     '       !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
-    ...pagedFilters(op).map(f=>f.type==='text'
+    ...pagedFilters(op).map(f=>f.type!=='boolean'
       ?'      _filter'+f.name+'.clear();'
       :'      _filter'+f.name+'=null;'),
     '      unawaited(_identity?.cancel());',
@@ -606,14 +628,14 @@ function infiniteListPage(op){
     '    _controller.removeListener(_redraw);_controller.dispose();',
     '    _scroll.removeListener(_maybeLoadMore);_scroll.dispose();',
     ...(op.supportsSearch?['    _search.dispose();']:[]),
-    ...pagedFilters(op).filter(f=>f.type==='text').map(f=>
+    ...pagedFilters(op).filter(f=>f.type!=='boolean').map(f=>
       '    _filter'+f.name+'.dispose();'),
     '    super.dispose();',
     '  }',
     '  void _refresh(){',
     '    _controller.reset('+
       [...(op.supportsSearch?['search:_search.text.trim()']:[]),
-        ...pagedFilters(op).map(f=>f.name+':' + (f.type==='text'
+        ...pagedFilters(op).map(f=>f.name+':' + (f.type!=='boolean'
           ?'(_filter'+f.name+'.text.trim().isEmpty?null:_filter'+f.name+'.text.trim())'
           :'_filter'+f.name))].join(',')+');',
     '    if(_scroll.hasClients)_scroll.jumpTo(0);',
@@ -640,12 +662,19 @@ function infiniteListPage(op){
       '              tooltip:"Search all results",icon:const Icon(Icons.search)),',
       '          ])),',
     ]:[]),
-    ...pagedFilters(op).flatMap(f=>f.type==='text'?[
+    ...pagedFilters(op).flatMap(f=>f.type!=='boolean'?[
       '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
-      '          child:TextField(controller:_filter'+f.name+',maxLength:191,',
+      '          child:TextField(controller:_filter'+f.name+',maxLength:'+
+        (f.type==='text'?'191':'32')+',',
+      ...(['int','decimal'].includes(f.type)?[
+        '            keyboardType:const TextInputType.numberWithOptions('+
+          'signed:true,decimal:'+(f.type==='decimal'?'true':'false')+'),',
+      ]:[]),
       '            textInputAction:TextInputAction.search,',
       '            decoration:const InputDecoration(labelText:'+
-        dart('Exact filter: '+f.name)+'),',
+        dart(f.type==='text'?'Exact filter: '+f.name:
+          f.name.endsWith('Min')?'Minimum: '+f.name.slice(0,-3):
+          'Maximum: '+f.name.slice(0,-3))+'),',
       '            onSubmitted:(_)=>_refresh(),',
       '          )),',
     ]:[
