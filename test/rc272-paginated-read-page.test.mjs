@@ -105,6 +105,8 @@ test('RC272 refuses unsigned pagination, untrusted query binding and malformed p
     f=>{f.openapi.paths['/catalog'].get.parameters[0].schema.type='string';},
     f=>{f.openapi.paths['/catalog'].get.parameters[2].schema.enum=['search'];},
     f=>{f.contract.operations[0].request.query.push({key:'secret',type:'string',required:true});},
+    f=>{f.contract.operations[0].recordAccess='managed-entity:company';},
+    f=>{f.contract.operations[0].response.data.meta.page.limit='string';},
     f=>{f.contract.operations[0].request.headers=['X-Admin'];},
     f=>{f.contract.operations[0].request.body={type:'object'};},
     f=>{f.contract.operations[0].response.data.meta.modes=['search'];},
