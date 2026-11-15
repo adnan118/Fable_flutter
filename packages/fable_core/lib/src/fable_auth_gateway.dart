@@ -165,6 +165,9 @@ class FableAuthGateway implements BackendApiGateway {
     required Future<Map<String,dynamic>?> Function(Map<String,dynamic>)
       assertCredential,
   }) async {
+    if(!canUseNativePasskeys){
+      throw StateError('Native Passkeys are disabled or not exported by this Fable project');
+    }
     _requireAuthOperation('passkeys.authentication.options','POST',
       '/auth/passkeys/authentication/options',requiresAuth:false);
     _requireAuthOperation('passkeys.authentication.verify','POST',
