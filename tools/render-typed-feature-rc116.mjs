@@ -232,7 +232,7 @@ function readPage(op){
     '}',
     'final class _'+name+'PageState extends State<'+name+'Page> {',
     '  late '+name+'Controller _controller;',
-    '  StreamSubscription<FableIdentityEvent>? _identity;',
+    '  StreamSubscription<Object?>? _identity;',
   ];
   for(const p of op.params)parts.push('  final _'+p+'=TextEditingController();');
   parts.push(
