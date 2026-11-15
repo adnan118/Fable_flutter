@@ -6,6 +6,7 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     private var nativeMedia: FableProtectedMediaBridge? = null
     private var nativeDpop: FableDpopNativeBridge? = null
+    private var nativePasskeys: FablePasskeysNativeBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
