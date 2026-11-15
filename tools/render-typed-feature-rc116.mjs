@@ -8,12 +8,25 @@ const dart=value=>JSON.stringify(value);
 const lower=value=>value[0].toLowerCase()+value.slice(1);
 const argsOf=op=>[...op.params,...(op.bodyFields??[]).map(f=>f.name)];
 const requiredArgsOf=op=>[...op.params,...(op.bodyFields??[]).filter(f=>f.required).map(f=>f.name)];
+const pagedFilters=op=>op.resultKind==='paginated-list'?(op.filters??[]):[];
 const params=op=>[...op.params.map(x=>'required String '+x),
   ...(op.bodyFields??[]).map(f=>(f.required?'required String ':'String? ')+f.name),
-  ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[])]:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['required int page',...(op.supportsSearch?['String? search']:[]),
+    ...pagedFilters(op).map(f=>'String? '+f.name)]:[])].join(', ');
 const named=op=>(argsOf(op).length||op.resultKind==='paginated-list')?'{'+params(op)+'}':'';
 const callArgs=op=>[...argsOf(op).map(x=>x+': '+x),
-  ...(op.resultKind==='paginated-list'?['page: page',...(op.supportsSearch?['search: search']:[])]:[])].join(', ');
+  ...(op.resultKind==='paginated-list'?['page: page',...(op.supportsSearch?['search: search']:[]),
+    ...pagedFilters(op).map(f=>f.name+': '+f.name)]:[])].join(', ');
+function signedPageQuery(op){
+  if(op.resultKind!=='paginated-list')return '';
+  const parts=['"page":page','"limit":20',
+    '"mode":'+(op.supportsSearch?'search!=null && search.trim().isNotEmpty?"search":"page"':'"page"')];
+  if(op.supportsSearch)parts.push('if(search!=null && search.trim().isNotEmpty)"q":search.trim()');
+  for(const filter of pagedFilters(op))
+    parts.push('if('+filter.name+'!=null && '+filter.name+'.trim().isNotEmpty)'+
+      dart(filter.name)+':'+filter.name+'.trim()');
+  return ',query:<String,dynamic>{'+parts.join(',')+'}';
+}
 const fieldType=f=>f.type+(f.required?'':'?');
 function assertPlan(plan){
   if(!plan||!Array.isArray(plan.operations)||!plan.operations.length||
@@ -264,17 +277,21 @@ function adapter(op,projectHash){
         '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
       ]:[]),
     ]:[]),
+    ...pagedFilters(op).flatMap(f=>[
+      '    if('+f.name+'!=null && '+f.name+'.trim().isNotEmpty && ('+
+        f.name+'.trim().length>191 || '+
+        f.name+'.codeUnits.any((c)=>c<32||c==127)'+
+        (f.type==='boolean'?' || ('+f.name+'.trim()!="true" && '+f.name+'.trim()!="false")':'')+
+        '))',
+      '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    ]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
       (op.method==='POST'?',body:'+name+'CreateRequest('+
         (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+
-      (op.resultKind==='paginated-list'
-        ?(op.supportsSearch
-          ?',query:<String,dynamic>{"page":page,"limit":20,"mode":search!=null && search.trim().isNotEmpty?"search":"page",if(search!=null && search.trim().isNotEmpty)"q":search.trim()}'
-          :',query:<String,dynamic>{"page":page,"limit":20,"mode":"page"}')
-        :'')+');',
+      signedPageQuery(op)+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
@@ -380,17 +397,22 @@ function infiniteListController(op){
     '  bool _loading=false,_completed=false,_closed=false;',
     '  int _epoch=0,_nextPage=1,_total=0;',
     ...(op.supportsSearch?['  String _search="";']:[]),
+    ...pagedFilters(op).map(f=>'  String? _'+f.name+';'),
     '  TypedReadFailureKind? _error;',
     '  bool get isLoading=>_loading;',
     '  bool get hasMore=>!_completed;',
     '  int get total=>_total;',
     '  TypedReadFailureKind? get error=>_error;',
-    '  void reset('+ (op.supportsSearch?'{String search=""}':'') +'){',
+    '  void reset('+ ((op.supportsSearch||pagedFilters(op).length)
+      ?'{'+[...(op.supportsSearch?['String search=""']:[]),
+        ...pagedFilters(op).map(f=>'String? '+f.name)].join(', ')+'}'
+      :'') +'){',
     '    if(_closed)return;',
     '    _epoch++;_items.clear();',
     '    _nextPage=1;_total=0;_loading=false;_completed=false;',
     '    _error=null;',
     ...(op.supportsSearch?['    _search=search.trim();']:[]),
+    ...pagedFilters(op).map(f=>'    _'+f.name+'='+f.name+'?.trim();'),
     '    notifyListeners();',
     '  }',
     '  Future<void> loadNext()async{',
@@ -399,7 +421,8 @@ function infiniteListController(op){
     '    _loading=true;notifyListeners();',
     '    try{',
     '      final result=await _read.call(page:requested'+
-      (op.supportsSearch?',search:_search':'')+');',
+      (op.supportsSearch?',search:_search':'')+
+      pagedFilters(op).map(f=>','+f.name+':_'+f.name).join('')+');',
     '      if(_closed || _epoch!=epoch)return;',
     '      switch(result){',
     '        case TypedReadSuccess<'+name+'Entity> ok:',
@@ -524,6 +547,9 @@ function infiniteListPage(op){
     '  late '+name+'Controller _controller;',
     '  final ScrollController _scroll=ScrollController();',
     ...(op.supportsSearch?['  final TextEditingController _search=TextEditingController();']:[]),
+    ...pagedFilters(op).map(f=>f.type==='text'
+      ?'  final TextEditingController _filter'+f.name+'=TextEditingController();'
+      :'  String? _filter'+f.name+';'),
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
     '  void _redraw(){',
@@ -545,6 +571,9 @@ function infiniteListPage(op){
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
+    ...pagedFilters(op).map(f=>f.type==='text'
+      ?'      _filter'+f.name+'.clear();'
+      :'      _filter'+f.name+'=null;'),
     '      _controller.invalidate();',
     '    });',
     '    final bindingIdentity=_identityEpoch;',
@@ -564,6 +593,9 @@ function infiniteListPage(op){
     '       !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
+    ...pagedFilters(op).map(f=>f.type==='text'
+      ?'      _filter'+f.name+'.clear();'
+      :'      _filter'+f.name+'=null;'),
     '      unawaited(_identity?.cancel());',
     '      _controller.removeListener(_redraw);_controller.dispose();',
     '      _bind();',
@@ -574,10 +606,16 @@ function infiniteListPage(op){
     '    _controller.removeListener(_redraw);_controller.dispose();',
     '    _scroll.removeListener(_maybeLoadMore);_scroll.dispose();',
     ...(op.supportsSearch?['    _search.dispose();']:[]),
+    ...pagedFilters(op).filter(f=>f.type==='text').map(f=>
+      '    _filter'+f.name+'.dispose();'),
     '    super.dispose();',
     '  }',
     '  void _refresh(){',
-    '    _controller.reset('+(op.supportsSearch?'search:_search.text.trim()':'')+');',
+    '    _controller.reset('+
+      [...(op.supportsSearch?['search:_search.text.trim()']:[]),
+        ...pagedFilters(op).map(f=>f.name+':' + (f.type==='text'
+          ?'(_filter'+f.name+'.text.trim().isEmpty?null:_filter'+f.name+'.text.trim())'
+          :'_filter'+f.name))].join(',')+');',
     '    if(_scroll.hasClients)_scroll.jumpTo(0);',
     '    unawaited(_controller.loadNext());',
     '  }',
@@ -602,6 +640,31 @@ function infiniteListPage(op){
       '              tooltip:"Search all results",icon:const Icon(Icons.search)),',
       '          ])),',
     ]:[]),
+    ...pagedFilters(op).flatMap(f=>f.type==='text'?[
+      '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+      '          child:TextField(controller:_filter'+f.name+',maxLength:191,',
+      '            textInputAction:TextInputAction.search,',
+      '            decoration:const InputDecoration(labelText:'+
+        dart('Exact filter: '+f.name)+'),',
+      '            onSubmitted:(_)=>_refresh(),',
+      '          )),',
+    ]:[
+      '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+      '          child:DropdownButtonFormField<String>(',
+      '            value:_filter'+f.name+',',
+      '            decoration:const InputDecoration(labelText:'+
+        dart('Exact filter: '+f.name)+'),',
+      '            items:const [',
+      '              DropdownMenuItem<String>(value:null,child:Text("Any")),',
+      '              DropdownMenuItem<String>(value:"true",child:Text("True")),',
+      '              DropdownMenuItem<String>(value:"false",child:Text("False")),',
+      '            ],',
+      '            onChanged:(value){',
+      '              setState(()=>_filter'+f.name+'=value);',
+      '              _refresh();',
+      '            },',
+      '          )),',
+    ]),
     '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
     '          child:Row(children:[',
     '            Expanded(child:Text("Loaded "+items.length.toString()+',
@@ -947,10 +1010,13 @@ function infiniteListPageTest(op,featureId){
     '  final calls=<int>[];',
     '  bool emptyIntermediate=false;',
     ...(op.supportsSearch?['  final searches=<String?>[];']:[]),
+    ...pagedFilters(op).map(f=>'  final seen'+f.name+'=<String?>[];'),
     '  @override Future<'+name+'Entity> load({required int page'+
-      (op.supportsSearch?',String? search':'')+'})async{',
+      (op.supportsSearch?',String? search':'')+
+      pagedFilters(op).map(f=>',String? '+f.name).join('')+'})async{',
     '    calls.add(page);',
     ...(op.supportsSearch?['    searches.add(search);']:[]),
+    ...pagedFilters(op).map(f=>'    seen'+f.name+'.add('+f.name+');'),
     '    return '+name+'Entity(',
     '      items:emptyIntermediate?<'+name+'Item>[]:<'+name+'Item>[',
     '        '+name+'Item(',

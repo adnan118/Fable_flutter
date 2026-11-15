@@ -227,7 +227,37 @@ function signedPaginatedListFields(op,schema,route){
   if(byMode.size!==2)fail('paginated mode alternative missing: '+id);
   const fields=dataFields(schema.properties.items.items);
   checkSignedResponseShape(op,schema.properties.items.items,fields,signed.item);
-  return {fields,searchPageSupported};
+  // RC278: only exact-match filters proven by BOTH the signed query and
+  // signed response item projection. This deliberately excludes fields that
+  // may be protected/sensitive, numeric ranges, dates, and arbitrary sort.
+  const reserved=new Set(['page','limit','mode','q','locale','sort']);
+  const signedItems=new Map(signed.item.fields.map(f=>[f.name,f]));
+  const filters=[];
+  for(const [name,source] of q){
+    if(reserved.has(name)||!safeIdent(name)||
+       /(?:password|secret|token|otp|pin|private|credential|session|payment|billing|accesskey)/i.test(name))
+      continue;
+    const item=signedItems.get(name);
+    const declaredItem=fields.find(f=>f.name===name);
+    if(!item||!declaredItem||source.type!=='string'||
+       source.required===true||source.format!=null||
+       source.minimum!==undefined||source.maximum!==undefined||
+       item.protectedAuth===true||item.sensitiveFilterSort===true)
+      continue;
+    let type=null;
+    if(item.type==='boolean'&&declaredItem.type==='bool'&&
+       Array.isArray(source.enum)&&source.enum.length===2&&
+       source.enum.includes('true')&&source.enum.includes('false')){
+      type='boolean';
+    }else if(['string','text'].includes(item.type)&&
+             declaredItem.type==='String'&&source.enum===undefined){
+      type='text';
+    }
+    if(type)filters.push({name,type});
+  }
+  // Small verified subset of the eligible signed fields, with no arbitrary
+  // query-map editor exposed to the user.
+  return {fields,searchPageSupported,filters:filters.slice(0,3)};
 }
 
 function validatedCreateFields(op,route,id,featureId){
@@ -398,7 +428,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,bodyFields,resultKind,
-      supportsSearch:paginated?.searchPageSupported??false});
+      supportsSearch:paginated?.searchPageSupported??false,
+      filters:paginated?.filters??[]});
   }
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
