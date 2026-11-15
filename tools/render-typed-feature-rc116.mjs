@@ -284,7 +284,7 @@ function readPage(op){
     '          if(state is '+name+'Ready)...[',
   );
   for(const f of op.fields)
-    parts.push('            Text('+dart(f.name)+': "+state.value.'+f.name+'.toString()),');
+    parts.push('            Text('+dart(f.name+': ')+'+state.value.'+f.name+'.toString()),');
   parts.push(
     '          ],',
     '        ],',
