@@ -533,7 +533,7 @@ function infiniteListPage(op){
     '        unawaited(_controller.loadNext());',
     '    });',
     '  }',
-    '  @override void initState(){
+    '  @override void initState(){',
     '    super.initState();',
     '    _scroll.addListener(_maybeLoadMore);',
     '    _bind();',
