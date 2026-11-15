@@ -148,6 +148,13 @@ class FableAuthGateway implements BackendApiGateway {
     return FableLoginOutcome.authenticated(mustChangePassword: mandatoryChange);
   }
 
+  bool get canUseNativePasskeys =>
+    _contract.isFeatureAvailable('biometrics') &&
+    _supportsAuthOperation('passkeys.authentication.options','POST',
+      '/auth/passkeys/authentication/options',requiresAuth:false) &&
+    _supportsAuthOperation('passkeys.authentication.verify','POST',
+      '/auth/passkeys/authentication/verify',requiresAuth:false);
+
   /// Fable's native WebAuthn login is completed by the SAME Auth gateway
   /// that persists password/OTP credentials. No arbitrary caller-supplied
   /// "login result" can be injected to replace a verified session.
