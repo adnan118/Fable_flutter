@@ -221,6 +221,8 @@ class _SecurityState extends State<FableSecuritySettingsPage> {
           message='Native Passkey registration was cancelled.';
         }
       });
+      if(created&&widget.gateway.canManageAccountPasskeys)
+        unawaited(_loadPasskeys());
     }catch(_){
       if(mounted&&widget.gateway.session.identityRevision==revision)
         setState(()=>message='Passkey registration failed. Check your authorization and app domain.');
