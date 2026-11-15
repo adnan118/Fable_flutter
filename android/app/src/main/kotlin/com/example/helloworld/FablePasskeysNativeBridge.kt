@@ -45,8 +45,8 @@ internal class FablePasskeysNativeBridge(
                 result.error("PASSKEY_OPTIONS_INVALID","Malformed server options",null);return@setMethodCallHandler
             }
             val challenge=json.optString("challenge","")
-            val rp=if(call.method=="register")json.optJSONObject("rp")?.optString("id","")
-                   else json.optString("rpId","")
+            val rp=(if(call.method=="register")json.optJSONObject("rp")?.optString("id","")
+                   else json.optString("rpId","")) ?: ""
             if(json.toString().length>131072||
                 !Regex("^[A-Za-z0-9_-]{16,1024}$").matches(challenge)||
                 rp.isNullOrEmpty()||rp.length>253||!rp.contains('.')||
