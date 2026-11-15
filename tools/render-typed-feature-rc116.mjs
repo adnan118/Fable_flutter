@@ -886,10 +886,10 @@ export function renderTypedFeature(plan){
     'Project ID: '+plan.projectId,
     'Pinned Backend Contract SHA-256: '+plan.contractHash,
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
-    'Supported: authenticated GET with signed flat-object or unpaginated-list DTO and reviewed create POST.',
+    'Supported: signed object GET, unpaginated GET, bounded page-mode GET and reviewed create POST.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, paginated/search lists, unbound query, PUT/PATCH/DELETE, sensitive POST and ambiguous schemas are NOT generated.',
+    'Other Backend, search/filter/sort, tenant-scoped pagination, PUT/PATCH/DELETE, sensitive POST and ambiguous schemas are NOT generated.',
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
