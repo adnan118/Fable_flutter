@@ -127,7 +127,7 @@ class FablePasskeyRepository {
       fableClient.contract is FableContract &&
       fableClient.adapter is FableTransportAdapter &&
       operations.verifyId=='passkeys.authentication.verify';
-    if(fableLogin && !fableClient.session.sharesIdentityNamespaceWith(session)){
+    if(fableClient!=null && fableLogin && !fableClient.session.sharesIdentityNamespaceWith(session)){
       throw StateError('Fable passkey session does not match the verified API client');
     }
     final installationId=fableLogin?await session.installationId():null;
