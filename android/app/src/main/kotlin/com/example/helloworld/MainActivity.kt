@@ -31,6 +31,8 @@ class MainActivity : FlutterActivity() {
         nativeMedia = null
         nativeDpop?.dispose()
         nativeDpop = null
+        nativePasskeys?.dispose()
+        nativePasskeys = null
         super.onDestroy()
     }
 }
