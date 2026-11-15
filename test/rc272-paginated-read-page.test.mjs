@@ -89,12 +89,12 @@ test('RC272 emits signed page-mode query, typed page metadata and previous/next 
   assert.match(dto,/meta\['totalPages'\] as int/);
   assert.match(dto,/input\.length>20/);
   assert.match(entity,/final int page,limit,total,totalPages/);
-  assert.match(page,/Previous page/);
-  assert.match(page,/Next page/);
-  assert.match(page,/_page=1;/);
-  assert.match(page,/state\.value\.page<state\.value\.totalPages/);
+  assert.match(page,/ScrollController/);
+  assert.match(page,/ListView\.builder/);
+  assert.match(page,/_controller\.loadNext\(\)/);
+  assert.match(page,/extentAfter<400/);
   assert.match(dtoTest,/"mode":"page","page":1,"limit":20/);
-  assert.match(widget,/page:1,limit:20,total:1,totalPages:1/);
+  assert.match(widget,/repository\.calls,contains\(1\)/);
   assert.doesNotMatch(page,/Dio|package:fable_core|Map<String,dynamic>/);
 });
 
