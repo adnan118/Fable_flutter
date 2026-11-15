@@ -46,6 +46,10 @@ dependencies {
     val media3Version = "1.11.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
+    // RC254: system-owned WebAuthn credential creation and assertion.
+    val credentialsVersion = "1.6.0"
+    implementation("androidx.credentials:credentials:$credentialsVersion")
+    implementation("androidx.credentials:credentials-play-services-auth:$credentialsVersion")
 }
 
 flutter {
