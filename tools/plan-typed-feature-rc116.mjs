@@ -130,6 +130,101 @@ function signedUnpaginatedListFields(op,schema){
   return fields;
 }
 
+/**
+ * RC272 page-only read mode from a signed Backend list.paginated contract.
+ * Search/filter/sort are intentionally NOT sent: their opt-in consumer UI is
+ * a separate W5 gate. We still validate the full signed query declaration.
+ */
+function signedPaginatedListFields(op,schema,route){
+  const signed=op.response?.data,id=op.operationId;
+  if(op.recordAccess!=null &&
+     !['permission-wide','global','none'].includes(op.recordAccess))
+    fail('scoped/managed-entity pagination requires an explicitly bound tenant context: '+id);
+  if(op.method!=='GET'||!id.endsWith('.list.paginated')||
+     op.response?.kind!=='fable-success-envelope'||
+     signed?.type!=='list-result'||signed.item?.type!=='object'||
+     !Array.isArray(signed.item.fields)||
+     !Array.isArray(signed.meta?.modes)||
+     signed.meta.modes.length!==2||
+     !['page','search'].every(mode=>signed.meta.modes.includes(mode))||
+     !Array.isArray(op.request?.query) ||
+     (op.request?.headers??[]).length!==0||
+     op.request?.body!==undefined)
+    fail('paginated read requires signed page/search metadata and no custom headers: '+id);
+  const q=new Map();
+  for(const raw of op.request.query){
+    if(typeof raw?.key!=='string'||q.has(raw.key)||
+       !/^[A-Za-z][A-Za-z0-9_]{0,50}$/.test(raw.key)||
+       raw.required===true)
+      fail('paginated read has unbound/invalid required query: '+id);
+    q.set(raw.key,raw);
+  }
+  const declared=(route.parameters??[]).filter(p=>p.in==='query');
+  if(declared.length!==q.size)fail('paginated query does not match signed route: '+id);
+  for(const spec of declared){
+    const source=q.get(spec.name);
+    if(!source||spec.required===true||!spec.schema||
+       spec.schema.type!==(source.type??'string')||
+       (spec.schema.format??null)!==(source.format??null)||
+       JSON.stringify(spec.schema.enum??null)!==JSON.stringify(source.enum??null)||
+       (spec.schema.minimum??null)!==(source.minimum??null)||
+       (spec.schema.maximum??null)!==(source.maximum??null))
+      fail('paginated query schema differs from signed Backend: '+id);
+  }
+  for(const name of ['page','limit']){
+    const source=q.get(name);
+    if(!source||source.type!=='integer'||source.minimum!==1||
+       (name==='limit'&&(typeof source.maximum!=='number'||source.maximum<20||
+         source.maximum>500)))
+      fail('paginated query must publish bounded page/limit: '+id);
+  }
+  const mode=q.get('mode');
+  if(!mode||mode.type!=='string'||
+     !Array.isArray(mode.enum)||mode.enum.length!==2||
+     !['page','search'].every(x=>mode.enum.includes(x)))
+    fail('paginated query mode must be explicit page/search enum: '+id);
+  if(!schema||schema.type!=='object'||!schema.properties||
+     Object.keys(schema.properties).sort().join(',')!=='items,meta'||
+     schema.properties.items?.type!=='array'||
+     !Array.isArray(schema.required)||schema.required.length!==2||
+     !['items','meta'].every(x=>schema.required.includes(x)))
+    fail('paginated items/meta result missing: '+id);
+  const variants=schema.properties.meta?.oneOf;
+  if(!Array.isArray(variants)||variants.length!==2)
+    fail('paginated metadata requires signed page/search alternatives: '+id);
+  const expectedMetadata={
+    page:{page:'integer',limit:'integer',total:'integer',totalPages:'integer'},
+    search:{limit:'integer',count:'integer'},
+  };
+  for(const mode of ['page','search']){
+    const declared=signed.meta?.[mode];
+    if(!declared ||
+       JSON.stringify(Object.entries(declared).sort())!==
+       JSON.stringify(Object.entries(expectedMetadata[mode]).sort()))
+      fail('paginated source metadata semantics are not verified: '+id);
+  }
+  const byMode=new Map();
+  for(const entry of variants){
+    const mode=entry?.properties?.mode?.const;
+    if(!['page','search'].includes(mode)||byMode.has(mode)||
+       entry?.type!=='object'||!Array.isArray(entry.required))
+      fail('invalid paginated meta alternative: '+id);
+    const names=mode==='page'
+      ?['mode','page','limit','total','totalPages']
+      :['mode','limit','count'];
+    if(entry.required.length!==names.length||
+       Object.keys(entry.properties).sort().join(',')!==names.slice().sort().join(',')||
+       !names.every(x=>entry.required.includes(x))||
+       names.slice(1).some(x=>entry.properties[x]?.type!=='integer'))
+      fail('paginated meta fields drift from Backend modes: '+id);
+    byMode.set(mode,entry);
+  }
+  if(byMode.size!==2)fail('paginated mode alternative missing: '+id);
+  const fields=dataFields(schema.properties.items.items);
+  checkSignedResponseShape(op,schema.properties.items.items,fields,signed.item);
+  return fields;
+}
+
 function validatedCreateFields(op,route,id,featureId){
   // A generic typed form cannot invent fresh OTP/Idempotency-Key headers,
   // managed-entity scope, URL query binding, or server-issued revisions.
@@ -247,10 +342,14 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const params=[...spec.path.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(x=>x[1]);
     if(new Set(params).size!==params.length||params.some(x=>!safeIdent(x)))
       fail('unsafe path parameters: '+id);
-    if((route.parameters??[]).length!==params.length||
-       params.some(name=>!route.parameters.some(p=>p.in==='path'&&
+    const routePathParams=(route.parameters??[]).filter(p=>p.in==='path');
+    const extraParams=(route.parameters??[]).filter(p=>p.in!=='path');
+    if(routePathParams.length!==params.length||
+       (extraParams.length>0&&!id.endsWith('.list.paginated'))||
+       extraParams.some(p=>p.in!=='query')||
+       params.some(name=>!routePathParams.some(p=>
          p.name===name&&p.required===true&&p.schema?.type==='string')))
-      fail('only explicitly-typed string path parameters supported: '+id);
+      fail('only signed path parameters and explicitly reviewed paginated queries supported: '+id);
     // Verify parameter formats against the signed operation response/source,
     // not merely against the OpenAPI route's untrusted body.
     const sourceParams=op.request?.params;
@@ -273,10 +372,13 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
        !schema.required.includes('success')||!schema.required.includes('data'))
       fail('strict Fable success envelope and data schema required: '+id);
     const resultKind=op.response?.data?.type==='list-result'
-      ?'unpaginated-list':'single';
+      ?(op.operationId.endsWith('.list.paginated')?'paginated-list':'unpaginated-list')
+      :'single';
     const fields=resultKind==='unpaginated-list'
       ?signedUnpaginatedListFields(op,schema.properties?.data)
-      :dataFields(schema.properties?.data);
+      :resultKind==='paginated-list'
+        ?signedPaginatedListFields(op,schema.properties?.data,route)
+        :dataFields(schema.properties?.data);
     if(resultKind==='single')
       checkSignedResponseShape(op,schema.properties.data,fields);
     const className=typeName(id);
