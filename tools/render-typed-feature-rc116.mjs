@@ -547,6 +547,9 @@ function infiniteListPage(op){
     '  late '+name+'Controller _controller;',
     '  final ScrollController _scroll=ScrollController();',
     ...(op.supportsSearch?['  final TextEditingController _search=TextEditingController();']:[]),
+    ...pagedFilters(op).map(f=>f.type==='text'
+      ?'  final TextEditingController _filter'+f.name+'=TextEditingController();'
+      :'  String? _filter'+f.name+';'),
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
     '  void _redraw(){',
@@ -568,6 +571,9 @@ function infiniteListPage(op){
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
+    ...pagedFilters(op).map(f=>f.type==='text'
+      ?'      _filter'+f.name+'.clear();'
+      :'      _filter'+f.name+'=null;'),
     '      _controller.invalidate();',
     '    });',
     '    final bindingIdentity=_identityEpoch;',
@@ -587,6 +593,9 @@ function infiniteListPage(op){
     '       !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
+    ...pagedFilters(op).map(f=>f.type==='text'
+      ?'      _filter'+f.name+'.clear();'
+      :'      _filter'+f.name+'=null;'),
     '      unawaited(_identity?.cancel());',
     '      _controller.removeListener(_redraw);_controller.dispose();',
     '      _bind();',
@@ -597,10 +606,16 @@ function infiniteListPage(op){
     '    _controller.removeListener(_redraw);_controller.dispose();',
     '    _scroll.removeListener(_maybeLoadMore);_scroll.dispose();',
     ...(op.supportsSearch?['    _search.dispose();']:[]),
+    ...pagedFilters(op).filter(f=>f.type==='text').map(f=>
+      '    _filter'+f.name+'.dispose();'),
     '    super.dispose();',
     '  }',
     '  void _refresh(){',
-    '    _controller.reset('+(op.supportsSearch?'search:_search.text.trim()':'')+');',
+    '    _controller.reset('+
+      [...(op.supportsSearch?['search:_search.text.trim()']:[]),
+        ...pagedFilters(op).map(f=>f.name+':' + (f.type==='text'
+          ?'(_filter'+f.name+'.text.trim().isEmpty?null:_filter'+f.name+'.text.trim())'
+          :'_filter'+f.name))].join(',')+');',
     '    if(_scroll.hasClients)_scroll.jumpTo(0);',
     '    unawaited(_controller.loadNext());',
     '  }',
@@ -625,6 +640,31 @@ function infiniteListPage(op){
       '              tooltip:"Search all results",icon:const Icon(Icons.search)),',
       '          ])),',
     ]:[]),
+    ...pagedFilters(op).flatMap(f=>f.type==='text'?[
+      '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+      '          child:TextField(controller:_filter'+f.name+',maxLength:191,',
+      '            textInputAction:TextInputAction.search,',
+      '            decoration:const InputDecoration(labelText:'+
+        dart('Exact filter: '+f.name)+'),',
+      '            onSubmitted:(_)=>_refresh(),',
+      '          )),',
+    ]:[
+      '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+      '          child:DropdownButtonFormField<String>(',
+      '            value:_filter'+f.name+',',
+      '            decoration:const InputDecoration(labelText:'+
+        dart('Exact filter: '+f.name)+'),',
+      '            items:const [',
+      '              DropdownMenuItem<String>(value:null,child:Text("Any")),',
+      '              DropdownMenuItem<String>(value:"true",child:Text("True")),',
+      '              DropdownMenuItem<String>(value:"false",child:Text("False")),',
+      '            ],',
+      '            onChanged:(value){',
+      '              setState(()=>_filter'+f.name+'=value);',
+      '              _refresh();',
+      '            },',
+      '          )),',
+    ]),
     '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
     '          child:Row(children:[',
     '            Expanded(child:Text("Loaded "+items.length.toString()+',
