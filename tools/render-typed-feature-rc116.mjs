@@ -957,7 +957,9 @@ function infiniteListPageTest(op,featureId){
     ...fields,
     '        ),',
     '      ],',
-    '      mode:'+name+'ListMode.'+(op.supportsSearch?'(search!=null && search.isNotEmpty?"search":"page")':'page')+',',
+    '      mode:'+(op.supportsSearch
+      ?'(search!=null && search.isNotEmpty?'+name+'ListMode.search:'+name+'ListMode.page)'
+      :name+'ListMode.page')+',',
     '      page:page,limit:20,total:40,totalPages:2,',
     '    );',
     '  }',
@@ -1124,7 +1126,7 @@ function listDtoTest(op,featureId){
     '    expect(parsed.items.length,1);',
     '    expect(parsed.items.single.'+op.fields[0].name+',isNotNull);',
     ...(op.resultKind==='paginated-list'?[
-      '    expect(parsed.mode,'+name+'ListMode.page);',
+      '    expect(parsed.mode.name,"page");',
       '    expect(parsed.page,1);',
       '    expect(parsed.totalPages,1);',
     ]:['    expect(parsed.limitExceeded,isFalse);']),
