@@ -84,6 +84,10 @@ test('RC270 generates nullable optional DTO and omits untouched fields on create
   assert.doesNotMatch(useCase,/if\(notes\.trim\(\)\.isEmpty\)/);
   assert.match(ui,/notes: \(_notes\.text\.trim\(\)\.isEmpty\?null:_notes\.text\.trim\(\)\)/);
   assert.match(ui,/parentId: \(_parentId\.text\.trim\(\)\.isEmpty\?null:_parentId\.text\.trim\(\)\)/);
+  assert.match(ui,/state is OrdersCiRecordCreateReady \|\| state is OrdersCiRecordCreateFailed/);
+  assert.match(ui,/Check Backend, then start a new create/);
+  assert.match(ui,/_controller\.invalidate\(\)/);
+  assert.match(ui,/before attempting another create, check the Backend state/i);
   assert.doesNotMatch(ui,/package:fable_core|Dio|dynamic/);
 });
 
