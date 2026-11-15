@@ -24,6 +24,7 @@ function validDomain(rpId){
   if(typeof rpId!=='string'||rpId.length>253||
       rpId!==rpId.toLowerCase()||
       !rpId.includes('.')||rpId.startsWith('*.')||
+      /^\d+(?:\.\d+){3}$/.test(rpId)||
       !/^[a-z0-9.-]+$/.test(rpId)||forbiddenDomain.test(rpId)||
       ['example.com','example.org','example.net','localhost'].includes(rpId))
     return false;
