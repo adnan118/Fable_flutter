@@ -1873,15 +1873,27 @@ export function renderTypedFeature(plan){
   // RC299: this factory binds only selected, contract-verified managed GETs.
   // It never injects X-Fable-Managed-Entity-Id into unrelated operations.
   const managedOperations=plan.operations.filter(op=>op.managedScoped===true);
+  const managedApprovals=new Map();
+  for(const op of managedOperations){
+    const old=managedApprovals.get(op.operationId);
+    if(old&&old!==op.contractHash)throw Error('Managed contract hash conflict');
+    managedApprovals.set(op.operationId,op.contractHash);
+    if(op.preconditionRead){
+      const id=op.preconditionRead.operationId,hash=op.preconditionRead.contractHash;
+      const prior=managedApprovals.get(id);
+      if(prior&&prior!==hash)throw Error('Managed signed fresh GET conflict');
+      managedApprovals.set(id,hash);
+    }
+  }
   if(managedOperations.length){
     const className='Fable'+feature.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join('')+'ManagedBinding';
     const lines=[
-      '// GENERATED RC299: managed GET-only, signed operation allowlist.',
+      '// GENERATED RC301: managed GET and signed conditional writes only.',
       "import 'package:fable_core/fable_core.dart';",
       'abstract final class '+className+' {',
       '  static const projectHash='+dart(plan.contractHash)+';',
       '  static const approvedHashes=<String,String>{',
-      ...managedOperations.map(op=>'    '+dart(op.operationId)+':'+dart(op.contractHash)+','),
+      ...[...managedApprovals].map(([id,hash])=>'    '+dart(id)+':'+dart(hash)+','),
       '  };',
       '  static FableManagedEntityPinnedGateway create({',
       '    required Uri baseUri,required FableContract contract,',
@@ -1907,7 +1919,11 @@ export function renderTypedFeature(plan){
       operations:managedOperations.map(op=>({
         operationId:op.operationId,contractHash:op.contractHash,
         method:op.method,recordAccess:op.recordAccess,
+        ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
       })),
+      approvedDependencies:[...managedApprovals].filter(([id])=>
+        !managedOperations.some(op=>op.operationId===id))
+        .map(([operationId,contractHash])=>({operationId,contractHash})),
       requiresExplicitSelectedEntity:true,
       requiresIdentityBoundSelection:true,
       needsScopeEventsOnPages:true,
