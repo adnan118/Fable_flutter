@@ -21,3 +21,4 @@ export 'src/fable_locale_preference.dart';
 export 'src/fable_app_locale_scope.dart';
 export 'src/fable_managed_entity_scope.dart';
 export 'src/fable_managed_entity_pinned_gateway.dart';
+export 'src/fable_idempotency_key.dart';
