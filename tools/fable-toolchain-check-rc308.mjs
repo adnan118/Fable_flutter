@@ -6,7 +6,7 @@
  * 'java -version', to fail fast before the operator chooses to build.
  */
 import {readFileSync} from 'node:fs';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {resolve,join} from 'node:path';
 
@@ -73,22 +73,24 @@ function main(){
         throw Error('Cannot check '+bin+': '+desc.slice(0,300));
       }
     };
-    const flutter=JSON.parse(run(process.platform==='win32'?'flutter.bat':'flutter',
-      ['--version','--machine']));
+    // On Windows flutter is a .bat script, so invoke it through cmd.exe.
+    // Fixed arguments only; no user-controlled command is interpolated.
+    const flutter=JSON.parse(process.platform==='win32'
+      ?run('cmd.exe',['/d','/s','/c','flutter --version --machine'])
+      :run('flutter',['--version','--machine']));
     check(flutter.frameworkVersion===lock.flutter.version,
       'Installed Flutter '+flutter.frameworkVersion+' is not '+lock.flutter.version);
     check(typeof flutter.dartSdkVersion==='string'&&
       flutter.dartSdkVersion.startsWith(lock.dart.version),
       'Installed Dart '+flutter.dartSdkVersion+' is not '+lock.dart.version);
     const java=process.platform==='win32'?'java.exe':'java';
-    let javaVersion='';
-    try{javaVersion=execFileSync(java,['-version'],{
+    const javaResult=spawnSync(java,['-version'],{
       encoding:'utf8',timeout:15000,windowsHide:true,
       stdio:['ignore','pipe','pipe']
-    });}catch(error){
-      javaVersion=error.stderr?.toString()||'';
-      if(!/version/.test(javaVersion))throw Error('Java not accessible');
-    }
+    });
+    check(javaResult.status===0&&!javaResult.error,
+      'Java not accessible: '+String(javaResult.stderr||javaResult.error).slice(0,150));
+    const javaVersion=(javaResult.stderr||'')+(javaResult.stdout||'');
     const javaMatch=javaVersion.match(/version\s+"(\d+)[^"]*"/);
     check(javaMatch&&Number(javaMatch[1])>=expected.javaMajor,
       'Java 17+ is required by AGP and Flutter; detected '+javaVersion.slice(0,120));
