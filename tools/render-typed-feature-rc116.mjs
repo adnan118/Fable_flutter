@@ -1014,6 +1014,7 @@ function readPage(op){
 // RC265: FableFeature-compatible navigation. The feature is only launched
 // if every signed selected GET is still present in this EXACT backend export.
 function projectNavigation(plan){
+  const managedPresent=plan.operations.some(op=>op.managedScoped===true);
   const pascal=plan.featureId.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join('');
   const className='Fable'+pascal+'ProjectFeature',home='Fable'+pascal+'Home';
   const value=plan.featureId.replace(/_([a-z])/g,(_,c)=>c.toUpperCase())+'ProjectFeature';
@@ -1024,6 +1025,7 @@ function projectNavigation(plan){
     "import 'package:fable_feature_contract/fable_feature_contract.dart';",
     ...plan.operations.map(op=>"import 'presentation/"+snake(op.operationId)+"_page.dart';"),
     ...plan.operations.map(op=>"import 'data/fable_"+snake(op.operationId)+"_repository.dart';"),
+    ...(managedPresent?["import 'data/"+snake(plan.featureId)+"_managed_binding.dart';"]:[]),
     'const '+value+'='+className+'();',
     'final class '+className+' extends FableFeature {',
     '  const '+className+'():super(id:'+dart(plan.featureId)+',',
@@ -1039,7 +1041,11 @@ function projectNavigation(plan){
       '        '+v+'.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
       '        '+v+'.contractHash!='+dart(op.contractHash)+' ||',
       '        !'+v+'.requiresAuth || !'+v+'.enforceAuth ||',
-      '        '+v+'.credentialHeader!=null)return false;',
+      '        '+v+'.credentialHeader!=null'+
+        (op.managedScoped?' || '+v+'.recordAccess!='+dart(op.recordAccess):'')+
+        (op.managedScoped&&['PATCH','DELETE'].includes(op.method)
+          ?' || !'+v+'.requiresIfMatch':'')+
+        ')return false;',
     );
   }
   parts.push(
@@ -1058,6 +1064,10 @@ function projectNavigation(plan){
     '}',
     'final class _'+home+'State extends State<'+home+'> {',
     '  FableAuthGateway? _gateway;',
+    ...(managedPresent?[
+      '  FableManagedEntityPinnedGateway? _managedGateway;',
+      '  FableManagedEntityStore? _managedStore;',
+    ]:[]),
     '  @override void initState(){',
     '    super.initState();',
     "    const raw=String.fromEnvironment('FABLE_API_BASE_URL');",
@@ -1066,7 +1076,30 @@ function projectNavigation(plan){
     '      _gateway=FableAuthGateway(baseUri:base,contract:widget.contract);',
     '    }',
     '  }',
-    '  @override void dispose(){_gateway?.dispose();super.dispose();}',
+    ...(managedPresent?[
+      '  @override void didChangeDependencies(){',
+      '    super.didChangeDependencies();',
+      '    final store=FableManagedEntityScope.maybeOf(context);',
+      '    if(_managedGateway!=null && !identical(_managedStore,store)){',
+      '      _managedGateway!.dispose();_managedGateway=null;',
+      '    }',
+      '    _managedStore=store;',
+      '    final source=_gateway;',
+      '    if(store==null||source==null||_managedGateway!=null)return;',
+      "    const raw=String.fromEnvironment('FABLE_API_BASE_URL');",
+      '    final base=Uri.tryParse(raw);',
+      '    if(base==null||base.scheme!="https"||!base.hasAuthority)return;',
+      '    if(!store.isBoundToCredentials(source.session)||',
+      '       !store.isBoundToBackend(',
+      '         FableAuthGateway.managedEntityBackendIdentityFor(base,widget.contract)))return;',
+      '    _managedGateway=Fable'+pascal+'ManagedBinding.create(',
+      '      baseUri:base,contract:widget.contract,session:source.session,store:store);',
+      '  }',
+    ]:[]),
+    '  @override void dispose(){',
+    ...(managedPresent?['    _managedGateway?.dispose();']:[]),
+    '    _gateway?.dispose();super.dispose();',
+    '  }',
     '  @override Widget build(BuildContext context)=>Scaffold(',
     '    appBar:AppBar(title:const Text('+dart(pascal)+')),',
     '    body:SafeArea(child:ListView(',
@@ -1081,10 +1114,17 @@ function projectNavigation(plan){
       '          title:const Text('+dart(op.operationId)+'),',
       '          leading:const Icon(Icons.dataset_outlined),',
       '          trailing:const Icon(Icons.chevron_right),',
-      '          onTap:()=>Navigator.of(context).push(',
+      ...(op.managedScoped?[
+        '          subtitle:const Text("Select a verified managed entity before opening."),',
+        '          onTap:(_managedGateway==null||_managedGateway!.store.selected==null)?null:()=>Navigator.of(context).push(',
+      ]:[
+        '          onTap:()=>Navigator.of(context).push(',
+      ]),
       '            MaterialPageRoute<void>(builder:(_)=>'+op.className+'Page(',
-      '              repository:Fable'+op.className+'Repository(_gateway!),',
-      '              identityEvents:_gateway!.session.identityEvents))),',
+      '              repository:Fable'+op.className+'Repository('+
+        (op.managedScoped?'_managedGateway!':'_gateway!')+'),',
+      '              identityEvents:'+
+        (op.managedScoped?'_managedGateway!.scopeEvents':'_gateway!.session.identityEvents')+'))),',
       '        ),',
     );
   }
@@ -1363,10 +1403,17 @@ function signedFreshEtagReadLines(op,identityVar){
      get.path!=='/'+op.path.split('/')[1]+'/:id')
     throw Error('RC298 mandatory signed GET ETag prerequisite absent');
   return [
+    ...(op.managedScoped?[
+      '      final originalEntityRevision=gateway.store.selectionRevision;',
+      '      final originalEntityId=gateway.store.selected?.id;',
+      '      if(originalEntityId==null)',
+      '        throw const TypedReadFailure(TypedReadFailureKind.forbidden);',
+    ]:[]),
     '      final source=contract.operations['+dart(get.operationId)+'];',
     '      if(source==null||source.method!="GET"||source.path!='+
       dart(get.path.replace(/:id/g,'{id}'))+'||',
     '         source.contractHash!='+dart(get.contractHash)+'||',
+    ...(op.managedScoped?['         source.recordAccess!='+dart(op.recordAccess)+'||']:[]),
     '         !source.requiresAuth||!source.enforceAuth||source.credentialHeader!=null)',
     '        throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '      final fresh=await gateway.execute('+dart(get.operationId)+',path:{"id":id});',
@@ -1380,6 +1427,11 @@ function signedFreshEtagReadLines(op,identityVar){
     '      if(etag==null||!RegExp(r\'^"[a-f0-9]{64}"$\').hasMatch(etag))',
     '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
     '      final ifMatch=etag.substring(1,etag.length-1);',
+    ...(op.managedScoped?[
+      '      if(gateway.store.selectionRevision!=originalEntityRevision||',
+      '         gateway.store.selected?.id!=originalEntityId)',
+      '        throw const TypedReadFailure(TypedReadFailureKind.conflict);',
+    ]:[]),
   ];
 }
 function signedOwnerDeleteFiles(op,contractHash){
@@ -1417,7 +1469,8 @@ function signedOwnerDeleteFiles(op,contractHash){
     "import '../domain/"+slug+"_entity.dart';",
     "import '../domain/typed_read_result.dart';",
     'final class Fable'+name+'Repository implements '+name+'Repository {',
-    '  const Fable'+name+'Repository(this.gateway);final FableAuthGateway gateway;',
+    '  const Fable'+name+'Repository(this.gateway);final '+
+      (op.managedScoped?'FableManagedEntityPinnedGateway':'FableAuthGateway')+' gateway;',
     '  @override Future<'+name+'Entity> remove({required String id})async{',
     '    if(!RegExp('+uuid+').hasMatch(id))',
     '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
@@ -1427,7 +1480,8 @@ function signedOwnerDeleteFiles(op,contractHash){
     '       op.method!="DELETE"||op.path!='+
       dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+'||',
     '       op.contractHash!='+dart(op.contractHash)+'||!op.requiresAuth||',
-    '       !op.enforceAuth||op.credentialHeader!=null)',
+    '       !op.enforceAuth||op.credentialHeader!=null'+
+      (op.managedScoped?'||op.recordAccess!='+dart(op.recordAccess):'')+')',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    final epoch=gateway.session.identityRevision;',
     '    try{',
@@ -1629,7 +1683,8 @@ function signedOwnerPatchFiles(op,contractHash){
     "import '"+slug+"_dto.dart';",
     "import '"+slug+"_update_request.dart';",
     'final class Fable'+name+'Repository implements '+name+'Repository {',
-    '  const Fable'+name+'Repository(this.gateway);final FableAuthGateway gateway;',
+    '  const Fable'+name+'Repository(this.gateway);final '+
+      (op.managedScoped?'FableManagedEntityPinnedGateway':'FableAuthGateway')+' gateway;',
     '  @override Future<'+name+'Entity> update({required String id,'+
       fs.map(f=>'String? '+f.name).join(',')+'})async{',
     '    if(!RegExp('+uuid+').hasMatch(id))',
@@ -1640,7 +1695,8 @@ function signedOwnerPatchFiles(op,contractHash){
     '       op.method!="PATCH"||op.path!='+
       dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+'||',
     '       op.contractHash!='+dart(op.contractHash)+'||!op.requiresAuth||',
-    '       !op.enforceAuth||op.credentialHeader!=null)',
+    '       !op.enforceAuth||op.credentialHeader!=null'+
+      (op.managedScoped?'||op.recordAccess!='+dart(op.recordAccess):'')+')',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    final revision=gateway.session.identityRevision;',
     '    try{',
@@ -1868,15 +1924,27 @@ export function renderTypedFeature(plan){
   // RC299: this factory binds only selected, contract-verified managed GETs.
   // It never injects X-Fable-Managed-Entity-Id into unrelated operations.
   const managedOperations=plan.operations.filter(op=>op.managedScoped===true);
+  const managedApprovals=new Map();
+  for(const op of managedOperations){
+    const old=managedApprovals.get(op.operationId);
+    if(old&&old!==op.contractHash)throw Error('Managed contract hash conflict');
+    managedApprovals.set(op.operationId,op.contractHash);
+    if(op.preconditionRead){
+      const id=op.preconditionRead.operationId,hash=op.preconditionRead.contractHash;
+      const prior=managedApprovals.get(id);
+      if(prior&&prior!==hash)throw Error('Managed signed fresh GET conflict');
+      managedApprovals.set(id,hash);
+    }
+  }
   if(managedOperations.length){
     const className='Fable'+feature.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join('')+'ManagedBinding';
     const lines=[
-      '// GENERATED RC299: managed GET-only, signed operation allowlist.',
+      '// GENERATED RC301: managed GET and signed conditional writes only.',
       "import 'package:fable_core/fable_core.dart';",
       'abstract final class '+className+' {',
       '  static const projectHash='+dart(plan.contractHash)+';',
       '  static const approvedHashes=<String,String>{',
-      ...managedOperations.map(op=>'    '+dart(op.operationId)+':'+dart(op.contractHash)+','),
+      ...[...managedApprovals].map(([id,hash])=>'    '+dart(id)+':'+dart(hash)+','),
       '  };',
       '  static FableManagedEntityPinnedGateway create({',
       '    required Uri baseUri,required FableContract contract,',
@@ -1896,13 +1964,17 @@ export function renderTypedFeature(plan){
     put('lib/src/data/'+snake(feature)+'_managed_binding.dart',line(...lines));
     exports.push("export 'src/data/"+snake(feature)+"_managed_binding.dart';");
     put('.fable-managed-source-binding.json',JSON.stringify({
-      schemaVersion:1,kind:'fable.managed-read-source-binding',
+      schemaVersion:1,kind:'fable.managed-conditional-source-binding',
       projectContractHash:plan.contractHash,
       featureId:feature,sourceOnly:true,
       operations:managedOperations.map(op=>({
         operationId:op.operationId,contractHash:op.contractHash,
         method:op.method,recordAccess:op.recordAccess,
+        ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
       })),
+      approvedDependencies:[...managedApprovals].filter(([id])=>
+        !managedOperations.some(op=>op.operationId===id))
+        .map(([operationId,contractHash])=>({operationId,contractHash})),
       requiresExplicitSelectedEntity:true,
       requiresIdentityBoundSelection:true,
       needsScopeEventsOnPages:true,
@@ -1912,7 +1984,7 @@ export function renderTypedFeature(plan){
   const navigation=projectNavigation(plan);
   put('lib/src/project_feature.dart',navigation.source);
   put('lib/fable_'+feature+'.dart',line(
-    '// GENERATED by Fable RC271: typed read, unpaginated list and create screens.',
+    '// GENERATED: verified signed GET/POST and conditional PATCH/DELETE screens.',
     ...exports,
     "export 'src/project_feature.dart';"));
   put('.fable-operation-evidence.json',JSON.stringify({
@@ -1936,8 +2008,8 @@ export function renderTypedFeature(plan){
     'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, reviewed create POST and signed owner PATCH/DELETE.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, arbitrary filter/sort, legacy unpaged search, unsigned tenant paging, PUT, managed-entity/idempotency-required PATCH or DELETE, unsafe PATCH schema and sensitive POST are NOT generated.',
-    ...(managedOperations.length?['Managed GET: use the source-pinned managed binding factory, explicitly bound selection, and pass gateway.scopeEvents to generated pages.']:[]),
+    'Other Backend, arbitrary filters, unsigned tenancy, PUT, unsigned/idempotency-required managed writes, unsafe PATCH and sensitive POST are NOT generated.',
+    ...(managedOperations.length?['Managed GET/PATCH/DELETE: use the source-pinned binding factory and Backend-verified entity selection; pass gateway.scopeEvents to generated pages.']:[]),
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }

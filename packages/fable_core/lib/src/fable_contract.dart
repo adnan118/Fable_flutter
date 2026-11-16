@@ -10,7 +10,7 @@ abstract class OperationCatalog {
 }
 
 class FableOperation {
-  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader, this.recordAccess});
+  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader, this.recordAccess, this.requiresIfMatch=false});
   final String id;
   final String method;
   final String path;
@@ -22,6 +22,8 @@ class FableOperation {
   final String? credentialHeader;
   /// Verified against the project-signed operation and OpenAPI; null on legacy exports.
   final String? recordAccess;
+  /// True only if both signed contract and OpenAPI advertise enforced If-Match.
+  final bool requiresIfMatch;
 }
 
 /// Validated backend session policy. The exported value is a wizard/build-time hint;
@@ -163,9 +165,26 @@ class FableContract implements OperationCatalog {
                (signedAccess is! String || signedAccess.length>120 ||
                  !RegExp(r'^(?:owner|managed-entity):[A-Za-z][A-Za-z0-9_]*$|^(?:permission-wide|self-owner|global|none)$').hasMatch(signedAccess))))
             throw const FormatException('Signed record-access policy differs from OpenAPI');
+          final precondition=signedMatches.single['precondition'];
+          final declaredPrecondition=info['x-fable-precondition'];
+          if(jsonEncode(precondition)!=jsonEncode(declaredPrecondition))
+            throw const FormatException('Signed optimistic precondition differs from OpenAPI');
+          final conditional=precondition!=null;
+          if(conditional){
+            if(precondition is! Map||
+               precondition['required']!=true||precondition['header']!='If-Match'||
+               precondition['scheme']!='sha256-id-revision-v1'||
+               precondition['readOperation'] is! String||
+               !const {'PATCH','DELETE'}.contains((route.key as String).toUpperCase()) ||
+               info['parameters'] is! List ||
+               !(info['parameters'] as List).any((p)=>p is Map&&
+                 p['in']=='header'&&p['name']=='If-Match'&&p['required']==true)){
+              throw const FormatException('Invalid optimistic concurrency policy');
+            }
+          }
           ops[id] = FableOperation(id, (route.key as String).toUpperCase(), pair.key as String,
             actualHash, requiresAuth:!isPublic,enforceAuth:true,
-            recordAccess:signedAccess as String?);
+            recordAccess:signedAccess as String?,requiresIfMatch:conditional);
         }
       }
     }
