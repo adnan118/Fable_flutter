@@ -271,3 +271,54 @@ test('RC281 missing or unsafe date bounds never become generic filters',()=>{
   drift.openapi.paths['/catalog'].get.parameters.at(-1).schema.format='date';
   assert.throws(()=>planTypedFeature(drift),/RC116 typed feature/);
 });
+
+function signedSortFixture(){
+  const f=fixture();
+  const q={key:'sort',type:'string',sortAllowedFields:['title','createdAt']};
+  f.contract.operations[0].request.query.push(q);
+  f.openapi.paths['/catalog'].get.parameters.push({
+    name:'sort',in:'query',required:false,schema:{type:'string'},
+    'x-fable-sort-allowlist':['title','createdAt'],
+  });
+  return f;
+}
+
+test('RC282 signed sorting is passed to every page and resets Infinite Scroll',()=>{
+  const p=planTypedFeature(signedSortFixture());
+  const op=p.operations[0];
+  assert.deepEqual(op.sortFields,['title','createdAt']);
+  const files=renderTypedFeature(p),base='packages/features/fable_catalog/lib/src/';
+  const adapter=files.get(base+'data/fable_catalog_list_paginated_repository.dart');
+  const controller=files.get(base+'presentation/catalog_list_paginated_controller.dart');
+  const page=files.get(base+'presentation/catalog_list_paginated_page.dart');
+  const repository=files.get(base+'domain/catalog_list_paginated_repository.dart');
+  const widgetTest=files.get('packages/features/fable_catalog/test/catalog_list_paginated_page_test.dart');
+  assert.match(repository,/String\? sort/);
+  assert.match(adapter,/sortAllowed=<String>\{"title","-title","createdAt","-createdAt"\}/);
+  assert.match(adapter,/!sortAllowed\.contains\(sort\)/);
+  assert.match(adapter,/if\(sort!=null && sort\.isNotEmpty\)"sort":sort/);
+  assert.match(controller,/_sort=sort;/);
+  assert.match(controller,/sort:_sort/);
+  assert.match(page,/String\? _sort;/);
+  assert.match(page,/Sort/);
+  assert.match(page,/title ascending/);
+  assert.match(page,/createdAt descending/);
+  assert.match(page,/sort:_sort/);
+  assert.match(page,/_sort=null;/);
+  assert.match(widgetTest,/String\? sort/);
+});
+
+test('RC282 absent or divergent sortable allowlist fails closed',()=>{
+  const legacy=fixture();
+  assert.deepEqual(planTypedFeature(legacy).operations[0].sortFields,[]);
+  const drift=signedSortFixture();
+  drift.openapi.paths['/catalog'].get.parameters.at(-1)['x-fable-sort-allowlist']=['title'];
+  assert.throws(()=>planTypedFeature(drift),/RC116 typed feature/);
+  const missing=signedSortFixture();
+  delete missing.openapi.paths['/catalog'].get.parameters.at(-1)['x-fable-sort-allowlist'];
+  assert.throws(()=>planTypedFeature(missing),/RC116 typed feature/);
+  const sensitive=signedSortFixture();
+  sensitive.contract.operations[0].request.query.at(-1).sortAllowedFields=['password'];
+  sensitive.openapi.paths['/catalog'].get.parameters.at(-1)['x-fable-sort-allowlist']=['password'];
+  assert.deepEqual(planTypedFeature(sensitive).operations[0].sortFields,[]);
+});
