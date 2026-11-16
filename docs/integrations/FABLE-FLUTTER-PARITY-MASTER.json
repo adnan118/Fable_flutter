@@ -1353,7 +1353,7 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC308",
+    "lastSourceUpdate": "RC309",
     "date": "2026-11-16",
     "backendReferenceCommit": "0604d91ba22277f84fe1f4715b981683e0139754",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
@@ -1385,9 +1385,11 @@
       "RC306 Flutter generated signed CREATE distinguishes known ambiguous idempotency outcomes from ordinary conflict, preserves manual-only retry",
       "RC306 created form UUIDs use Backend UUIDv4 shape",
       "RC308 Flutter 3.50.0/Dart 3.14.0 source-pinned; official Flutter template defaults Gradle 9.5/AGP 9.3.1/Kotlin KGP 2.4.20/Java 17 and SDK 36/36/24/NDK 28.2.13676358",
-      "RC308 one-command read-only project toolchain guard verifies source tuple or exact installed Flutter/Dart before builds; Flutter SDK installation is never done by project"
+      "RC308 one-command read-only project toolchain guard verifies source tuple or exact installed Flutter/Dart before builds; Flutter SDK installation is never done by project",
+      "RC309 one-command W4/W5 source batch uses project-pinned signed contracts for all selected custom features, previews all operations, composes pubspec and registry once, and stages source packages before app writes",
+      "RC309 verifies committed source bytes against preflight, uses durable backup and compare-before-rollback to avoid overwriting unrelated concurrent edits"
     ],
-    "sourceTestEvidence": "RC308 source version change was verified against Flutter 3.50 documented template defaults. No Flutter, Gradle, Dart or Android build/test was executed; previous acceptance gates unchanged.",
+    "sourceTestEvidence": "RC309 source parser inspected; regression tests authored but deliberately not executed per user request. No Flutter 3.50 Android build or real Backend integration performed.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1410,7 +1412,9 @@
       "RC304 Dart compilation, backend replay/key-scope verification and uncertain-response recovery user-owned; no E2E executed",
       "RC305 mixed-version idempotency rollout must drain old writers and reconcile legacy ambiguous claims",
       "RC306 Flutter typed failure compile and real idempotency recovery E2E deferred to user; no automatic result recovery endpoint claimed",
-      "RC308 Flutter 3.50 real Android plugin dependency resolution, Gradle build, Kotlin built-in compatibility and native device E2E left for user"
+      "RC308 Flutter 3.50 real Android plugin dependency resolution, Gradle build, Kotlin built-in compatibility and native device E2E left for user",
+      "RC309 multi-selected generated Dart feature packages / Flutter 3.50 compilation and end-to-end navigation left to user; staged batch source does not certify production",
+      "RC309 supports only signed typed selected features; unsupported operations halt the whole batch until reviewed"
     ],
     "w5Closed": false,
     "w6Closed": false,
