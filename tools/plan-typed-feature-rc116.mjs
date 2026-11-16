@@ -135,9 +135,31 @@ function signedUnpaginatedListFields(op,schema){
  * Search/filter/sort are intentionally NOT sent: their opt-in consumer UI is
  * a separate W5 gate. We still validate the full signed query declaration.
  */
-function signedPaginatedListFields(op,schema,route){
+/** RC299: a managed GET is allowed only by two matching, independently
+ * signed artifacts and an explicit entity-aware Flutter gateway.
+ * Arbitrary HTTP headers or managed writes remain unsupported here. */
+function checkedManagedRead(op,route,featureId){
+  const policy=op.recordAccess;
+  if(typeof policy!=='string' ||
+     !/^managed-entity:[A-Za-z][A-Za-z0-9_]*$/.test(policy) ||
+     route['x-fable-record-access']!==policy ||
+     op.method!=='GET' ||
+     (op.operationId!==featureId+'.get' &&
+      op.operationId!==featureId+'.list.paginated') ||
+     (op.operationId.endsWith('.get')?
+       op.path!=='/'+featureId+'/:id':
+       op.path!=='/'+featureId) ||
+     (op.request?.headers??[]).length!==0 ||
+     op.request?.body!=null ||
+     (op.permissions??[]).length!==1 ||
+     op.permissions[0]!==
+       (op.operationId.endsWith('.get')?featureId+'.read':featureId+'.list.paginated'))
+    fail('Managed GET must be explicitly scoped, signed, typed and read-only: '+op.operationId);
+  return true;
+}
+function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
   const signed=op.response?.data,id=op.operationId;
-  if(op.recordAccess!=null &&
+  if(!verifiedManaged && op.recordAccess!=null &&
      !['permission-wide','global','none'].includes(op.recordAccess))
     fail('scoped/managed-entity pagination requires an explicitly bound tenant context: '+id);
   if(op.method!=='GET'||!id.endsWith('.list.paginated')||
@@ -537,6 +559,11 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
        !Array.isArray(route.security)||route.security.length!==1||
        !Object.hasOwn(route.security[0],'bearerAuth'))
       fail('OpenAPI route/security/hash differs from Fable project contract: '+id);
+    if(route['x-fable-record-access']!==op.recordAccess)
+      fail('OpenAPI policy differs from signed record-access scope: '+id);
+    const managedScoped=typeof op.recordAccess==='string' &&
+      op.recordAccess.startsWith('managed-entity:');
+    if(managedScoped)checkedManagedRead(op,route,featureId);
     if(spec.method==='GET'&&route.requestBody!==undefined)
       fail('GET with request body is unsupported: '+id);
     const params=[...spec.path.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(x=>x[1]);
@@ -578,7 +605,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       ?(op.operationId.endsWith('.list.paginated')?'paginated-list':'unpaginated-list')
       :'single';
     const paginated=resultKind==='paginated-list'
-      ?signedPaginatedListFields(op,schema.properties?.data,route):null;
+      ?signedPaginatedListFields(op,schema.properties?.data,route,managedScoped):null;
     const fields=resultKind==='confirmed-delete'?[]:
       resultKind==='unpaginated-list'
       ?signedUnpaginatedListFields(op,schema.properties?.data)
@@ -602,6 +629,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,bodyFields,resultKind,
+      ...(managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
       ...(preconditionRead?{preconditionRead}:{}),
       supportsSearch:paginated?.searchPageSupported??false,
       filters:paginated?.filters??[],sortFields:paginated?.sortFields??[]});
@@ -609,5 +637,5 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT, tenant-scoped/idempotency-required PATCH/DELETE and sensitive POST deliberately rejected; only signed fresh-GET If-Match mutation is supported'};
+    unsupportedMethods:'PUT, tenant-scoped/idempotency-required PATCH/DELETE and sensitive POST deliberately rejected; managed GET requires explicit signed scoped gateway'};
 }
