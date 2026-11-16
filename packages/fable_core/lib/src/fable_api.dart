@@ -139,7 +139,7 @@ class UnifiedApiClient implements BackendApiGateway {
   }
   Future<Response<dynamic>> request(String operationId,{Map<String,dynamic>? path,
     Map<String,dynamic>? query,Object? body,bool? authorized,CancelToken? cancelToken,
-    String? ifMatch,String? securityChallengeId,String? managedEntityId,
+    String? ifMatch,String? idempotencyKey,String? securityChallengeId,String? managedEntityId,
     bool Function()? contextStillValid,FableProtectedMediaByteRange? mediaRange}) async {
     // Entity-scoped operations must fail before any network dispatch if the
     // selected entity changes while obtaining credentials or retrying.
@@ -172,6 +172,16 @@ class UnifiedApiClient implements BackendApiGateway {
       throw ArgumentError('If-Match requires a verified authenticated mutation and SHA-256 revision');
     }
 
+    // RC304: a client-created idempotency key can leave Flutter ONLY on a
+    // verified Backend mutation whose signed contract explicitly requires it.
+    if(idempotencyKey!=null && (contract is! FableContract ||
+       !op.requiresIdempotency || !op.requiresAuth ||
+       !RegExp(r'^[a-f0-9]{64}$').hasMatch(idempotencyKey))){
+      throw ArgumentError('Idempotency-Key is allowed only by a signed authenticated mutation');
+    }
+    if(op.requiresIdempotency && idempotencyKey==null){
+      throw ArgumentError('A signed Backend operation requires Idempotency-Key');
+    }
     final requestIdentity = session.identityRevision;
     final useAuthorization=authorized ?? op.requiresAuth;
     // The imported backend contract is authoritative about token exposure.
@@ -200,7 +210,10 @@ class UnifiedApiClient implements BackendApiGateway {
       throw const FormatException('Unresolved backend path parameter');
     }
     final headers=await adapter.headersFor(op,session);
+    if(headers.keys.any((key)=>key.toLowerCase()=='idempotency-key'))
+      throw StateError('An ambient Idempotency-Key is not permitted');
     if (ifMatch != null) headers['If-Match']='"$ifMatch"';
+    if (idempotencyKey != null) headers['Idempotency-Key']=idempotencyKey;
     if(mediaRange!=null){
       headers['Accept']='application/octet-stream';
       headers['Accept-Encoding']='identity';
@@ -521,8 +534,9 @@ class UnifiedApiClient implements BackendApiGateway {
   }
   @override
   Future<Response<dynamic>> execute(String operationId,{Map<String,dynamic>? path,
-    Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,String? ifMatch}) =>
-      request(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
+    Map<String,dynamic>? query,Object? body,CancelToken? cancelToken,String? ifMatch,String? idempotencyKey}) =>
+      request(operationId,path:path,query:query,body:body,cancelToken:cancelToken,
+        ifMatch:ifMatch,idempotencyKey:idempotencyKey);
   @override
   void dispose()=>_dio.close(force:true);
 }
