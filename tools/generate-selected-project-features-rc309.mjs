@@ -106,8 +106,6 @@ function args(argv){
      result.expectedProjectId.length>160||
      !HASH.test(result.expectedContractHash??''))
     throw Error('Independent --expected-project-id and 64-hex --expected-contract-hash are required');
-  if(result.wireApp&&!result.apply)
-    throw Error('--wire-app requires --apply; preview already reports binding plans');
   return result;
 }
 export function generateSelectedProjectFeatures(options){
@@ -129,12 +127,14 @@ export function generateSelectedProjectFeatures(options){
     return {...planned,featureId,destination};
   });
   const binding=options.wireApp===true?assembleBinding(root,ids):null;
+  const totalFiles=all.reduce((sum,item)=>sum+item.files.size,0);
+  if(totalFiles>2400)throw Error('RC309 feature batch exceeds safe file cap');
   const report={
     schemaVersion:1,kind:'fable.selected-feature-source-batch',
     projectId:options.expectedProjectId,
     projectContractHash:options.expectedContractHash,
     selected:ids.length,operations:all.reduce((n,x)=>n+x.plan.operations.length,0),
-    files:all.reduce((n,x)=>n+x.files.size,0),
+    files:totalFiles,appWiringRequested:Boolean(binding),
     features:all.map(x=>({
       featureId:x.featureId,files:x.files.size,
       methods:[...new Set(x.plan.operations.map(op=>op.method))].sort(),
@@ -153,7 +153,7 @@ export function generateSelectedProjectFeatures(options){
   try{fd=openSync(lock,'wx');}
   catch{throw Error('Another RC309 batch lock exists; review before retry');}
   let stage=null,backup=null;
-  const created=[],backupRecord=[];
+  const created=[];
   try{
     unchanged(root,saved);
     for(const x of all)
@@ -212,7 +212,7 @@ export function generateSelectedProjectFeatures(options){
         throw Error('App source changed while committing feature packages');
       writeFileSync(binding.pubspecPath,binding.pubspec,'utf8');
       writeFileSync(binding.registryPath,binding.registry,'utf8');
-      backupRecord.push('App integration staged from canonical source');
+
     }
     report.applied=true;report.appWired=Boolean(binding);
     report.preflight='COMMITTED_SOURCE_ONLY';
@@ -260,7 +260,7 @@ function main(){
   const options=args(process.argv.slice(2));
   if(options.help){
     console.log('pnpm run wizard:feature:batch -- --expected-project-id <ID> --expected-contract-hash <SHA256> [--apply --wire-app] [--root PATH]');
-    console.log('Preview first; --apply stages all selected feature packages, --wire-app additionally wires app. No tests or downloads.');
+    console.log('Preview first with --wire-app (no writes); --apply stages all selected feature packages and --wire-app binds app. No tests or downloads.');
     return;
   }
   console.log(JSON.stringify(generateSelectedProjectFeatures(options),null,2));
