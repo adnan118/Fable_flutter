@@ -16,7 +16,7 @@ test('RC309 composes multiple typed app bindings in-memory without overwriting c
   }
   for(const id of ['hotel_rooms','hotel_inventory','hotel_guests']){
     assert.match(pubspec,new RegExp('  fable_'+id+':'));
-    assert.match(registry,new RegExp('import \\'package:fable_'+id));
+    assert.ok(registry.includes("import 'package:fable_"+id+"/fable_"+id+".dart';"));
   }
   assert.match(registry,/  authFeature,/);
   assert.equal((pubspec.match(/^dependencies:$/gm)||[]).length,1);
