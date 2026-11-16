@@ -1869,7 +1869,7 @@ export function renderTypedFeature(plan){
   // It never injects X-Fable-Managed-Entity-Id into unrelated operations.
   const managedOperations=plan.operations.filter(op=>op.managedScoped===true);
   if(managedOperations.length){
-    const className='Fable'+typeName(feature)+'ManagedBinding';
+    const className='Fable'+feature.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join('')+'ManagedBinding';
     const lines=[
       '// GENERATED RC299: managed GET-only, signed operation allowlist.',
       "import 'package:fable_core/fable_core.dart';",
