@@ -1403,6 +1403,12 @@ function signedFreshEtagReadLines(op,identityVar){
      get.path!=='/'+op.path.split('/')[1]+'/:id')
     throw Error('RC298 mandatory signed GET ETag prerequisite absent');
   return [
+    ...(op.managedScoped?[
+      '      final originalEntityRevision=gateway.store.selectionRevision;',
+      '      final originalEntityId=gateway.store.selected?.id;',
+      '      if(originalEntityId==null)',
+      '        throw const TypedReadFailure(TypedReadFailureKind.forbidden);',
+    ]:[]),
     '      final source=contract.operations['+dart(get.operationId)+'];',
     '      if(source==null||source.method!="GET"||source.path!='+
       dart(get.path.replace(/:id/g,'{id}'))+'||',
@@ -1421,6 +1427,11 @@ function signedFreshEtagReadLines(op,identityVar){
     '      if(etag==null||!RegExp(r\'^"[a-f0-9]{64}"$\').hasMatch(etag))',
     '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
     '      final ifMatch=etag.substring(1,etag.length-1);',
+    ...(op.managedScoped?[
+      '      if(gateway.store.selectionRevision!=originalEntityRevision||',
+      '         gateway.store.selected?.id!=originalEntityId)',
+      '        throw const TypedReadFailure(TypedReadFailureKind.conflict);',
+    ]:[]),
   ];
 }
 function signedOwnerDeleteFiles(op,contractHash){
