@@ -169,12 +169,23 @@ function checkedManagedCreate(op,route,featureId){
      op.permissions[0]!==featureId+'.create'||
      (route['x-fable-permissions']??[]).length!==1||
      route['x-fable-permissions'][0]!==featureId+'.create'||
-     op.idempotency?.required===true||
-     (op.request?.headers??[]).length!==0||
      (op.request?.query??[]).length!==0||
      (op.request?.params??[]).length!==0||
      (route.parameters??[]).length!==0)
     fail('Managed create must be exact signed, non-idempotency-required POST in one verified entity: '+op.operationId);
+  const needsKey=op.idempotency?.required===true;
+  const signedHeaders=op.request?.headers??[];
+  const routeHeaders=(route.parameters??[]).filter(p=>p.in==='header');
+  if(signedHeaders.length!==(needsKey?1:0)||
+     routeHeaders.length!==(needsKey?1:0)||
+     (needsKey&&(
+       signedHeaders[0]!=='Idempotency-Key'||
+       op.idempotency?.headers?.includes('Idempotency-Key')!==true||
+       routeHeaders[0]?.name!=='Idempotency-Key'||
+       routeHeaders[0]?.required!==true||
+       routeHeaders[0]?.schema?.type!=='string'))||
+     (!needsKey && op.idempotency!=null))
+    fail('Managed create idempotency must match signed Backend and OpenAPI: '+op.operationId);
   return true;
 }
 function checkedManagedRead(op,route,featureId){
@@ -363,8 +374,8 @@ function validatedCreateFields(op,route,id,featureId,managedScoped=false){
   // A generic typed form cannot invent fresh OTP/Idempotency-Key headers,
   // managed-entity scope, URL query binding, or server-issued revisions.
   // Such operations need reviewed dedicated adapters and flow evidence.
-  if(op.idempotency?.required===true ||
-     (op.request?.headers??[]).length>0 ||
+  if((op.idempotency?.required===true && !managedScoped) ||
+     ((op.request?.headers??[]).length>0 && !managedScoped) ||
      (op.request?.query??[]).length>0 ||
      (op.recordAccess &&
        !(managedScoped
@@ -626,10 +637,13 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const routePathParams=(route.parameters??[]).filter(p=>p.in==='path');
     const extraParams=(route.parameters??[]).filter(p=>p.in!=='path');
     const conditionalMutation=['PATCH','DELETE'].includes(spec.method);
+    const signedCreateKey=managedScoped&&spec.method==='POST'&&
+      op.idempotency?.required===true;
     if(routePathParams.length!==params.length||
-       (extraParams.length>0&&!id.endsWith('.list.paginated')&&!conditionalMutation)||
+       (extraParams.length>0&&!id.endsWith('.list.paginated')&&!conditionalMutation&&!signedCreateKey)||
        extraParams.some(p=>p.in!=='query'&&
-         !(conditionalMutation&&p.in==='header'&&p.name==='If-Match'&&p.required===true))||
+         !(conditionalMutation&&p.in==='header'&&p.name==='If-Match'&&p.required===true)&&
+         !(signedCreateKey&&p.in==='header'&&p.name==='Idempotency-Key'&&p.required===true))||
        params.some(name=>!routePathParams.some(p=>
          p.name===name&&p.required===true&&p.schema?.type==='string')))
       fail('only signed path parameters and explicitly reviewed paginated queries supported: '+id);
@@ -684,6 +698,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,bodyFields,resultKind,
       ...(managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
+      ...(spec.method==='POST'&&op.idempotency?.required===true?
+        {requiresIdempotency:true}:{}),
       ...(preconditionRead?{preconditionRead}:{}),
       supportsSearch:paginated?.searchPageSupported??false,
       filters:paginated?.filters??[],sortFields:paginated?.sortFields??[]});
@@ -691,5 +707,5 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT, idempotency-required or unreviewed writes and sensitive POST blocked; managed POST requires signed entity scope/role with no invented idempotency'};
+    unsupportedMethods:'PUT, unsigned/unreviewed writes and sensitive POST blocked; managed POST may require source-signed Idempotency-Key, minted once per user action'};
 }
