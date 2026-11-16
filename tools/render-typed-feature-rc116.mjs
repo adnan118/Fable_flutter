@@ -1367,6 +1367,7 @@ function signedFreshEtagReadLines(op,identityVar){
     '      if(source==null||source.method!="GET"||source.path!='+
       dart(get.path.replace(/:id/g,'{id}'))+'||',
     '         source.contractHash!='+dart(get.contractHash)+'||',
+    ...(op.managedScoped?['         source.recordAccess!='+dart(op.recordAccess)+'||']:[]),
     '         !source.requiresAuth||!source.enforceAuth||source.credentialHeader!=null)',
     '        throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '      final fresh=await gateway.execute('+dart(get.operationId)+',path:{"id":id});',
@@ -1417,7 +1418,8 @@ function signedOwnerDeleteFiles(op,contractHash){
     "import '../domain/"+slug+"_entity.dart';",
     "import '../domain/typed_read_result.dart';",
     'final class Fable'+name+'Repository implements '+name+'Repository {',
-    '  const Fable'+name+'Repository(this.gateway);final FableAuthGateway gateway;',
+    '  const Fable'+name+'Repository(this.gateway);final '+
+      (op.managedScoped?'FableManagedEntityPinnedGateway':'FableAuthGateway')+' gateway;',
     '  @override Future<'+name+'Entity> remove({required String id})async{',
     '    if(!RegExp('+uuid+').hasMatch(id))',
     '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
@@ -1427,7 +1429,8 @@ function signedOwnerDeleteFiles(op,contractHash){
     '       op.method!="DELETE"||op.path!='+
       dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+'||',
     '       op.contractHash!='+dart(op.contractHash)+'||!op.requiresAuth||',
-    '       !op.enforceAuth||op.credentialHeader!=null)',
+    '       !op.enforceAuth||op.credentialHeader!=null'+
+      (op.managedScoped?'||op.recordAccess!='+dart(op.recordAccess):'')+')',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    final epoch=gateway.session.identityRevision;',
     '    try{',
@@ -1629,7 +1632,8 @@ function signedOwnerPatchFiles(op,contractHash){
     "import '"+slug+"_dto.dart';",
     "import '"+slug+"_update_request.dart';",
     'final class Fable'+name+'Repository implements '+name+'Repository {',
-    '  const Fable'+name+'Repository(this.gateway);final FableAuthGateway gateway;',
+    '  const Fable'+name+'Repository(this.gateway);final '+
+      (op.managedScoped?'FableManagedEntityPinnedGateway':'FableAuthGateway')+' gateway;',
     '  @override Future<'+name+'Entity> update({required String id,'+
       fs.map(f=>'String? '+f.name).join(',')+'})async{',
     '    if(!RegExp('+uuid+').hasMatch(id))',
@@ -1640,7 +1644,8 @@ function signedOwnerPatchFiles(op,contractHash){
     '       op.method!="PATCH"||op.path!='+
       dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+'||',
     '       op.contractHash!='+dart(op.contractHash)+'||!op.requiresAuth||',
-    '       !op.enforceAuth||op.credentialHeader!=null)',
+    '       !op.enforceAuth||op.credentialHeader!=null'+
+      (op.managedScoped?'||op.recordAccess!='+dart(op.recordAccess):'')+')',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    final revision=gateway.session.identityRevision;',
     '    try{',
