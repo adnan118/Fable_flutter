@@ -152,8 +152,9 @@ class FableContract implements OperationCatalog {
           if(signedMatches.length!=1 || signedMatches.single is! Map ||
              signedMatches.single['contractHash']!=actualHash ||
              signedMatches.single['method']!=(route.key as String).toUpperCase() ||
-             (signedMatches.single['path'] as String?)?.replaceAll(
-               RegExp(r':([A-Za-z][A-Za-z0-9_]*)'),r'{$1}')!=pair.key)
+             (signedMatches.single['path'] as String?)?.replaceAllMapped(
+               RegExp(r':([A-Za-z][A-Za-z0-9_]*)'),
+               (match)=>'{'+match.group(1)!+'}')!=pair.key)
             throw const FormatException('Signed Fable operation/OpenAPI identity mismatch');
           final signedAccess=signedMatches.single['recordAccess'];
           final openAccess=info['x-fable-record-access'];
