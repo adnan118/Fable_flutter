@@ -214,6 +214,24 @@ export function generateSelectedProjectFeatures(options){
       writeFileSync(binding.registryPath,binding.registry,'utf8');
 
     }
+    // Source receipt: compare every committed file to the fully verified
+    // preflight source before announcing source-level success (not a test).
+    let verifiedFiles=0;
+    for(const feature of all){
+      const prefix='packages/features/fable_'+feature.featureId+'/';
+      for(const [name,source] of feature.files){
+        const dest=join(feature.destination,...name.slice(prefix.length).split('/'));
+        requireFile(dest);
+        if(readFileSync(dest,'utf8')!==source)
+          throw Error('Committed source differs from signed preflight: '+name);
+        verifiedFiles++;
+      }
+    }
+    if(binding&&(
+      readFileSync(binding.pubspecPath,'utf8')!==binding.pubspec||
+      readFileSync(binding.registryPath,'utf8')!==binding.registry))
+      throw Error('Committed app integration differs from preflight');
+    report.sourceFilesVerified=verifiedFiles;
     report.applied=true;report.appWired=Boolean(binding);
     report.preflight='COMMITTED_SOURCE_ONLY';
     report.backup=backup?relative(root,backup):null;
