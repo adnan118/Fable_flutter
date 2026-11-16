@@ -378,6 +378,64 @@ function validatedCreateFields(op,route,id,featureId){
  * idempotency or optimistic concurrency support. The UI must show a second
  * explicit confirmation, never retry and never infer success from 404/409.
  */
+/**
+ * RC293 PATCH is accepted only as an explicitly signed, owner-scoped,
+ * bounded optional text update. This is not a generic mutation policy:
+ * no concurrency/If-Match or custom idempotency header is inferred.
+ */
+function validatedOwnerPatch(op,route,featureId,params,id){
+  const restricted=new Set(['auth','payments','media','access_control','biometrics',
+    'messaging','support','social','notifications','account_lifecycle','roles',
+    'organizations','system_settings','content_pages']);
+  if(restricted.has(featureId) ||
+     op.method!=='PATCH'||id!==featureId+'.update'||
+     op.path!=='/'+featureId+'/:id'||params.length!==1||params[0]!=='id'||
+     !/^owner:[A-Za-z][A-Za-z0-9_]{0,50}$/.test(op.recordAccess??'')||
+     op.permissions?.length!==1||op.permissions[0]!==featureId+'.update'||
+     route['x-fable-permissions']?.length!==1||
+     route['x-fable-permissions'][0]!==featureId+'.update'||
+     op.idempotency?.required===true||
+     (op.request?.headers??[]).length!==0||
+     (op.request?.query??[]).length!==0||
+     op.httpStatus!==200)
+    fail('PATCH requires an explicitly signed owner UUID operation without custom headers: '+id);
+  const idParam=op.request?.params?.find(p=>p.name==='id');
+  const routeId=route.parameters?.find(p=>p.name==='id'&&p.in==='path');
+  if(idParam?.type!=='uuid'||routeId?.schema?.format!=='uuid')
+    fail('PATCH requires a signed UUID record id: '+id);
+  const signed=op.request?.body;
+  const request=route.requestBody;
+  const schemas=request?.content;
+  if(!signed||signed.type!=='object'||!Array.isArray(signed.fields)||
+     signed.fields.length<1||signed.fields.length>12||
+     request?.required!==true||!schemas||
+     Object.keys(schemas).join(',')!=='application/json')
+    fail('PATCH requires a bounded signed JSON body: '+id);
+  const schema=schemas['application/json']?.schema;
+  if(schema?.type!=='object'||schema.additionalProperties!==false||
+     !schema.properties||Array.isArray(schema.properties)||
+     Object.keys(schema.properties).length!==signed.fields.length||
+     (schema.required??[]).length!==0 ||
+     Object.keys(schema.properties).length<1)
+    fail('PATCH body must consist exclusively of optional flat properties: '+id);
+  const seen=new Set(),fields=[];
+  for(const raw of signed.fields){
+    const name=raw?.name;
+    if(!safeIdent(name)||seen.has(name)||raw.optional!==true||
+       raw.protectedAuth===true||raw.sensitiveFilterSort===true||
+       raw.translatable===true||!['string','text','uuid'].includes(raw.type)||
+       /(?:password|secret|token|otp|pin|private|credential|session|payment|billing|accesskey|amount|price|currency|balance|bank|card|role|permission|owner|tenant)/i.test(name))
+      fail('sensitive or non-text PATCH requires a dedicated adapter: '+id);
+    seen.add(name);
+    const field=schema.properties[name];
+    if(field?.type!=='string'||(field.format??null)!==(raw.type==='uuid'?'uuid':null)||
+       Object.keys(field).some(k=>!['type','format','description'].includes(k)))
+      fail('PATCH OpenAPI body contradicts signed optional fields: '+id);
+    fields.push({name,type:'String',required:false,uuid:raw.type==='uuid',maxLength:512});
+  }
+  return fields;
+}
+
 function validatedOwnerDelete(op,route,featureId,params,id,schema){
   const forbidden=new Set(['auth','payments','media','access_control','biometrics',
     'messaging','support','social','notifications','account_lifecycle','roles',
@@ -431,8 +489,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const id=spec?.operationId;
     if(typeof id!=='string'||!OP_ID.test(id)||seen.has(id))fail('unsafe/duplicate operation ID');
     seen.add(id);
-    if(!['GET','POST','DELETE'].includes(spec.method)||typeof spec.path!=='string'||!PATH.test(spec.path))
-      fail('GET, reviewed create POST, or reviewed owner DELETE contract path required for '+id);
+    if(!['GET','POST','PATCH','DELETE'].includes(spec.method)||typeof spec.path!=='string'||!PATH.test(spec.path))
+      fail('GET, reviewed create POST, or reviewed owner PATCH/DELETE contract path required for '+id);
     const candidates=contract.operations.filter(op=>op.operationId===id);
     if(candidates.length!==1)fail('operation not unique in project export: '+id);
     const op=candidates[0];
@@ -503,7 +561,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     if(typeof op.contractHash!=='string')fail('missing operation hash');
     for(const value of [id,spec.path,op.contractHash])safeString(value);
     const bodyFields=spec.method==='POST'
-      ?validatedCreateFields(op,route,id,featureId):[];
+      ?validatedCreateFields(op,route,id,featureId)
+      :spec.method==='PATCH'?validatedOwnerPatch(op,route,featureId,params,id):[];
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
@@ -514,5 +573,5 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT/PATCH, idempotency-required DELETE, tenant-scoped DELETE and sensitive POST deliberately rejected'};
+    unsupportedMethods:'PUT, tenant-scoped/idempotency-required PATCH/DELETE and sensitive POST deliberately rejected'};
 }
