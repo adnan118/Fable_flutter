@@ -1353,7 +1353,7 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC306",
+    "lastSourceUpdate": "RC308",
     "date": "2026-11-16",
     "backendReferenceCommit": "0604d91ba22277f84fe1f4715b981683e0139754",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
@@ -1383,9 +1383,11 @@
       "RC304 verified HTTP Auth and Managed gateway transport forwarding with rejection of missing, unsigned or ambient idempotency keys",
       "RC305 Backend actor + managed tenant + method idempotency claim scoping mirrored into new Backend blueprints; legacy claim replay blocked",
       "RC306 Flutter generated signed CREATE distinguishes known ambiguous idempotency outcomes from ordinary conflict, preserves manual-only retry",
-      "RC306 created form UUIDs use Backend UUIDv4 shape"
+      "RC306 created form UUIDs use Backend UUIDv4 shape",
+      "RC308 Flutter 3.50.0/Dart 3.14.0 source-pinned; official Flutter template defaults Gradle 9.5/AGP 9.3.1/Kotlin KGP 2.4.20/Java 17 and SDK 36/36/24/NDK 28.2.13676358",
+      "RC308 one-command read-only project toolchain guard verifies source tuple or exact installed Flutter/Dart before builds; Flutter SDK installation is never done by project"
     ],
-    "sourceTestEvidence": "No RC305–RC306 tests were executed at user request; new Jest/Node regression sources were only authored. Dart runtime not available.",
+    "sourceTestEvidence": "RC308 source version change was verified against Flutter 3.50 documented template defaults. No Flutter, Gradle, Dart or Android build/test was executed; previous acceptance gates unchanged.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1407,12 +1409,31 @@
       "RC303 live upgrade Prisma migration generation/state refresh and historical projects require user review",
       "RC304 Dart compilation, backend replay/key-scope verification and uncertain-response recovery user-owned; no E2E executed",
       "RC305 mixed-version idempotency rollout must drain old writers and reconcile legacy ambiguous claims",
-      "RC306 Flutter typed failure compile and real idempotency recovery E2E deferred to user; no automatic result recovery endpoint claimed"
+      "RC306 Flutter typed failure compile and real idempotency recovery E2E deferred to user; no automatic result recovery endpoint claimed",
+      "RC308 Flutter 3.50 real Android plugin dependency resolution, Gradle build, Kotlin built-in compatibility and native device E2E left for user"
     ],
     "w5Closed": false,
     "w6Closed": false,
     "w7Closed": false,
     "w8Closed": false,
     "productionReady": false
+  },
+  "toolchainSourceTarget": {
+    "lastSourceUpdate": "RC308",
+    "flutter": "3.50.0",
+    "dart": "3.14.0",
+    "gradle": "9.5.0",
+    "agp": "9.3.1",
+    "kotlinPlugin": "2.4.20",
+    "builtInKotlin": true,
+    "javaMajor": 17,
+    "compileSdk": 36,
+    "targetSdk": 36,
+    "minSdk": 24,
+    "ndk": "28.2.13676358",
+    "buildTools": "36.0.0",
+    "reference": "toolchain/fable-flutter-3.50.json",
+    "realBuildVerified": false,
+    "deviceE2EVerified": false
   }
 }
