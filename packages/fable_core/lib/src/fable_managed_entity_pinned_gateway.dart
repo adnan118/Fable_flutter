@@ -35,7 +35,12 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
       final op=verifiedContract.operations[item.key];
       if(op==null||op.contractHash!=item.value||
          !RegExp(r'^[a-f0-9]{64}$').hasMatch(item.value)||
-         !const {'GET','POST','PATCH','DELETE'}.contains(op.method)||
+         op.method!='GET' ||
+         op.recordAccess==null ||
+         !RegExp(r'^managed-entity:[A-Za-z][A-Za-z0-9_]*$').hasMatch(op.recordAccess!) ||
+         !(item.key.endsWith('.get')||item.key.endsWith('.list.paginated'))||
+         !(op.path=='/'+item.key.split('.').first ||
+           op.path=='/'+item.key.split('.').first+'/{id}')||
          !op.requiresAuth||!op.enforceAuth||op.credentialHeader!=null||
          !op.path.startsWith('/')||op.path.startsWith('/auth/')||
          op.path.contains('..')||op.path.contains('?')){
@@ -72,11 +77,10 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
       throw FableApiException(403,'managed_operation_not_signed_for_context');
     final selected=store.selected;
     if(selected==null)throw FableApiException(403,'managed_entity_selection_required');
-    if(!const {'GET','HEAD'}.contains(entry.method)&&
-       !const {'OWNER','MANAGER'}.contains(selected.access))
-      throw FableApiException(403,'managed_mutation_access_denied');
-    if(const {'PATCH','DELETE'}.contains(entry.method)&&ifMatch==null)
-      throw FableApiException(428,'managed_revision_precondition_required');
+    // RC299 enables managed GET only. Verified writes require a separate,
+    // schema-reviewed mutation policy and must not use this gateway yet.
+    if(entry.method!='GET'||body!=null||ifMatch!=null)
+      throw FableApiException(403,'managed_source_only_read_allowed');
     final revision=store.selectionRevision;
     final account=session.identityRevision;
     bool valid()=>
