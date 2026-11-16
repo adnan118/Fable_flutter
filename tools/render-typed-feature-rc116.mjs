@@ -1354,6 +1354,31 @@ function dtoTest(op,featureId){
 
 /** RC292: separately reviewed UUID DELETE; signed null response, owner scope,
  * no invented idempotency, arbitrary query, automatic retry or transport in UI. */
+function signedFreshEtagReadLines(op,identityVar){
+  const get=op.preconditionRead;
+  if(!get||!get.contractHash||!get.operationId||
+     get.path!=='/'+op.path.split('/')[1]+'/:id')
+    throw Error('RC298 mandatory signed GET ETag prerequisite absent');
+  return [
+    '      final source=contract.operations['+dart(get.operationId)+'];',
+    '      if(source==null||source.method!="GET"||source.path!='+
+      dart(get.path.replace(/:id/g,'{id}'))+'||',
+    '         source.contractHash!='+dart(get.contractHash)+'||',
+    '         !source.requiresAuth||!source.enforceAuth||source.credentialHeader!=null)',
+    '        throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
+    '      final fresh=await gateway.execute('+dart(get.operationId)+',path:{"id":id});',
+    '      if(gateway.session.identityRevision!='+identityVar+')',
+    '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
+    '      final result=fresh.data;',
+    '      if(fresh.statusCode!=200||result is! Map||result["success"]!=true||',
+    '         result["data"] is! Map||result["data"]["id"]!=id)',
+    '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
+    '      final etag=fresh.headers.value("etag");',
+    '      if(etag==null||!RegExp(r\'^"[a-f0-9]{64}"$\').hasMatch(etag))',
+    '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
+    '      final ifMatch=etag.substring(1,etag.length-1);',
+  ];
+}
 function signedOwnerDeleteFiles(op,contractHash){
   if(op.method!=='DELETE'||op.resultKind!=='confirmed-delete'||
      op.params.join(',')!=='id'||op.fields.length||op.bodyFields.length)
@@ -1403,7 +1428,8 @@ function signedOwnerDeleteFiles(op,contractHash){
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    final epoch=gateway.session.identityRevision;',
     '    try{',
-    '      final response=await gateway.execute('+dart(op.operationId)+',path:{"id":id});',
+    ...signedFreshEtagReadLines(op,'epoch'),
+    '      final response=await gateway.execute('+dart(op.operationId)+',path:{"id":id},ifMatch:ifMatch);',
     '      if(gateway.session.identityRevision!=epoch)',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      final envelope=response.data;',
@@ -1416,7 +1442,7 @@ function signedOwnerDeleteFiles(op,contractHash){
     '        401=>TypedReadFailureKind.unauthenticated,',
     '        403=>TypedReadFailureKind.forbidden,',
     '        404=>TypedReadFailureKind.notFound,',
-    '        409||412=>TypedReadFailureKind.conflict,',
+    '        409||412||428=>TypedReadFailureKind.conflict,',
     '        408||504=>TypedReadFailureKind.timedOut,',
     '        429=>TypedReadFailureKind.rateLimited,',
     '        >=500=>TypedReadFailureKind.serverUnavailable,',
@@ -1619,8 +1645,9 @@ function signedOwnerPatchFiles(op,contractHash){
     '      late final Map<String,Object?> payload;',
     '      try{payload=request.toJson();}',
     '      on FormatException {throw const TypedReadFailure(TypedReadFailureKind.invalidInput);}',
+    ...signedFreshEtagReadLines(op,'revision'),
     '      final response=await gateway.execute('+dart(op.operationId)+',',
-    '        path:{"id":id},body:payload);',
+    '        path:{"id":id},body:payload,ifMatch:ifMatch);',
     '      if(gateway.session.identityRevision!=revision)',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      final envelope=response.data;',
@@ -1636,7 +1663,7 @@ function signedOwnerPatchFiles(op,contractHash){
     '        401=>TypedReadFailureKind.unauthenticated,',
     '        403=>TypedReadFailureKind.forbidden,',
     '        404=>TypedReadFailureKind.notFound,',
-    '        409||412=>TypedReadFailureKind.conflict,',
+    '        409||412||428=>TypedReadFailureKind.conflict,',
     '        408||504=>TypedReadFailureKind.timedOut,',
     '        429=>TypedReadFailureKind.rateLimited,',
     '        >=500=>TypedReadFailureKind.serverUnavailable,',
@@ -1848,6 +1875,7 @@ export function renderTypedFeature(plan){
       operationId:op.operationId,method:op.method,path:op.path,
       operationHash:op.contractHash,responseKind:op.resultKind,
       requestFields:(op.bodyFields??[]).map(f=>({name:f.name,required:f.required,type:f.type})),
+      ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
       sourceOnly:true,
     })),
     testsExecuted:false,liveE2EVerified:false,productionApproved:false,
