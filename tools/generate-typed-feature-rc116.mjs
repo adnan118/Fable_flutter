@@ -201,6 +201,7 @@ export function generatePinnedTypedFeature(root,options={}){
       id:op.operationId,method:op.method,operationHash:op.contractHash,
       responseKind:op.resultKind,
       ...(op.managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
+      ...(op.requiresIdempotency?{requiresIdempotency:true}:{}),
     })),
     managedBinding:plan.operations.some(op=>op.managedScoped)
       ?'packages/features/fable_'+plan.featureId+'/.fable-managed-source-binding.json':null,
