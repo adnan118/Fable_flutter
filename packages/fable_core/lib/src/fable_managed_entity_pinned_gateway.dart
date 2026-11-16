@@ -119,7 +119,7 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
          query!=null||
          ifMatch==null||!RegExp(r'^[a-f0-9]{64}$').hasMatch(ifMatch)||
          (entry.method=='DELETE'&&body!=null)||
-         (entry.method=='PATCH'&&(body is! Map||body.isEmpty))))){
+         (entry.method=='PATCH'&&(body is! Map||body.isEmpty)))){
         throw FableApiException(400,'managed_mutation_input_or_revision_invalid');
       }
     }
