@@ -1353,9 +1353,9 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC296",
+    "lastSourceUpdate": "RC299/RC300",
     "date": "2026-11-16",
-    "backendReferenceCommit": "d65af79195862050e1a5ed3d82590ebb43df9af6",
+    "backendReferenceCommit": "1f7984c63cefd50f399188d3c48aa3611a7697c2",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
       "RC274 signed global search DB pagination with server-side filtering",
@@ -1369,9 +1369,12 @@
       "RC295 Backend four-scope no-op PATCH guard (REQUEST_INVALID 400) in generated services",
       "RC296 Flutter UUIDv4 exact path/field validation for signed PATCH/DELETE and distinct request-vs-response failure mapping",
       "RC296 W3/W4 per-operation signed feature source receipts and precise preview/apply method-aware integration status",
-      "RC296 W0-W8 read-only source-map CLI (no tests or production side effects)"
+      "RC296 W0-W8 read-only source-map CLI (no tests or production side effects)",
+      "RC300 Backend OpenAPI mirrors independently signed recordAccess on all operations",
+      "RC299 FableContract validates operation identity/hash/managed recordAccess against independently signed OpenAPI",
+      "RC299 fail-closed managed GET/by-id and paginated infinite scroll generation using explicit entity-context pinned gateway and source receipts"
     ],
-    "sourceTestEvidence": "No RC292–RC296 test suites executed per user request; current source compiled/simulated E2E has not been verified.",
+    "sourceTestEvidence": "No RC299/RC300 live tests, Flutter compile or generated-project integration tests were executed per user request; source review only.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1383,7 +1386,9 @@
       "RC293 Flutter generated Dart PATCH compile and E2E, user-owned tests",
       "Backend server-enforced optimistic PATCH concurrency (If-Match/revision), still unsupported by generic codegen",
       "RC296 source receipt and generated Dart method-specific compile/analyze; deferred to user",
-      "RC296 W4 feature registry app integration across multiple selected features"
+      "RC296 W4 feature registry app integration across multiple selected features",
+      "RC299/RC300 managed selection-bound Dart SDK integration compile, real cross-tenant authorization and Flutter widget data invalidation remain with user",
+      "Managed PATCH/DELETE intentionally unsupported pending source-approved write policy, backend authorization and acceptance"
     ],
     "w5Closed": false,
     "w6Closed": false,
