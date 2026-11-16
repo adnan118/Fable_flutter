@@ -7,10 +7,10 @@ The previous `wizard:feature:generate` required one invocation per feature. For 
 
 ## One-command source preview
 
-Run from the intended **generated Flutter project root** that contains `.fable/project-features.json`, `assets/contracts/{contract,openapi}.json`, the independently imported setup and the selected feature requirements:
+Run from the **Fable Flutter source repository** (where this `pnpm` script is installed), passing `--root PATH_TO_GENERATED_PROJECT`. That generated project must contain `.fable/project-features.json`, `assets/contracts/{contract,openapi}.json`, the independently imported setup and the selected feature requirements:
 
 ```bash
-pnpm run wizard:feature:batch -- --expected-project-id PROJECT_ID --expected-contract-hash CONTRACT_SHA256 --wire-app
+pnpm run wizard:feature:batch -- --root PATH_TO_GENERATED_PROJECT --expected-project-id PROJECT_ID --expected-contract-hash CONTRACT_SHA256 --wire-app
 ```
 
 Preview validates every selection, pinned contract and the proposed pubspec/registry mutations **without writing any file**. It returns one JSON report with source file counts, methods, signed operation IDs, managed-entity requirements and `liveE2EVerified:false`.
@@ -18,7 +18,7 @@ Preview validates every selection, pinned contract and the proposed pubspec/regi
 ## One-command stage and app binding
 
 ```bash
-pnpm run wizard:feature:batch -- --expected-project-id PROJECT_ID --expected-contract-hash CONTRACT_SHA256 --apply --wire-app
+pnpm run wizard:feature:batch -- --root PATH_TO_GENERATED_PROJECT --expected-project-id PROJECT_ID --expected-contract-hash CONTRACT_SHA256 --apply --wire-app
 ```
 
 - Validates and renders **ALL** selected custom feature packages before mutating source. A failing/unsupported feature blocks the whole batch. No partial support is treated as success.
@@ -30,7 +30,7 @@ pnpm run wizard:feature:batch -- --expected-project-id PROJECT_ID --expected-con
 - Does **NOT** call `flutter pub get`, Gradle, Dart analyzer, live Backend, Render, GitHub Actions or Android/iOS tools. No new downloads or SDK changes are triggered.
 
 ## Dependencies / limits
-- The CLI expects the generator tools and `package.json` script from the Fable Flutter source checkout to be present in the **generated project** invoking it. Source-only preview may be used until all selected features have independent, signed operation contracts.
+- Run the CLI from the Fable Flutter source checkout and pass `--root` to the generated project's filesystem path. It can also run directly from the generated project only if those exact generator tools/scripts are present there. Preview is useful until all selected features have independently signed operation contracts.
 - Only explicitly supported CRUD operations are emitted; sensitive/unsupported/ambiguous write signatures fail closed.
 - After a committed source batch, the user intentionally runs `flutter pub get` and Flutter/Dart build checks under pinned Flutter 3.50.0 / Dart 3.14.0 to test the generated project.
 - The existing single-feature command remains available and unchanged.
