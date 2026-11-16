@@ -138,6 +138,24 @@ function signedUnpaginatedListFields(op,schema){
 /** RC299: a managed GET is allowed only by two matching, independently
  * signed artifacts and an explicit entity-aware Flutter gateway.
  * Arbitrary HTTP headers or managed writes remain unsupported here. */
+/** RC301: allow only owner-equivalent, source-pinned managed writes.
+ * Real authorization and concurrent revision predicate live in Backend. */
+function checkedManagedWrite(op,route,featureId){
+  if(typeof op.recordAccess!=='string' ||
+     !/^managed-entity:[A-Za-z][A-Za-z0-9_]*$/.test(op.recordAccess) ||
+     route['x-fable-record-access']!==op.recordAccess ||
+     !['PATCH','DELETE'].includes(op.method) ||
+     op.operationId!==featureId+(op.method==='PATCH'?'.update':'.delete') ||
+     op.path!=='/'+featureId+'/:id' ||
+     (op.request?.query??[]).length!==0 ||
+     (op.permissions??[]).length!==1 ||
+     op.permissions[0]!==featureId+(op.method==='PATCH'?'.update':'.delete') ||
+     (route['x-fable-permissions']??[]).length!==1 ||
+     route['x-fable-permissions'][0]!==op.permissions[0] ||
+     op.idempotency?.required===true)
+    fail('Managed mutation requires source-signed, tenant-scoped UUID and role permission: '+op.operationId);
+  return true;
+}
 function checkedManagedRead(op,route,featureId){
   const policy=op.recordAccess;
   if(typeof policy!=='string' ||
@@ -426,6 +444,8 @@ function verifyMutationPrecondition(op,route,featureId,contract,openapi){
   const etag={header:'ETag',scheme:'sha256-id-revision-v1'};
   if(get.method!=='GET'||get.path!=='/'+featureId+'/:id'||
      get.public!==false||get.feature!==featureId||
+     get.recordAccess!==op.recordAccess ||
+     getRoute?.['x-fable-record-access']!==op.recordAccess||
      get.permissions?.length!==1||get.permissions[0]!==featureId+'.read'||
      !HASH.test(get.contractHash)||
      JSON.stringify(get.etag)!==JSON.stringify(etag)||
@@ -438,14 +458,16 @@ function verifyMutationPrecondition(op,route,featureId,contract,openapi){
   return {operationId:get.operationId,contractHash:get.contractHash,path:get.path};
 }
 
-function validatedOwnerPatch(op,route,featureId,params,id){
+function validatedOwnerPatch(op,route,featureId,params,id,managedScoped=false){
   const restricted=new Set(['auth','payments','media','access_control','biometrics',
     'messaging','support','social','notifications','account_lifecycle','roles',
     'organizations','system_settings','content_pages']);
   if(restricted.has(featureId) ||
      op.method!=='PATCH'||id!==featureId+'.update'||
      op.path!=='/'+featureId+'/:id'||params.length!==1||params[0]!=='id'||
-     !/^owner:[A-Za-z][A-Za-z0-9_]{0,50}$/.test(op.recordAccess??'')||
+     !(managedScoped
+       ?/^managed-entity:[A-Za-z][A-Za-z0-9_]*$/.test(op.recordAccess??'')
+       :/^owner:[A-Za-z][A-Za-z0-9_]{0,50}$/.test(op.recordAccess??''))||
      op.permissions?.length!==1||op.permissions[0]!==featureId+'.update'||
      route['x-fable-permissions']?.length!==1||
      route['x-fable-permissions'][0]!==featureId+'.update'||
@@ -490,7 +512,7 @@ function validatedOwnerPatch(op,route,featureId,params,id){
   return fields;
 }
 
-function validatedOwnerDelete(op,route,featureId,params,id,schema){
+function validatedOwnerDelete(op,route,featureId,params,id,schema,managedScoped=false){
   const forbidden=new Set(['auth','payments','media','access_control','biometrics',
     'messaging','support','social','notifications','account_lifecycle','roles',
     'organizations','system_settings','content_pages']);
@@ -499,7 +521,9 @@ function validatedOwnerDelete(op,route,featureId,params,id,schema){
      op.method!=='DELETE'||!id.endsWith('.delete')||
      op.path!=='/'+featureId+'/:id' ||
      params.length!==1||params[0]!=='id'||
-     !/^owner:[A-Za-z][A-Za-z0-9_]{0,50}$/.test(op.recordAccess??'')||
+     !(managedScoped
+       ?/^managed-entity:[A-Za-z][A-Za-z0-9_]*$/.test(op.recordAccess??'')
+       :/^owner:[A-Za-z][A-Za-z0-9_]{0,50}$/.test(op.recordAccess??''))||
      (op.permissions??[]).length!==1||
      op.permissions[0]!==featureId+'.delete'||
      route['x-fable-permissions']?.length!==1 ||
@@ -563,7 +587,12 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       fail('OpenAPI policy differs from signed record-access scope: '+id);
     const managedScoped=typeof op.recordAccess==='string' &&
       op.recordAccess.startsWith('managed-entity:');
-    if(managedScoped)checkedManagedRead(op,route,featureId);
+    if(managedScoped){
+      if(spec.method==='GET')checkedManagedRead(op,route,featureId);
+      else if(['PATCH','DELETE'].includes(spec.method))
+        checkedManagedWrite(op,route,featureId);
+      else fail('Managed writes require reviewed PATCH/DELETE and source-bound preconditions: '+id);
+    }
     if(spec.method==='GET'&&route.requestBody!==undefined)
       fail('GET with request body is unsupported: '+id);
     const params=[...spec.path.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(x=>x[1]);
@@ -613,7 +642,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     if(resultKind==='single')
       checkSignedResponseShape(op,schema.properties.data,fields);
     if(resultKind==='confirmed-delete')
-      validatedOwnerDelete(op,route,featureId,params,id,schema);
+      validatedOwnerDelete(op,route,featureId,params,id,schema,managedScoped);
     const preconditionRead=['PATCH','DELETE'].includes(spec.method)
       ?verifyMutationPrecondition(op,route,featureId,contract,openapi):null;
     const className=typeName(id);
@@ -624,7 +653,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     for(const value of [id,spec.path,op.contractHash])safeString(value);
     const bodyFields=spec.method==='POST'
       ?validatedCreateFields(op,route,id,featureId)
-      :spec.method==='PATCH'?validatedOwnerPatch(op,route,featureId,params,id):[];
+      :spec.method==='PATCH'?validatedOwnerPatch(op,route,featureId,params,id,managedScoped):[];
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
@@ -637,5 +666,5 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT, tenant-scoped/idempotency-required PATCH/DELETE and sensitive POST deliberately rejected; managed GET requires explicit signed scoped gateway'};
+    unsupportedMethods:'PUT, idempotency-required or unreviewed managed writes and sensitive POST blocked; managed mutations require signed scope, fresh GET and If-Match'};
 }
