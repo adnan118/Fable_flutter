@@ -340,12 +340,20 @@ function adapter(op,projectHash){
       '    if(sort!=null && sort.isNotEmpty && !sortAllowed.contains(sort))',
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
     ]:[]),
-'    final identity=gateway.session.identityRevision;',
+...(op.method==='POST'?[
+      '    late final Map<String,Object?> validatedCreate;',
+      '    try {',
+      '      validatedCreate='+name+'CreateRequest('+
+        (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson();',
+      '    } on FormatException {',
+      '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      '    }',
+    ]:[]),
+    '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
-      (op.method==='POST'?',body:'+name+'CreateRequest('+
-        (op.bodyFields??[]).map(f=>f.name+': '+f.name).join(', ')+').toJson()':'')+
+      (op.method==='POST'?',body:validatedCreate':'')+
       signedPageQuery(op)+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
@@ -378,6 +386,7 @@ function adapter(op,projectHash){
     '      final kind=switch(error.status){',
     '        401=>TypedReadFailureKind.unauthenticated,',
     '        403=>TypedReadFailureKind.forbidden,',
+    '        400||422=>TypedReadFailureKind.invalidInput,',
     '        404=>TypedReadFailureKind.notFound,',
     '        408||504=>TypedReadFailureKind.timedOut,',
     '        409=>TypedReadFailureKind.conflict,',

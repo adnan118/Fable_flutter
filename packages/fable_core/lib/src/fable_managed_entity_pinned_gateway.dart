@@ -35,15 +35,18 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
       final op=verifiedContract.operations[item.key];
       if(op==null||op.contractHash!=item.value||
          !RegExp(r'^[a-f0-9]{64}$').hasMatch(item.value)||
-         !const {'GET','PATCH','DELETE'}.contains(op.method)||
+         !const {'GET','POST','PATCH','DELETE'}.contains(op.method)||
          op.recordAccess==null||
          !RegExp(r'^managed-entity:[A-Za-z][A-Za-z0-9_]*$').hasMatch(op.recordAccess!)||
          !(op.method=='GET'?
            ((item.key.endsWith('.get')&&op.path=='/'+item.key.split('.').first+'/{id}')||
             (item.key.endsWith('.list.paginated')&&op.path=='/'+item.key.split('.').first)):
-           (op.requiresIfMatch&&
-            item.key.endsWith(op.method=='PATCH'?'.update':'.delete')&&
-            op.path=='/'+item.key.split('.').first+'/{id}'))||
+           (op.method=='POST'
+             ?(!op.requiresIfMatch&&item.key.endsWith('.create')&&
+               op.path=='/'+item.key.split('.').first)
+             :(op.requiresIfMatch&&
+               item.key.endsWith(op.method=='PATCH'?'.update':'.delete')&&
+               op.path=='/'+item.key.split('.').first+'/{id}')))||
          !op.requiresAuth||!op.enforceAuth||op.credentialHeader!=null||
          !op.path.startsWith('/')||op.path.startsWith('/auth/')||
          op.path.contains('..')||op.path.contains('?')){
@@ -52,7 +55,7 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
     }
     for(final item in _approved.entries){
       final op=verifiedContract.operations[item.key]!;
-      if(op.method=='GET')continue;
+      if(const {'GET','POST'}.contains(op.method))continue;
       final feature=item.key.split('.').first;
       final read=verifiedContract.operations['$feature.get'];
       if(read==null||read.method!='GET'||
@@ -98,19 +101,25 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
       if(body!=null||ifMatch!=null)
         throw FableApiException(400,'managed_get_cannot_mutate');
     }else{
-      if(!entry.requiresIfMatch ||
-         !const {'PATCH','DELETE'}.contains(entry.method))
+      if(entry.method=='POST'){
+        if(entry.requiresIfMatch||path!=null||query!=null||ifMatch!=null||
+           body is! Map||body.isEmpty||
+           body.keys.any((key)=>key is! String))
+          throw FableApiException(400,'managed_create_payload_invalid');
+      }else if(!entry.requiresIfMatch||
+         !const {'PATCH','DELETE'}.contains(entry.method)){
         throw FableApiException(403,'managed_write_not_signed');
+      }
       if(!const {'OWNER','MANAGER'}.contains(selected.access))
         throw FableApiException(403,'managed_mutation_access_denied');
       final id=path?['id'];
-      if(id is! String||path!.length!=1||
+      if(entry.method!='POST' && (id is! String||path!.length!=1||
          !RegExp(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
            caseSensitive:false).hasMatch(id)||
          query!=null||
          ifMatch==null||!RegExp(r'^[a-f0-9]{64}$').hasMatch(ifMatch)||
          (entry.method=='DELETE'&&body!=null)||
-         (entry.method=='PATCH'&&(body is! Map||body.isEmpty))){
+         (entry.method=='PATCH'&&(body is! Map||body.isEmpty)))){
         throw FableApiException(400,'managed_mutation_input_or_revision_invalid');
       }
     }
