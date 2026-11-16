@@ -202,10 +202,16 @@ export function generatePinnedTypedFeature(root,options={}){
       responseKind:op.resultKind,
       ...(op.managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
     })),
-    managedReadBinding:plan.operations.some(op=>op.managedScoped)
+    managedBinding:plan.operations.some(op=>op.managedScoped)
       ?'packages/features/fable_'+plan.featureId+'/.fable-managed-source-binding.json':null,
     managedScopedOperations:plan.operations.filter(op=>op.managedScoped)
       .map(op=>op.operationId),
+    managedConditionalWrites:plan.operations.filter(op=>op.managedScoped&&
+      ['PATCH','DELETE'].includes(op.method)).map(op=>({
+        operationId:op.operationId,
+        readBeforeMutation:op.preconditionRead?.operationId??null,
+        requiresIfMatch:true,sourceOnly:true,
+      })),
     sourceReceipt:'packages/features/fable_'+plan.featureId+'/.fable-operation-evidence.json',
     integrationStatus:options.apply!==true
       ?'PREVIEW_ONLY: no generated package or app binding has been written'
