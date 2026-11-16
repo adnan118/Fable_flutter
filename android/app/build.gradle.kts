@@ -6,8 +6,10 @@ plugins {
 
 android {
     namespace = "com.example.helloworld"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Flutter 3.50.0 tested defaults, pinned to avoid a silent Android SDK drift.
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
+    buildToolsVersion = "36.0.0"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -19,8 +21,8 @@ android {
         applicationId = "com.example.helloworld"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 24
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
