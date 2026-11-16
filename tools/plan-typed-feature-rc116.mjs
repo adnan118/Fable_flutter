@@ -1,6 +1,6 @@
 /**
- * RC116: plan *only* source-exported, fully typed, authenticated Fable GET
- * operations. This is deliberately a strict subset of OpenAPI 3.1.
+ * RC116/RC292: plan only source-exported authenticated Fable GET, reviewed POST
+ * and narrowly owner-scoped DELETE. Strict subset of OpenAPI 3.1.
  * Unsupported schema MUST fail, never silently become dynamic or empty [].
  */
 const FEATURE=/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
@@ -371,6 +371,44 @@ function validatedCreateFields(op,route,id,featureId){
   return fields;
 }
 
+/**
+ * RC292: deletion is *not* a generic CRUD shortcut. A signed one-record,
+ * owner-scoped DELETE with no custom headers/tenant binding is the only
+ * subtype that can use the existing authenticated gateway without guessing
+ * idempotency or optimistic concurrency support. The UI must show a second
+ * explicit confirmation, never retry and never infer success from 404/409.
+ */
+function validatedOwnerDelete(op,route,featureId,params,id,schema){
+  const forbidden=new Set(['auth','payments','media','access_control','biometrics',
+    'messaging','support','social','notifications','account_lifecycle','roles',
+    'organizations','system_settings','content_pages']);
+  if(forbidden.has(featureId) ||
+     /(?:^|[._-])(admin|billing|payment|security|revoke|transfer|purge|erase|destroy)(?:$|[._-])/i.test(id) ||
+     op.method!=='DELETE'||!id.endsWith('.delete')||
+     op.path!=='/'+featureId+'/:id' ||
+     params.length!==1||params[0]!=='id'||
+     !/^owner:[A-Za-z][A-Za-z0-9_]{0,50}$/.test(op.recordAccess??'')||
+     (op.permissions??[]).length!==1||
+     op.permissions[0]!==featureId+'.delete'||
+     route['x-fable-permissions']?.length!==1 ||
+     route['x-fable-permissions'][0]!==featureId+'.delete'||
+     op.idempotency?.required===true||
+     (op.request?.headers??[]).length!==0||
+     (op.request?.query??[]).length!==0||
+     op.request?.body!=null||
+     route.requestBody!==undefined ||
+     op.response?.kind!=='fable-success-envelope'||
+     op.response.data?.type!=='null' ||
+     schema.properties?.data?.type!=='null' ||
+     op.httpStatus!==200)
+    fail('DELETE requires signed owner-only UUID, null acknowledgement, no idempotency/header or privileged action: '+id);
+  const idParam=(op.request?.params??[]).find(p=>p.name==='id');
+  const routeId=route.parameters?.find(p=>p.name==='id'&&p.in==='path');
+  if(idParam?.type!=='uuid'||routeId?.schema?.format!=='uuid')
+    fail('DELETE requires a signed UUID record identifier: '+id);
+  return true;
+}
+
 export function planTypedFeature({featureId,contract,openapi,requirements,selectedFeatures}){
   if(typeof featureId!=='string'||!FEATURE.test(featureId)||featureId.length>64)
     fail('unsafe project feature identifier');
@@ -387,14 +425,14 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   const specs=requirements.features[featureId];
   if(!specs||specs.needsBackend!==true||!Array.isArray(specs.operations)||
       specs.operations.length===0||specs.operations.length>8)
-    fail('1..8 explicitly selected signed GET/POST operations required');
+    fail('1..8 explicitly selected signed GET/reviewed POST/owner DELETE operations required');
   const seen=new Set(),names=new Set(),out=[];
   for(const spec of specs.operations){
     const id=spec?.operationId;
     if(typeof id!=='string'||!OP_ID.test(id)||seen.has(id))fail('unsafe/duplicate operation ID');
     seen.add(id);
-    if(!['GET','POST'].includes(spec.method)||typeof spec.path!=='string'||!PATH.test(spec.path))
-      fail('GET or reviewed create POST with a safe explicit contract path required for '+id);
+    if(!['GET','POST','DELETE'].includes(spec.method)||typeof spec.path!=='string'||!PATH.test(spec.path))
+      fail('GET, reviewed create POST, or reviewed owner DELETE contract path required for '+id);
     const candidates=contract.operations.filter(op=>op.operationId===id);
     if(candidates.length!==1)fail('operation not unique in project export: '+id);
     const op=candidates[0];
@@ -444,16 +482,20 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
        !Array.isArray(schema.required)||
        !schema.required.includes('success')||!schema.required.includes('data'))
       fail('strict Fable success envelope and data schema required: '+id);
-    const resultKind=op.response?.data?.type==='list-result'
+    const resultKind=spec.method==='DELETE'?'confirmed-delete':
+      op.response?.data?.type==='list-result'
       ?(op.operationId.endsWith('.list.paginated')?'paginated-list':'unpaginated-list')
       :'single';
     const paginated=resultKind==='paginated-list'
       ?signedPaginatedListFields(op,schema.properties?.data,route):null;
-    const fields=resultKind==='unpaginated-list'
+    const fields=resultKind==='confirmed-delete'?[]:
+      resultKind==='unpaginated-list'
       ?signedUnpaginatedListFields(op,schema.properties?.data)
       :paginated?.fields??dataFields(schema.properties?.data);
     if(resultKind==='single')
       checkSignedResponseShape(op,schema.properties.data,fields);
+    if(resultKind==='confirmed-delete')
+      validatedOwnerDelete(op,route,featureId,params,id,schema);
     const className=typeName(id);
     if(!/^[A-Z][A-Za-z0-9]*$/.test(className)||className.length>80||
        names.has(className))fail('unsafe/colliding Dart type name: '+id);
@@ -472,5 +514,5 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT/PATCH/DELETE and unsupported POST schemas deliberately rejected'};
+    unsupportedMethods:'PUT/PATCH, idempotency-required DELETE, tenant-scoped DELETE and sensitive POST deliberately rejected'};
 }
