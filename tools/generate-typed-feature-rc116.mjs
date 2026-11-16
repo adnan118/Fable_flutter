@@ -194,10 +194,20 @@ export function generatePinnedTypedFeature(root,options={}){
     appWired:options.apply===true&&binding!==null,
     backup:backup?relative(root,backup):null,
     destination:'packages/features/fable_'+plan.featureId,
-    integrationStatus:binding
-      ?'typed GET source + app registry/pubspec connected; real E2E pending'
-      :'typed GET source generated; host app registry/pubspec still require explicit binding',
-    liveE2EVerified:false,
+    // RC296: distinguish source preview from committed/generated Dart outputs.
+    // A registry binding is not evidence that any Backend operation passed E2E.
+    methods:[...new Set(plan.operations.map(op=>op.method))].sort(),
+    operationEvidence:plan.operations.map(op=>({
+      id:op.operationId,method:op.method,operationHash:op.contractHash,
+      responseKind:op.resultKind,
+    })),
+    sourceReceipt:'packages/features/fable_'+plan.featureId+'/.fable-operation-evidence.json',
+    integrationStatus:options.apply!==true
+      ?'PREVIEW_ONLY: no generated package or app binding has been written'
+      :binding
+        ?'SOURCE_GENERATED_APP_BOUND: signed GET/POST/PATCH/DELETE subject to selected operation contract; E2E pending'
+        :'SOURCE_GENERATED_UNBOUND: host app registry/pubspec binding still required',
+    liveE2EVerified:false,productionReady:false,
   };
 }
 function cli(args){
