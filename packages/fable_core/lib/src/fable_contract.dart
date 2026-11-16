@@ -10,7 +10,7 @@ abstract class OperationCatalog {
 }
 
 class FableOperation {
-  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader, this.recordAccess, this.requiresIfMatch=false});
+  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader, this.recordAccess, this.requiresIfMatch=false, this.requiresIdempotency=false});
   final String id;
   final String method;
   final String path;
@@ -24,6 +24,8 @@ class FableOperation {
   final String? recordAccess;
   /// True only if both signed contract and OpenAPI advertise enforced If-Match.
   final bool requiresIfMatch;
+  /// True only when signed Backend and OpenAPI both require Idempotency-Key.
+  final bool requiresIdempotency;
 }
 
 /// Validated backend session policy. The exported value is a wizard/build-time hint;
@@ -182,9 +184,34 @@ class FableContract implements OperationCatalog {
               throw const FormatException('Invalid optimistic concurrency policy');
             }
           }
+          final signedIdempotency=signedMatches.single['idempotency'];
+          final requiresIdempotency=signedIdempotency!=null;
+          final idHeader=(info['parameters'] is List)
+            ?(info['parameters'] as List).where((p)=>p is Map &&
+                p['in']=='header' && p['name']=='Idempotency-Key').toList():[];
+          if(requiresIdempotency){
+            final headers=signedIdempotency is Map ? signedIdempotency['headers']:null;
+            final signedRequest=signedMatches.single['request'];
+            if(signedIdempotency is! Map ||
+               signedIdempotency['required']!=true ||
+               headers is! List ||
+               !headers.contains('Idempotency-Key') ||
+               signedRequest is! Map ||
+               signedRequest['headers'] is! List ||
+               !(signedRequest['headers'] as List).contains('Idempotency-Key') ||
+               idHeader.length!=1 ||
+               idHeader.single['required']!=true ||
+               !const {'POST','PATCH','DELETE','PUT'}.contains(
+                 (route.key as String).toUpperCase())){
+              throw const FormatException('Signed idempotency policy differs from OpenAPI');
+            }
+          }else if(idHeader.isNotEmpty){
+            throw const FormatException('Unsigned Idempotency-Key in OpenAPI');
+          }
           ops[id] = FableOperation(id, (route.key as String).toUpperCase(), pair.key as String,
             actualHash, requiresAuth:!isPublic,enforceAuth:true,
-            recordAccess:signedAccess as String?,requiresIfMatch:conditional);
+            recordAccess:signedAccess as String?,requiresIfMatch:conditional,
+            requiresIdempotency:requiresIdempotency);
         }
       }
     }
