@@ -1353,9 +1353,9 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC304",
+    "lastSourceUpdate": "RC306",
     "date": "2026-11-16",
-    "backendReferenceCommit": "cfcae97d09092e822579ecad7b69744f29fd5907",
+    "backendReferenceCommit": "0604d91ba22277f84fe1f4715b981683e0139754",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
       "RC274 signed global search DB pagination with server-side filtering",
@@ -1380,9 +1380,12 @@
       "RC302 source-side POST request validation before gateway transport; 400/422 input errors distinguished from Backend malformed DTO",
       "RC303 Backend read-only legacy Prisma fableRevision upgrade planner; migrations and schema unchanged",
       "RC304 Flutter source-pinned Idempotency-Key 256-bit secure generation for scoped POST when exact Backend/OpenAPI signed requirement exists",
-      "RC304 verified HTTP Auth and Managed gateway transport forwarding with rejection of missing, unsigned or ambient idempotency keys"
+      "RC304 verified HTTP Auth and Managed gateway transport forwarding with rejection of missing, unsigned or ambient idempotency keys",
+      "RC305 Backend actor + managed tenant + method idempotency claim scoping mirrored into new Backend blueprints; legacy claim replay blocked",
+      "RC306 Flutter generated signed CREATE distinguishes known ambiguous idempotency outcomes from ordinary conflict, preserves manual-only retry",
+      "RC306 created form UUIDs use Backend UUIDv4 shape"
     ],
-    "sourceTestEvidence": "No tests executed for RC302–RC304 by user request; JavaScript source syntax inspection only, no Flutter SDK/compiler, Prisma migration or Render deployment.",
+    "sourceTestEvidence": "No RC305–RC306 tests were executed at user request; new Jest/Node regression sources were only authored. Dart runtime not available.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1402,7 +1405,9 @@
       "RC302 managed POST source-generated Dart compilation and real owner/manager vs viewer CREATE isolation E2E deferred to user",
       "RC302 idempotency-required managed POST intentionally rejected pending signed idempotency support",
       "RC303 live upgrade Prisma migration generation/state refresh and historical projects require user review",
-      "RC304 Dart compilation, backend replay/key-scope verification and uncertain-response recovery user-owned; no E2E executed"
+      "RC304 Dart compilation, backend replay/key-scope verification and uncertain-response recovery user-owned; no E2E executed",
+      "RC305 mixed-version idempotency rollout must drain old writers and reconcile legacy ambiguous claims",
+      "RC306 Flutter typed failure compile and real idempotency recovery E2E deferred to user; no automatic result recovery endpoint claimed"
     ],
     "w5Closed": false,
     "w6Closed": false,
