@@ -1353,7 +1353,7 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC292",
+    "lastSourceUpdate": "RC293",
     "date": "2026-11-16",
     "backendReferenceCommit": "d57d000fe8ad366fbacfa1d64fdd525962608752",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
@@ -1364,9 +1364,10 @@
       "RC280 Flutter atomic signed integer/decimal Min/Max filters and infinite-scroll reset",
       "RC281 Flutter signed datetime From/To UTC calendar filters with identity-fenced selection and canonical date checks",
       "RC282 signed Backend sort-field allowlist mirrored into OpenAPI, selected Flutter asc/desc sorting across infinite scroll",
-      "RC292 Flutter signed, owner-scoped UUID record DELETE with null response, two-stage confirmation and session fencing; no auto retry"
+      "RC292 Flutter signed, owner-scoped UUID record DELETE with null response, two-stage confirmation and session fencing; no auto retry",
+      "RC293 Flutter four-layer source for signed owner-scoped PATCH with bounded optional text/UUID fields, manual confirmation and no retry"
     ],
-    "sourceTestEvidence": "No tests executed for RC292 by user request; prior RC282 source-isolate tests remain historical evidence only",
+    "sourceTestEvidence": "No tests executed for RC292-RC293 per user request; reviewed only JavaScript source syntax. Prior RC282 tests are historical.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1374,7 +1375,9 @@
       "real role/tenant/scope authorization",
       "Native calendar picker widget rendering and date locale integration",
       "True signed sort E2E in generated Backend+Flutter project",
-      "RC292 generated DELETE Dart analyzer/Flutter widget and real owner-scoped E2E intentionally left to user"
+      "RC292 generated DELETE Dart analyzer/Flutter widget and real owner-scoped E2E intentionally left to user",
+      "RC293 Flutter generated Dart PATCH compile and E2E, user-owned tests",
+      "Backend server-enforced optimistic PATCH concurrency (If-Match/revision), still unsupported by generic codegen"
     ],
     "w5Closed": false,
     "w6Closed": false,
