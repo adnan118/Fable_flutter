@@ -18,8 +18,10 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.1.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // Flutter 3.50.0 template-tested Android build stack.
+    id("com.android.application") version "9.3.1" apply false
+    // Version retained for third-party plugin resolution; app uses built-in Kotlin.
+    id("org.jetbrains.kotlin.android") version "2.4.20" apply false
 }
 
 include(":app")
