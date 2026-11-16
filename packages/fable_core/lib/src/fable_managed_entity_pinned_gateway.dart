@@ -88,7 +88,7 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
   @override
   Future<Response<dynamic>> execute(String operationId,{
     Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
-    CancelToken? cancelToken,String? ifMatch,
+    CancelToken? cancelToken,String? ifMatch,String? idempotencyKey,
   }) {
     if(!_bound())throw FableApiException(403,'managed_context_backend_or_identity_changed');
     final entry=verifiedContract.operations[operationId];
@@ -98,9 +98,16 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
     if(selected==null)throw FableApiException(403,'managed_entity_selection_required');
     final readOnly=entry.method=='GET';
     if(readOnly){
-      if(body!=null||ifMatch!=null)
+      if(body!=null||ifMatch!=null||idempotencyKey!=null)
         throw FableApiException(400,'managed_get_cannot_mutate');
     }else{
+      if(entry.requiresIdempotency){
+        if(idempotencyKey==null ||
+           !RegExp(r'^[a-f0-9]{64}$').hasMatch(idempotencyKey))
+          throw FableApiException(400,'managed_signed_idempotency_key_required');
+      }else if(idempotencyKey!=null){
+        throw FableApiException(403,'managed_idempotency_key_not_signed');
+      }
       if(entry.method=='POST'){
         if(entry.requiresIfMatch||path!=null||query!=null||ifMatch!=null||
            body is! Map||body.isEmpty||
@@ -132,7 +139,7 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
     if(!valid())throw FableApiException(409,'managed_entity_context_changed_discard_response');
     return super.executeInManagedEntity(operationId,selected.id,
       path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch,
-      contextStillValid:valid);
+      idempotencyKey:idempotencyKey,contextStillValid:valid);
   }
 
   @override

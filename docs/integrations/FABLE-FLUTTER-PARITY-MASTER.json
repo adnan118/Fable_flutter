@@ -1353,9 +1353,9 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC302",
+    "lastSourceUpdate": "RC304",
     "date": "2026-11-16",
-    "backendReferenceCommit": "1f7984c63cefd50f399188d3c48aa3611a7697c2",
+    "backendReferenceCommit": "cfcae97d09092e822579ecad7b69744f29fd5907",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
       "RC274 signed global search DB pagination with server-side filtering",
@@ -1377,9 +1377,12 @@
       "RC301 managed owner/manager PATCH/DELETE with signed tenant recordAccess, same-scope fresh GET ETag, bounded non-sensitive update DTO and no automatic retries",
       "RC301 managed project factory includes signed GET precondition dependencies; project navigation binds pages to inherited verified entity store and scopeEvents",
       "RC302 managed-entity POST create signed operation, exact feature.create permission, bounded safe request DTO and OWNER/MANAGER scoped gateway",
-      "RC302 source-side POST request validation before gateway transport; 400/422 input errors distinguished from Backend malformed DTO"
+      "RC302 source-side POST request validation before gateway transport; 400/422 input errors distinguished from Backend malformed DTO",
+      "RC303 Backend read-only legacy Prisma fableRevision upgrade planner; migrations and schema unchanged",
+      "RC304 Flutter source-pinned Idempotency-Key 256-bit secure generation for scoped POST when exact Backend/OpenAPI signed requirement exists",
+      "RC304 verified HTTP Auth and Managed gateway transport forwarding with rejection of missing, unsigned or ambient idempotency keys"
     ],
-    "sourceTestEvidence": "Per user request no RC302 unit tests, generated Dart build, real Backend CREATE or Render deploy. JavaScript source syntax inspected only.",
+    "sourceTestEvidence": "No tests executed for RC302–RC304 by user request; JavaScript source syntax inspection only, no Flutter SDK/compiler, Prisma migration or Render deployment.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1397,7 +1400,9 @@
       "RC301 Flutter generated Dart compiler/analyzer, navigation integration with verified selection and Backend atomic write E2E left to user",
       "Existing generated project Prisma fableRevision migration plan, live authorization/concurrency acceptance and production readiness not verified",
       "RC302 managed POST source-generated Dart compilation and real owner/manager vs viewer CREATE isolation E2E deferred to user",
-      "RC302 idempotency-required managed POST intentionally rejected pending signed idempotency support"
+      "RC302 idempotency-required managed POST intentionally rejected pending signed idempotency support",
+      "RC303 live upgrade Prisma migration generation/state refresh and historical projects require user review",
+      "RC304 Dart compilation, backend replay/key-scope verification and uncertain-response recovery user-owned; no E2E executed"
     ],
     "w5Closed": false,
     "w6Closed": false,

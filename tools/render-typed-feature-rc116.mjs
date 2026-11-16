@@ -349,11 +349,16 @@ function adapter(op,projectHash){
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
       '    }',
     ]:[]),
+    ...(op.method==='POST'&&op.requiresIdempotency?[
+      '    // A distinct cryptographically secure key for this user-intended CREATE.',
+      '    final idempotencyKey=FableIdempotencyKey.generate();',
+    ]:[]),
     '    final identity=gateway.session.identityRevision;',
     '    try {',
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
       (op.method==='POST'?',body:validatedCreate':'')+
+      (op.requiresIdempotency?',idempotencyKey:idempotencyKey':'')+
       signedPageQuery(op)+');',
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
@@ -2005,6 +2010,7 @@ export function renderTypedFeature(plan){
       requestFields:(op.bodyFields??[]).map(f=>({name:f.name,required:f.required,type:f.type})),
       ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
       ...(op.managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
+      ...(op.requiresIdempotency?{requiresIdempotency:true}:{}),
       sourceOnly:true,
     })),
     testsExecuted:false,liveE2EVerified:false,productionApproved:false,
@@ -2017,7 +2023,7 @@ export function renderTypedFeature(plan){
     'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, reviewed create POST and signed owner PATCH/DELETE.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, arbitrary filters, unsigned tenancy, PUT, unsigned/idempotency-required managed writes, unsafe PATCH and sensitive POST are NOT generated.',
+    'Other Backend, arbitrary filters, unsigned tenancy, PUT, unsigned managed writes, unsafe PATCH and sensitive POST are NOT generated. Signed managed CREATE can use a secure per-request Idempotency-Key.',
     ...(managedOperations.length?['Managed GET/PATCH/DELETE: use the source-pinned binding factory and Backend-verified entity selection; pass gateway.scopeEvents to generated pages.']:[]),
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;

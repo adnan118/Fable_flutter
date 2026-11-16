@@ -915,12 +915,12 @@ class FableAuthGateway implements BackendApiGateway {
   /// operation. Never persist the entity header or propagate it across Backends.
   Future<Response<dynamic>> executeInManagedEntity(String operationId,String managedEntityId,{
     Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
-    CancelToken? cancelToken,String? ifMatch,
+    CancelToken? cancelToken,String? ifMatch,String? idempotencyKey,
     bool Function()? contextStillValid,
   }) {
     if(!_uuid.hasMatch(managedEntityId))throw ArgumentError('Invalid managed entity ID');
     return _api.request(operationId,path:path,query:query,body:body,
-      cancelToken:cancelToken,ifMatch:ifMatch,
+      cancelToken:cancelToken,ifMatch:ifMatch,idempotencyKey:idempotencyKey,
       managedEntityId:managedEntityId,contextStillValid:contextStillValid);
   }
 
@@ -994,8 +994,9 @@ class FableAuthGateway implements BackendApiGateway {
   /// the same auth/session/refresh semantics as login, without guessing routes.
   Future<Response<dynamic>> execute(String operationId,{
     Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
-    CancelToken? cancelToken,String? ifMatch,
-  }) => _api.execute(operationId,path:path,query:query,body:body,cancelToken:cancelToken,ifMatch:ifMatch);
+    CancelToken? cancelToken,String? ifMatch,String? idempotencyKey,
+  }) => _api.execute(operationId,path:path,query:query,body:body,
+    cancelToken:cancelToken,ifMatch:ifMatch,idempotencyKey:idempotencyKey);
   /// Streams bounded, origin-locked media bytes via the same verified Fable
   /// Bearer transport (including session refresh). Not a native-player URL.
   /// No operation ID is inferred: the caller supplies the verified GET ID.
