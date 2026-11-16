@@ -915,10 +915,12 @@ class FableAuthGateway implements BackendApiGateway {
   /// operation. Never persist the entity header or propagate it across Backends.
   Future<Response<dynamic>> executeInManagedEntity(String operationId,String managedEntityId,{
     Map<String,dynamic>? path,Map<String,dynamic>? query,Object? body,
+    CancelToken? cancelToken,String? ifMatch,
     bool Function()? contextStillValid,
   }) {
     if(!_uuid.hasMatch(managedEntityId))throw ArgumentError('Invalid managed entity ID');
     return _api.request(operationId,path:path,query:query,body:body,
+      cancelToken:cancelToken,ifMatch:ifMatch,
       managedEntityId:managedEntityId,contextStillValid:contextStillValid);
   }
 

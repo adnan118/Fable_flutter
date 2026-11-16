@@ -10,7 +10,7 @@ abstract class OperationCatalog {
 }
 
 class FableOperation {
-  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader});
+  const FableOperation(this.id, this.method, this.path, this.contractHash, {this.requiresAuth=true, this.enforceAuth=false, this.credentialHeader, this.recordAccess});
   final String id;
   final String method;
   final String path;
@@ -20,6 +20,8 @@ class FableOperation {
   /// Set only for contract-declared non-Bearer credentials. The actual secret
   /// is provided at runtime and must never be serialized in assets.
   final String? credentialHeader;
+  /// Verified against the project-signed operation and OpenAPI; null on legacy exports.
+  final String? recordAccess;
 }
 
 /// Validated backend session policy. The exported value is a wizard/build-time hint;
@@ -141,8 +143,29 @@ class FableContract implements OperationCatalog {
                 (!isPublic && (info['security'] as List).isEmpty)))) {
             throw const FormatException('Fable operation authorization metadata is missing or inconsistent');
           }
+          // RC299: do not trust a free-standing OpenAPI access label.
+          // Accept it only when it matches the independently signed operation.
+          final signedOps=contract['operations'];
+          if(signedOps is! List)throw const FormatException('Signed operation catalog missing');
+          final signedMatches=signedOps.where((item)=>item is Map &&
+            item['operationId']==id).toList(growable:false);
+          if(signedMatches.length!=1 || signedMatches.single is! Map ||
+             signedMatches.single['contractHash']!=actualHash ||
+             signedMatches.single['method']!=(route.key as String).toUpperCase() ||
+             (signedMatches.single['path'] as String?)?.replaceAllMapped(
+               RegExp(r':([A-Za-z][A-Za-z0-9_]*)'),
+               (match)=>'{'+match.group(1)!+'}')!=pair.key)
+            throw const FormatException('Signed Fable operation/OpenAPI identity mismatch');
+          final signedAccess=signedMatches.single['recordAccess'];
+          final openAccess=info['x-fable-record-access'];
+          if(signedAccess!=openAccess ||
+             (signedAccess!=null &&
+               (signedAccess is! String || signedAccess.length>120 ||
+                 !RegExp(r'^(?:owner|managed-entity):[A-Za-z][A-Za-z0-9_]*$|^(?:permission-wide|self-owner|global|none)$').hasMatch(signedAccess))))
+            throw const FormatException('Signed record-access policy differs from OpenAPI');
           ops[id] = FableOperation(id, (route.key as String).toUpperCase(), pair.key as String,
-            actualHash, requiresAuth:!isPublic,enforceAuth:true);
+            actualHash, requiresAuth:!isPublic,enforceAuth:true,
+            recordAccess:signedAccess as String?);
         }
       }
     }

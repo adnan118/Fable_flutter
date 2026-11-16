@@ -200,7 +200,12 @@ export function generatePinnedTypedFeature(root,options={}){
     operationEvidence:plan.operations.map(op=>({
       id:op.operationId,method:op.method,operationHash:op.contractHash,
       responseKind:op.resultKind,
+      ...(op.managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
     })),
+    managedReadBinding:plan.operations.some(op=>op.managedScoped)
+      ?'packages/features/fable_'+plan.featureId+'/.fable-managed-source-binding.json':null,
+    managedScopedOperations:plan.operations.filter(op=>op.managedScoped)
+      .map(op=>op.operationId),
     sourceReceipt:'packages/features/fable_'+plan.featureId+'/.fable-operation-evidence.json',
     integrationStatus:options.apply!==true
       ?'PREVIEW_ONLY: no generated package or app binding has been written'
