@@ -156,6 +156,27 @@ function checkedManagedWrite(op,route,featureId){
     fail('Managed mutation requires source-signed, tenant-scoped UUID and role permission: '+op.operationId);
   return true;
 }
+/** RC302: restrict managed create to signed, safe scalar POST
+ * under the server's active managed entity and OWNER/MANAGER access.
+ * No custom headers, spoofed tenant IDs, or mandatory idempotency keys. */
+function checkedManagedCreate(op,route,featureId){
+  if(op.method!=='POST'||op.operationId!==featureId+'.create'||
+     op.path!=='/'+featureId||
+     typeof op.recordAccess!=='string'||
+     !/^managed-entity:[A-Za-z][A-Za-z0-9_]*$/.test(op.recordAccess)||
+     route['x-fable-record-access']!==op.recordAccess||
+     (op.permissions??[]).length!==1||
+     op.permissions[0]!==featureId+'.create'||
+     (route['x-fable-permissions']??[]).length!==1||
+     route['x-fable-permissions'][0]!==featureId+'.create'||
+     op.idempotency?.required===true||
+     (op.request?.headers??[]).length!==0||
+     (op.request?.query??[]).length!==0||
+     (op.request?.params??[]).length!==0||
+     (route.parameters??[]).length!==0)
+    fail('Managed create must be exact signed, non-idempotency-required POST in one verified entity: '+op.operationId);
+  return true;
+}
 function checkedManagedRead(op,route,featureId){
   const policy=op.recordAccess;
   if(typeof policy!=='string' ||
@@ -338,14 +359,17 @@ function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
   return {fields,searchPageSupported,filters:selected,sortFields};
 }
 
-function validatedCreateFields(op,route,id,featureId){
+function validatedCreateFields(op,route,id,featureId,managedScoped=false){
   // A generic typed form cannot invent fresh OTP/Idempotency-Key headers,
   // managed-entity scope, URL query binding, or server-issued revisions.
   // Such operations need reviewed dedicated adapters and flow evidence.
   if(op.idempotency?.required===true ||
      (op.request?.headers??[]).length>0 ||
      (op.request?.query??[]).length>0 ||
-     (op.recordAccess && !['global','none'].includes(op.recordAccess.mode)) ||
+     (op.recordAccess &&
+       !(managedScoped
+         ?/^managed-entity:[A-Za-z][A-Za-z0-9_]*$/.test(op.recordAccess)
+         :['global','none'].includes(op.recordAccess))) ||
      (op.permissions??[]).some(p=>typeof p!=='string'||!p.trim()||
        /(?:^|[._-])(admin|manage|billing|payment|security|revoke|transfer)(?:$|[._-])/i.test(p)))
     fail('create POST needs a reviewed idempotency, context or privileged write adapter: '+id);
@@ -591,7 +615,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       if(spec.method==='GET')checkedManagedRead(op,route,featureId);
       else if(['PATCH','DELETE'].includes(spec.method))
         checkedManagedWrite(op,route,featureId);
-      else fail('Managed writes require reviewed PATCH/DELETE and source-bound preconditions: '+id);
+      else if(spec.method==='POST')checkedManagedCreate(op,route,featureId);
+      else fail('Managed write not reviewed or signed: '+id);
     }
     if(spec.method==='GET'&&route.requestBody!==undefined)
       fail('GET with request body is unsupported: '+id);
@@ -652,7 +677,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     if(typeof op.contractHash!=='string')fail('missing operation hash');
     for(const value of [id,spec.path,op.contractHash])safeString(value);
     const bodyFields=spec.method==='POST'
-      ?validatedCreateFields(op,route,id,featureId)
+      ?validatedCreateFields(op,route,id,featureId,managedScoped)
       :spec.method==='PATCH'?validatedOwnerPatch(op,route,featureId,params,id,managedScoped):[];
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
@@ -666,5 +691,5 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT, idempotency-required or unreviewed managed writes and sensitive POST blocked; managed mutations require signed scope, fresh GET and If-Match'};
+    unsupportedMethods:'PUT, idempotency-required or unreviewed writes and sensitive POST blocked; managed POST requires signed entity scope/role with no invented idempotency'};
 }
