@@ -1530,6 +1530,236 @@ function signedOwnerDeleteFiles(op,contractHash){
   return files;
 }
 
+
+/** RC293: bounded signed owner PATCH with no auto retry. This helper is
+ * separate from GET/POST because optional field selection must be explicit. */
+function signedOwnerPatchFiles(op,contractHash){
+  if(op.method!=='PATCH'||op.resultKind!=='single'||op.params.join(',')!=='id'||
+     !op.bodyFields.length||op.bodyFields.some(f=>f.required||f.type!=='String'))
+    throw Error('RC293 PATCH renderer requires a signed optional text-only owner update');
+  const name=op.className,slug=snake(op.operationId),fs=op.bodyFields;
+  const uuid="r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'";
+  const files=new Map(),put=(p,...parts)=>files.set(p,line(...parts));
+  put('lib/src/domain/'+slug+'_entity.dart',entity(op));
+  put('lib/src/domain/'+slug+'_repository.dart',
+    "import '"+slug+"_entity.dart';",
+    'abstract interface class '+name+'Repository {',
+    '  Future<'+name+'Entity> update({required String id,'+
+      fs.map(f=>'String? '+f.name).join(',')+'});',
+    '}');
+  put('lib/src/application/'+slug+'_use_case.dart',
+    "import '../domain/"+slug+"_entity.dart';",
+    "import '../domain/"+slug+"_repository.dart';",
+    "import '../domain/typed_read_result.dart';",
+    'final class '+name+'UseCase {',
+    '  const '+name+'UseCase(this.repository);final '+name+'Repository repository;',
+    '  Future<TypedReadResult<'+name+'Entity>> call({required String id,'+
+      fs.map(f=>'String? '+f.name).join(',')+'})async{',
+    '    if(!RegExp('+uuid+').hasMatch(id)||'+
+      fs.map(f=>f.name+'==null').join('&&')+')',
+    '      return const TypedReadFailed<'+name+'Entity>(',
+    '        TypedReadFailure(TypedReadFailureKind.invalidInput));',
+    '    try{return TypedReadSuccess<'+name+'Entity>(',
+    '      await repository.update(id:id,'+
+      fs.map(f=>f.name+':'+f.name).join(',')+'));}',
+    '    on TypedReadFailure catch(e){return TypedReadFailed<'+name+'Entity>(e);}',
+    '    catch(_){return const TypedReadFailed<'+name+'Entity>(',
+    '      TypedReadFailure(TypedReadFailureKind.unknown));}',
+    '  }',
+    '}');
+  put('lib/src/data/'+slug+'_dto.dart',dto(op));
+  put('lib/src/data/'+slug+'_update_request.dart',
+    '// RC293: only explicitly selected safe scalar fields; at least one.',
+    'final class '+name+'UpdateRequest {',
+    '  const '+name+'UpdateRequest({'+fs.map(f=>'this.'+f.name).join(',')+'});',
+    ...fs.map(f=>'  final String? '+f.name+';'),
+    '  Map<String,Object?> toJson(){',
+    '    if('+fs.map(f=>f.name+'==null').join('&&')+')',
+    '      throw const FormatException("PATCH needs a field");',
+    ...fs.flatMap(f=>[
+      '    if('+f.name+'!=null && ('+f.name+'!.trim().isEmpty ||',
+      '       '+f.name+'!.length>'+f.maxLength+' ||',
+      '       '+f.name+'!.codeUnits.any((c)=>c<32||c==127)))',
+      '      throw const FormatException('+dart('Invalid '+f.name+' PATCH field')+');',
+      ...(f.uuid?[
+        '    if('+f.name+'!=null && !RegExp('+uuid+').hasMatch('+f.name+'!))',
+        '      throw const FormatException('+dart('Invalid '+f.name+' UUID')+');',
+      ]:[]),
+    ]),
+    '    return <String,Object?>{',
+    ...fs.map(f=>'      if('+f.name+'!=null)'+dart(f.name)+':'+f.name+','),
+    '    };',
+    '  }',
+    '}');
+  put('lib/src/data/fable_'+slug+'_repository.dart',
+    '// RC293: Data alone transports signed owner PATCH and parses strict DTO.',
+    "import 'package:fable_core/fable_core.dart';",
+    "import '../domain/"+slug+"_entity.dart';",
+    "import '../domain/"+slug+"_repository.dart';",
+    "import '../domain/typed_read_result.dart';",
+    "import '"+slug+"_dto.dart';",
+    "import '"+slug+"_update_request.dart';",
+    'final class Fable'+name+'Repository implements '+name+'Repository {',
+    '  const Fable'+name+'Repository(this.gateway);final FableAuthGateway gateway;',
+    '  @override Future<'+name+'Entity> update({required String id,'+
+      fs.map(f=>'String? '+f.name).join(',')+'})async{',
+    '    if(!RegExp('+uuid+').hasMatch(id))',
+    '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    '    final contract=gateway.verifiedContract;',
+    '    final op=contract.operations['+dart(op.operationId)+'];',
+    '    if(contract.contractHash!='+dart(contractHash)+'||op==null||',
+    '       op.method!="PATCH"||op.path!='+
+      dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+'||',
+    '       op.contractHash!='+dart(op.contractHash)+'||!op.requiresAuth||',
+    '       !op.enforceAuth||op.credentialHeader!=null)',
+    '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
+    '    final revision=gateway.session.identityRevision;',
+    '    try{',
+    '      final request='+name+'UpdateRequest('+fs.map(f=>f.name+':'+f.name).join(',')+');',
+    '      final response=await gateway.execute('+dart(op.operationId)+',',
+    '        path:{"id":id},body:request.toJson());',
+    '      if(gateway.session.identityRevision!=revision)',
+    '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
+    '      final envelope=response.data;',
+    '      if(response.statusCode!=200||envelope is! Map||',
+    '         envelope["success"]!=true||envelope["data"] is! Map)',
+    '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
+    '      final raw=envelope["data"] as Map;',
+    '      if(raw.keys.any((key)=>key is! String))',
+    '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
+    '      return '+name+'Dto.fromJson(Map<String,Object?>.from(raw)).toDomain();',
+    '    } on FableApiException catch(e){',
+    '      throw TypedReadFailure(switch(e.status){',
+    '        401=>TypedReadFailureKind.unauthenticated,',
+    '        403=>TypedReadFailureKind.forbidden,',
+    '        404=>TypedReadFailureKind.notFound,',
+    '        409||412=>TypedReadFailureKind.conflict,',
+    '        408||504=>TypedReadFailureKind.timedOut,',
+    '        429=>TypedReadFailureKind.rateLimited,',
+    '        >=500=>TypedReadFailureKind.serverUnavailable,',
+    '        _=>TypedReadFailureKind.unknown,',
+    '      });',
+    '    } on FormatException {',
+    '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+    '    } on TypedReadFailure {rethrow;}',
+    '  }',
+    '}');
+  put('lib/src/presentation/'+slug+'_controller.dart',
+    "import 'package:flutter/foundation.dart';",
+    "import '../application/"+slug+"_use_case.dart';",
+    "import '../domain/"+slug+"_entity.dart';",
+    "import '../domain/typed_read_result.dart';",
+    'sealed class '+name+'State {const '+name+'State();}',
+    'final class '+name+'Idle extends '+name+'State {const '+name+'Idle();}',
+    'final class '+name+'Busy extends '+name+'State {const '+name+'Busy();}',
+    'final class '+name+'Done extends '+name+'State {',
+    '  const '+name+'Done(this.value);final '+name+'Entity value;}',
+    'final class '+name+'Failed extends '+name+'State {',
+    '  const '+name+'Failed(this.kind);final TypedReadFailureKind kind;}',
+    'final class '+name+'Controller extends ChangeNotifier {',
+    '  '+name+'Controller(this.useCase);final '+name+'UseCase useCase;',
+    '  '+name+'State state=const '+name+'Idle();',
+    '  int _epoch=0;bool _closed=false;',
+    '  void invalidate(){if(_closed)return;_epoch++;state=const '+name+'Idle();notifyListeners();}',
+    '  Future<void> submit({required String id,'+fs.map(f=>'String? '+f.name).join(',')+'})async{',
+    '    if(_closed||state is! '+name+'Idle)return;',
+    '    final ticket=++_epoch;state=const '+name+'Busy();notifyListeners();',
+    '    final result=await useCase(id:id,'+fs.map(f=>f.name+':'+f.name).join(',')+');',
+    '    if(_closed||ticket!=_epoch)return;',
+    '    if(result is TypedReadSuccess<'+name+'Entity>)state='+name+'Done(result.value);',
+    '    else if(result is TypedReadFailed<'+name+'Entity>)',
+    '      state='+name+'Failed(result.failure.kind);',
+    '    else state=const '+name+'Failed(TypedReadFailureKind.unknown);',
+    '    notifyListeners();',
+    '  }',
+    '  @override void dispose(){_closed=true;_epoch++;super.dispose();}',
+    '}');
+  put('lib/src/presentation/'+slug+'_page.dart',
+    '// RC293: an explicit owner UUID update; no background retry or generic form data.',
+    "import 'dart:async';",
+    "import 'package:material_ui/material_ui.dart';",
+    "import '../domain/"+slug+"_repository.dart';",
+    "import '../application/"+slug+"_use_case.dart';",
+    "import '"+slug+"_controller.dart';",
+    'final class '+name+'Page extends StatefulWidget {',
+    '  const '+name+'Page({super.key,required this.repository,required this.identityEvents});',
+    '  final '+name+'Repository repository;final Stream<Object?> identityEvents;',
+    '  @override State<'+name+'Page> createState()=>_'+name+'PageState();}',
+    'final class _'+name+'PageState extends State<'+name+'Page> {',
+    '  final _id=TextEditingController();',
+    ...fs.map(f=>'  final _'+f.name+'=TextEditingController();'),
+    '  late '+name+'Controller _controller;',
+    '  StreamSubscription<Object?>? _identity;int _epoch=0;bool _confirming=false;',
+    '  void _redraw(){if(mounted)setState((){});}',
+    '  void _clear(){_id.clear();'+fs.map(f=>'_'+f.name+'.clear();').join('')+'}',
+    '  void _bind(){_controller='+name+'Controller('+name+'UseCase(widget.repository));',
+    '    _controller.addListener(_redraw);',
+    '    _identity=widget.identityEvents.listen((_){',
+    '      _epoch++;_clear();if(mounted)_controller.invalidate();});}',
+    '  @override void initState(){super.initState();_bind();}',
+    '  @override void didUpdateWidget(covariant '+name+'Page old){',
+    '    super.didUpdateWidget(old);',
+    '    if(!identical(old.repository,widget.repository)||',
+    '       !identical(old.identityEvents,widget.identityEvents)){',
+    '      _epoch++;_clear();unawaited(_identity?.cancel());',
+    '      _controller.removeListener(_redraw);_controller.dispose();_bind();}}',
+    '  @override void dispose(){unawaited(_identity?.cancel());',
+    '    _controller.removeListener(_redraw);_controller.dispose();',
+    '    _id.dispose();'+fs.map(f=>'_'+f.name+'.dispose();').join('')+
+      'super.dispose();}',
+    '  Future<void> _update()async{',
+    '    if(_confirming||_controller.state is! '+name+'Idle)return;',
+    '    final id=_id.text.trim();',
+    '    if(!RegExp('+uuid+').hasMatch(id))return;',
+    '    if('+fs.map(f=>'_'+f.name+'.text.trim().isEmpty').join('&&')+')return;',
+    '    _confirming=true;setState((){});final epoch=_epoch;',
+    '    final approval=TextEditingController();',
+    '    try{',
+    '      final confirmed=await showDialog<bool>(context:context,barrierDismissible:false,',
+    '        builder:(dialog)=>AlertDialog(',
+    '          title:const Text("Update one owned record?"),',
+    '          content:Column(mainAxisSize:MainAxisSize.min,children:[',
+    '            Text("Record: "+id),',
+    '            const Text("Type UPDATE to confirm. Network failure may be ambiguous."),',
+    '            TextField(controller:approval,autocorrect:false),',
+    '          ]),actions:[',
+    '            TextButton(onPressed:()=>Navigator.pop(dialog,false),child:const Text("Cancel")),',
+    '            FilledButton(onPressed:()=>Navigator.pop(dialog,approval.text=="UPDATE"),',
+    '              child:const Text("Confirm update")),',
+    '          ]));',
+    '      if(confirmed!=true||!mounted||epoch!=_epoch||_id.text.trim()!=id)return;',
+    '      await _controller.submit(id:id,'+
+      fs.map(f=>f.name+':(_'+f.name+'.text.trim().isEmpty?null:_'+f.name+'.text.trim())').join(',')+');',
+    '    }finally{approval.dispose();_confirming=false;if(mounted)setState((){});}}',
+    '  @override Widget build(BuildContext context){',
+    '    final st=_controller.state;',
+    '    return Scaffold(appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
+    '      body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[',
+    '        const Text("Signed owner PATCH; only entered fields are sent."),',
+    '        TextField(controller:_id,maxLength:36,',
+    '          enabled:st is '+name+'Idle&&!_confirming,',
+    '          decoration:const InputDecoration(labelText:"Owned record UUID")),',
+    ...fs.flatMap(f=>[
+      '        TextField(controller:_'+f.name+',maxLength:'+f.maxLength+',',
+      '          enabled:st is '+name+'Idle&&!_confirming,',
+      '          decoration:const InputDecoration(labelText:'+dart(f.name+' (optional)')+')),',
+    ]),
+    '        FilledButton(onPressed:st is '+name+'Idle&&!_confirming?_update:null,',
+    '          child:const Text("Review update")),',
+    '        if(st is '+name+'Busy)const LinearProgressIndicator(),',
+    '        if(st is '+name+'Done)const Text("Backend confirmed the update."),',
+    '        if(st is '+name+'Failed)...[',
+    '          Text("Update outcome unconfirmed: "+st.kind.name),',
+    '          const Text("Verify current Backend record before another update."),',
+    '        ],',
+    '        if(st is '+name+'Done||st is '+name+'Failed)',
+    '          OutlinedButton(onPressed:(){_clear();_controller.invalidate();},',
+    '            child:const Text("Start a separately confirmed update")),',
+    '      ])));}',
+    '}');
+  return files;
+}
+
 export function renderTypedFeature(plan){
   assertPlan(plan);
   const feature=plan.featureId;
@@ -1565,6 +1795,16 @@ export function renderTypedFeature(plan){
   const exports=["export 'src/domain/typed_read_result.dart';"];
   for(const op of plan.operations){
     const slug=snake(op.operationId);
+    if(op.method==='PATCH'){
+      for(const [p,source] of signedOwnerPatchFiles(op,plan.contractHash))put(p,source);
+      exports.push("export 'src/domain/"+slug+"_entity.dart';",
+        "export 'src/domain/"+slug+"_repository.dart';",
+        "export 'src/application/"+slug+"_use_case.dart';",
+        "export 'src/data/fable_"+slug+"_repository.dart';",
+        "export 'src/presentation/"+slug+"_controller.dart';",
+        "export 'src/presentation/"+slug+"_page.dart';");
+      continue;
+    }
     if(op.method==='DELETE'){
       for(const [p,source] of signedOwnerDeleteFiles(op,plan.contractHash))put(p,source);
       exports.push("export 'src/domain/"+slug+"_entity.dart';",
@@ -1603,10 +1843,10 @@ export function renderTypedFeature(plan){
     'Project ID: '+plan.projectId,
     'Pinned Backend Contract SHA-256: '+plan.contractHash,
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
-    'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, reviewed create POST and RC292 signed owner DELETE.',
+    'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, reviewed create POST and signed owner PATCH/DELETE.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, arbitrary filter/sort, legacy unpaged search, tenant-scoped paging, PUT/PATCH, managed-entity DELETE, idempotency-required DELETE and sensitive POST are NOT generated.',
+    'Other Backend, arbitrary filter/sort, legacy unpaged search, tenant-scoped paging, PUT, managed-entity/idempotency-required PATCH or DELETE, unsafe PATCH schema and sensitive POST are NOT generated.',
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
