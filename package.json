@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@12.10.1",
   "scripts": {
+    "fable:source-map": "node tools/fable-source-map-rc296.mjs",
     "wizard": "node tools/flutter-setup-wizard.mjs",
     "wizard:review": "node tools/flutter-setup-wizard.mjs --mode guided",
     "wizard:verify": "node tools/verify-fable-contract.mjs --mode source",
