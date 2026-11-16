@@ -24,16 +24,16 @@ The project does **not** download or upgrade Flutter/Dart SDKs on its own. Insta
 
 ## RC309 — Generate all selected Fable features in one batch
 
-From the **generated project root**, with an imported project-bound Backend contract and a `.fable/project-features.json` listing the selected custom features, preview everything in one call:
+From the **Fable Flutter source repository**, pass `--root PATH_TO_GENERATED_PROJECT` pointing to a generated project with an imported project-bound Backend contract and a `.fable/project-features.json` listing the selected custom features, preview everything in one call:
 
 ```bash
-pnpm run wizard:feature:batch -- --expected-project-id PROJECT_ID --expected-contract-hash SHA256 --wire-app
+pnpm run wizard:feature:batch -- --root PATH_TO_GENERATED_PROJECT --expected-project-id PROJECT_ID --expected-contract-hash SHA256 --wire-app
 ```
 
 After reviewing all source-gated operations, generate and bind all selected features in one source batch:
 
 ```bash
-pnpm run wizard:feature:batch -- --expected-project-id PROJECT_ID --expected-contract-hash SHA256 --apply --wire-app
+pnpm run wizard:feature:batch -- --root PATH_TO_GENERATED_PROJECT --expected-project-id PROJECT_ID --expected-contract-hash SHA256 --apply --wire-app
 ```
 
 Every selected feature is checked before writing; packages are staged together, app registry/pubspec edits are composed in memory, and original app files are durably backed up with best-effort guarded rollback. Unsupported contracts block the batch; nothing silently bypasses security policies. The operation **does not download Flutter/Dart**, build, or run tests. It prepares source for subsequent Flutter 3.50 verification by the operator. Read [RC309 guide](docs/integrations/RC309-W4-W5-BULK-PROJECT-FEATURE-INTEGRATION.ar.md). W7/W8 live acceptance remains open.
