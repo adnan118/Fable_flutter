@@ -263,14 +263,17 @@ function adapter(op,projectHash){
     ...(op.method==='POST'?["import '"+file+"_create_request.dart';"]:[]),
     'final class '+className+' implements '+name+'Repository {',
     '  const '+className+'(this.gateway);',
-    '  final FableAuthGateway gateway;',
+    (op.managedScoped
+      ?'  final FableManagedEntityPinnedGateway gateway;'
+      :'  final FableAuthGateway gateway;'),
     '  @override Future<'+name+'Entity> '+(op.method==='GET'?'load':'create')+'('+args+') async {',
     '    final contract=gateway.verifiedContract;',
     '    final op=contract.operations['+dart(op.operationId)+'];',
     '    if(contract.contractHash!='+dart(projectHash)+' || op==null ||',
     '       op.method!='+dart(op.method)+' || op.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
     '       op.contractHash!='+dart(op.contractHash)+' || !op.requiresAuth ||',
-    '       !op.enforceAuth || op.credentialHeader!=null){',
+    '       !op.enforceAuth || op.credentialHeader!=null'+
+      (op.managedScoped?' || op.recordAccess!='+dart(op.recordAccess):'')+'){',
     '      throw const TypedReadFailure(TypedReadFailureKind.unsupportedContract);',
     '    }',
   ];
@@ -1862,6 +1865,50 @@ export function renderTypedFeature(plan){
       "export 'src/presentation/"+slug+"_controller.dart';",
       "export 'src/presentation/"+slug+"_page.dart';");
   }
+  // RC299: this factory binds only selected, contract-verified managed GETs.
+  // It never injects X-Fable-Managed-Entity-Id into unrelated operations.
+  const managedOperations=plan.operations.filter(op=>op.managedScoped===true);
+  if(managedOperations.length){
+    const className='Fable'+typeName(feature)+'ManagedBinding';
+    const lines=[
+      '// GENERATED RC299: managed GET-only, signed operation allowlist.',
+      "import 'package:fable_core/fable_core.dart';",
+      'abstract final class '+className+' {',
+      '  static const projectHash='+dart(plan.contractHash)+';',
+      '  static const approvedHashes=<String,String>{',
+      ...managedOperations.map(op=>'    '+dart(op.operationId)+':'+dart(op.contractHash)+','),
+      '  };',
+      '  static FableManagedEntityPinnedGateway create({',
+      '    required Uri baseUri,required FableContract contract,',
+      '    required FableSecureSession session,required FableManagedEntityStore store,',
+      '    FableDpopProofSigner? dpopProofSigner,',
+      '  }){',
+      '    if(contract.contractHash!=projectHash)',
+      '      throw StateError("Generated managed binding has a stale Backend contract");',
+      '    // store.bindBackend(FableAuthGateway.managedEntityBackendIdentityFor(baseUri,contract))',
+      '    // is a deliberate authenticated step, NOT an automatic selection.',
+      '    return FableManagedEntityPinnedGateway(baseUri:baseUri,contract:contract,',
+      '      secureSession:session,store:store,dpopProofSigner:dpopProofSigner,',
+      '      approvedOperationHashes:approvedHashes);',
+      '  }',
+      '}',
+    ];
+    put('lib/src/data/'+snake(feature)+'_managed_binding.dart',line(...lines));
+    exports.push("export 'src/data/"+snake(feature)+"_managed_binding.dart';");
+    put('.fable-managed-source-binding.json',JSON.stringify({
+      schemaVersion:1,kind:'fable.managed-read-source-binding',
+      projectContractHash:plan.contractHash,
+      featureId:feature,sourceOnly:true,
+      operations:managedOperations.map(op=>({
+        operationId:op.operationId,contractHash:op.contractHash,
+        method:op.method,recordAccess:op.recordAccess,
+      })),
+      requiresExplicitSelectedEntity:true,
+      requiresIdentityBoundSelection:true,
+      needsScopeEventsOnPages:true,
+      liveE2EVerified:false,productionReady:false,
+    },null,2)+String.fromCharCode(10));
+  }
   const navigation=projectNavigation(plan);
   put('lib/src/project_feature.dart',navigation.source);
   put('lib/fable_'+feature+'.dart',line(
@@ -1876,6 +1923,7 @@ export function renderTypedFeature(plan){
       operationHash:op.contractHash,responseKind:op.resultKind,
       requestFields:(op.bodyFields??[]).map(f=>({name:f.name,required:f.required,type:f.type})),
       ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
+      ...(op.managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
       sourceOnly:true,
     })),
     testsExecuted:false,liveE2EVerified:false,productionApproved:false,
@@ -1888,7 +1936,8 @@ export function renderTypedFeature(plan){
     'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, reviewed create POST and signed owner PATCH/DELETE.',
     'Typed read screen, feature navigation, repository and state source are generated.',
     'Host app still needs an explicit verified feature registry/pubspec binding.',
-    'Other Backend, arbitrary filter/sort, legacy unpaged search, tenant-scoped paging, PUT, managed-entity/idempotency-required PATCH or DELETE, unsafe PATCH schema and sensitive POST are NOT generated.',
+    'Other Backend, arbitrary filter/sort, legacy unpaged search, unsigned tenant paging, PUT, managed-entity/idempotency-required PATCH or DELETE, unsafe PATCH schema and sensitive POST are NOT generated.',
+    ...(managedOperations.length?['Managed GET: use the source-pinned managed binding factory, explicitly bound selection, and pass gateway.scopeEvents to generated pages.']:[]),
     'No live Backend, DB, device, or authorization E2E has been verified.'));
   return files;
 }
