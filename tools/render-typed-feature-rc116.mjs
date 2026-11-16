@@ -1014,6 +1014,7 @@ function readPage(op){
 // RC265: FableFeature-compatible navigation. The feature is only launched
 // if every signed selected GET is still present in this EXACT backend export.
 function projectNavigation(plan){
+  const managedPresent=plan.operations.some(op=>op.managedScoped===true);
   const pascal=plan.featureId.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join('');
   const className='Fable'+pascal+'ProjectFeature',home='Fable'+pascal+'Home';
   const value=plan.featureId.replace(/_([a-z])/g,(_,c)=>c.toUpperCase())+'ProjectFeature';
@@ -1024,6 +1025,7 @@ function projectNavigation(plan){
     "import 'package:fable_feature_contract/fable_feature_contract.dart';",
     ...plan.operations.map(op=>"import 'presentation/"+snake(op.operationId)+"_page.dart';"),
     ...plan.operations.map(op=>"import 'data/fable_"+snake(op.operationId)+"_repository.dart';"),
+    ...(managedPresent?["import 'data/"+snake(plan.featureId)+"_managed_binding.dart';"]:[]),
     'const '+value+'='+className+'();',
     'final class '+className+' extends FableFeature {',
     '  const '+className+'():super(id:'+dart(plan.featureId)+',',
@@ -1039,7 +1041,11 @@ function projectNavigation(plan){
       '        '+v+'.path!='+dart(op.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,'{$1}'))+' ||',
       '        '+v+'.contractHash!='+dart(op.contractHash)+' ||',
       '        !'+v+'.requiresAuth || !'+v+'.enforceAuth ||',
-      '        '+v+'.credentialHeader!=null)return false;',
+      '        '+v+'.credentialHeader!=null'+
+        (op.managedScoped?' || '+v+'.recordAccess!='+dart(op.recordAccess):'')+
+        (op.managedScoped&&['PATCH','DELETE'].includes(op.method)
+          ?' || !'+v+'.requiresIfMatch':'')+
+        ')return false;',
     );
   }
   parts.push(
@@ -1058,6 +1064,10 @@ function projectNavigation(plan){
     '}',
     'final class _'+home+'State extends State<'+home+'> {',
     '  FableAuthGateway? _gateway;',
+    ...(managedPresent?[
+      '  FableManagedEntityPinnedGateway? _managedGateway;',
+      '  FableManagedEntityStore? _managedStore;',
+    ]:[]),
     '  @override void initState(){',
     '    super.initState();',
     "    const raw=String.fromEnvironment('FABLE_API_BASE_URL');",
@@ -1066,7 +1076,30 @@ function projectNavigation(plan){
     '      _gateway=FableAuthGateway(baseUri:base,contract:widget.contract);',
     '    }',
     '  }',
-    '  @override void dispose(){_gateway?.dispose();super.dispose();}',
+    ...(managedPresent?[
+      '  @override void didChangeDependencies(){',
+      '    super.didChangeDependencies();',
+      '    final store=FableManagedEntityScope.maybeOf(context);',
+      '    if(_managedGateway!=null && !identical(_managedStore,store)){',
+      '      _managedGateway!.dispose();_managedGateway=null;',
+      '    }',
+      '    _managedStore=store;',
+      '    final source=_gateway;',
+      '    if(store==null||source==null||_managedGateway!=null)return;',
+      "    const raw=String.fromEnvironment('FABLE_API_BASE_URL');",
+      '    final base=Uri.tryParse(raw);',
+      '    if(base==null||base.scheme!="https"||!base.hasAuthority)return;',
+      '    if(!store.isBoundToCredentials(source.session)||',
+      '       !store.isBoundToBackend(',
+      '         FableAuthGateway.managedEntityBackendIdentityFor(base,widget.contract)))return;',
+      '    _managedGateway=Fable'+pascal+'ManagedBinding.create(',
+      '      baseUri:base,contract:widget.contract,session:source.session,store:store);',
+      '  }',
+    ]:[]),
+    '  @override void dispose(){',
+    ...(managedPresent?['    _managedGateway?.dispose();']:[]),
+    '    _gateway?.dispose();super.dispose();',
+    '  }',
     '  @override Widget build(BuildContext context)=>Scaffold(',
     '    appBar:AppBar(title:const Text('+dart(pascal)+')),',
     '    body:SafeArea(child:ListView(',
@@ -1081,10 +1114,17 @@ function projectNavigation(plan){
       '          title:const Text('+dart(op.operationId)+'),',
       '          leading:const Icon(Icons.dataset_outlined),',
       '          trailing:const Icon(Icons.chevron_right),',
-      '          onTap:()=>Navigator.of(context).push(',
+      ...(op.managedScoped?[
+        '          subtitle:const Text("Select a verified managed entity before opening."),',
+        '          onTap:(_managedGateway==null||_managedGateway!.store.selected==null)?null:()=>Navigator.of(context).push(',
+      ]:[
+        '          onTap:()=>Navigator.of(context).push(',
+      ]),
       '            MaterialPageRoute<void>(builder:(_)=>'+op.className+'Page(',
-      '              repository:Fable'+op.className+'Repository(_gateway!),',
-      '              identityEvents:_gateway!.session.identityEvents))),',
+      '              repository:Fable'+op.className+'Repository('+
+        (op.managedScoped?'_managedGateway!':'_gateway!')+'),',
+      '              identityEvents:'+
+        (op.managedScoped?'_managedGateway!.scopeEvents':'_gateway!.session.identityEvents')+'))),',
       '        ),',
     );
   }
