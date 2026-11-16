@@ -1353,9 +1353,9 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC282",
-    "date": "2026-11-15",
-    "backendReferenceCommit": "fbe31f30f191bb38ab334242fe2dafb0f1963dbb",
+    "lastSourceUpdate": "RC292",
+    "date": "2026-11-16",
+    "backendReferenceCommit": "d57d000fe8ad366fbacfa1d64fdd525962608752",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
       "RC274 signed global search DB pagination with server-side filtering",
@@ -1363,16 +1363,18 @@
       "RC279 Backend numeric/datetime invalid-range guards",
       "RC280 Flutter atomic signed integer/decimal Min/Max filters and infinite-scroll reset",
       "RC281 Flutter signed datetime From/To UTC calendar filters with identity-fenced selection and canonical date checks",
-      "RC282 signed Backend sort-field allowlist mirrored into OpenAPI, selected Flutter asc/desc sorting across infinite scroll"
+      "RC282 signed Backend sort-field allowlist mirrored into OpenAPI, selected Flutter asc/desc sorting across infinite scroll",
+      "RC292 Flutter signed, owner-scoped UUID record DELETE with null response, two-stage confirmation and session fencing; no auto retry"
     ],
-    "sourceTestEvidence": "10/10 isolated JavaScript test callbacks executed against real current Flutter planner/renderer source; backend test authored but full Node SDK tests not executed",
+    "sourceTestEvidence": "No tests executed for RC292 by user request; prior RC282 source-isolate tests remain historical evidence only",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
       "Android/iOS native E2E",
       "real role/tenant/scope authorization",
       "Native calendar picker widget rendering and date locale integration",
-      "True signed sort E2E in generated Backend+Flutter project"
+      "True signed sort E2E in generated Backend+Flutter project",
+      "RC292 generated DELETE Dart analyzer/Flutter widget and real owner-scoped E2E intentionally left to user"
     ],
     "w5Closed": false,
     "w6Closed": false,
