@@ -1353,24 +1353,26 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC281",
+    "lastSourceUpdate": "RC282",
     "date": "2026-11-15",
-    "backendReferenceCommit": "b61e7d6bb69f4d330a16dc045bc7428a07f8be46",
+    "backendReferenceCommit": "fbe31f30f191bb38ab334242fe2dafb0f1963dbb",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
       "RC274 signed global search DB pagination with server-side filtering",
       "RC278 signed non-sensitive text/boolean equality filters",
       "RC279 Backend numeric/datetime invalid-range guards",
       "RC280 Flutter atomic signed integer/decimal Min/Max filters and infinite-scroll reset",
-      "RC281 Flutter signed datetime From/To UTC calendar filters with identity-fenced selection and canonical date checks"
+      "RC281 Flutter signed datetime From/To UTC calendar filters with identity-fenced selection and canonical date checks",
+      "RC282 signed Backend sort-field allowlist mirrored into OpenAPI, selected Flutter asc/desc sorting across infinite scroll"
     ],
-    "sourceTestEvidence": "8/8 isolated JavaScript test callbacks executed against actual current planner/renderer source; full Node and Flutter SDK not run",
+    "sourceTestEvidence": "10/10 isolated JavaScript test callbacks executed against real current Flutter planner/renderer source; backend test authored but full Node SDK tests not executed",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
       "Android/iOS native E2E",
       "real role/tenant/scope authorization",
-      "Native calendar picker widget rendering and date locale integration"
+      "Native calendar picker widget rendering and date locale integration",
+      "True signed sort E2E in generated Backend+Flutter project"
     ],
     "w5Closed": false,
     "w6Closed": false,

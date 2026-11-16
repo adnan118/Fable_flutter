@@ -168,7 +168,10 @@ function signedPaginatedListFields(op,schema,route){
        (spec.schema.format??null)!==(source.format??null)||
        JSON.stringify(spec.schema.enum??null)!==JSON.stringify(source.enum??null)||
        (spec.schema.minimum??null)!==(source.minimum??null)||
-       (spec.schema.maximum??null)!==(source.maximum??null))
+       (spec.schema.maximum??null)!==(source.maximum??null)||
+       (spec.name==='sort'&&
+        JSON.stringify(spec['x-fable-sort-allowlist']??null)!==
+          JSON.stringify(source.sortAllowedFields??null)))
       fail('paginated query schema differs from signed Backend: '+id);
   }
   for(const name of ['page','limit']){
@@ -279,7 +282,20 @@ function signedPaginatedListFields(op,schema,route){
        v.minimum===undefined && v.maximum===undefined))continue;
     selected.push({name:min,type:item.type},{name:max,type:item.type});
   }
-  return {fields,searchPageSupported,filters:selected};
+  // RC282: sorting is opt-in ONLY when the signed query agrees with
+  // OpenAPI's explicit generated Backend allowlist, never inferred from DTO.
+  const sorting=q.get('sort');
+  const allow=sorting?.sortAllowedFields;
+  const sortFields=(sorting?.type==='string' && sorting.required!==true &&
+    sorting.enum===undefined && sorting.format==null &&
+    Array.isArray(allow) && allow.length>0 && allow.length<=64 &&
+    new Set(allow).size===allow.length &&
+    allow.every(name=>safeIdent(name)&&
+      !/(?:password|secret|token|otp|pin|private|credential|session|payment|billing|accesskey)/i.test(name)&&
+      !signedItems.get(name)?.protectedAuth &&
+      !signedItems.get(name)?.sensitiveFilterSort)
+  )?allow.slice(0,8):[];
+  return {fields,searchPageSupported,filters:selected,sortFields};
 }
 
 function validatedCreateFields(op,route,id,featureId){
@@ -451,7 +467,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,bodyFields,resultKind,
       supportsSearch:paginated?.searchPageSupported??false,
-      filters:paginated?.filters??[]});
+      filters:paginated?.filters??[],sortFields:paginated?.sortFields??[]});
   }
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
