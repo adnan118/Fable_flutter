@@ -1353,9 +1353,9 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC293",
+    "lastSourceUpdate": "RC296",
     "date": "2026-11-16",
-    "backendReferenceCommit": "d57d000fe8ad366fbacfa1d64fdd525962608752",
+    "backendReferenceCommit": "d65af79195862050e1a5ed3d82590ebb43df9af6",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
       "RC274 signed global search DB pagination with server-side filtering",
@@ -1365,9 +1365,13 @@
       "RC281 Flutter signed datetime From/To UTC calendar filters with identity-fenced selection and canonical date checks",
       "RC282 signed Backend sort-field allowlist mirrored into OpenAPI, selected Flutter asc/desc sorting across infinite scroll",
       "RC292 Flutter signed, owner-scoped UUID record DELETE with null response, two-stage confirmation and session fencing; no auto retry",
-      "RC293 Flutter four-layer source for signed owner-scoped PATCH with bounded optional text/UUID fields, manual confirmation and no retry"
+      "RC293 Flutter four-layer source for signed owner-scoped PATCH with bounded optional text/UUID fields, manual confirmation and no retry",
+      "RC295 Backend four-scope no-op PATCH guard (REQUEST_INVALID 400) in generated services",
+      "RC296 Flutter UUIDv4 exact path/field validation for signed PATCH/DELETE and distinct request-vs-response failure mapping",
+      "RC296 W3/W4 per-operation signed feature source receipts and precise preview/apply method-aware integration status",
+      "RC296 W0-W8 read-only source-map CLI (no tests or production side effects)"
     ],
-    "sourceTestEvidence": "No tests executed for RC292-RC293 per user request; reviewed only JavaScript source syntax. Prior RC282 tests are historical.",
+    "sourceTestEvidence": "No RC292–RC296 test suites executed per user request; current source compiled/simulated E2E has not been verified.",
     "unverified": [
       "generated Nest+Prisma+MySQL E2E",
       "Dart/Flutter SDK analyze and tests",
@@ -1377,7 +1381,9 @@
       "True signed sort E2E in generated Backend+Flutter project",
       "RC292 generated DELETE Dart analyzer/Flutter widget and real owner-scoped E2E intentionally left to user",
       "RC293 Flutter generated Dart PATCH compile and E2E, user-owned tests",
-      "Backend server-enforced optimistic PATCH concurrency (If-Match/revision), still unsupported by generic codegen"
+      "Backend server-enforced optimistic PATCH concurrency (If-Match/revision), still unsupported by generic codegen",
+      "RC296 source receipt and generated Dart method-specific compile/analyze; deferred to user",
+      "RC296 W4 feature registry app integration across multiple selected features"
     ],
     "w5Closed": false,
     "w6Closed": false,
