@@ -383,6 +383,39 @@ function validatedCreateFields(op,route,id,featureId){
  * bounded optional text update. This is not a generic mutation policy:
  * no concurrency/If-Match or custom idempotency header is inferred.
  */
+/**
+ * RC298: each mutating source must be bound to an independently signed fresh
+ * GET of the same record. Never invent a local ETag or source from stale UI.
+ */
+function verifyMutationPrecondition(op,route,featureId,contract,openapi){
+  const meta={required:true,header:'If-Match',scheme:'sha256-id-revision-v1',
+    readOperation:featureId+'.get'};
+  if(JSON.stringify(op.precondition)!==JSON.stringify(meta)||
+     JSON.stringify(route['x-fable-precondition'])!==JSON.stringify(meta)||
+     !Array.isArray(op.request?.headers)||
+     op.request.headers.length!==1||op.request.headers[0]!=='If-Match'||
+     (route.parameters??[]).filter(p=>p.in==='header').length!==1||
+     !(route.parameters??[]).some(p=>p.in==='header'&&
+       p.name==='If-Match'&&p.required===true&&p.schema?.type==='string'))
+    fail('PATCH/DELETE must have an independently signed mandatory If-Match: '+op.operationId);
+  const entries=contract.operations.filter(x=>x.operationId===featureId+'.get');
+  if(entries.length!==1)fail('Signed fresh record GET required for mutation '+op.operationId);
+  const get=entries[0],getRoute=openapi.paths['/'+featureId+'/{id}']?.get;
+  const etag={header:'ETag',scheme:'sha256-id-revision-v1'};
+  if(get.method!=='GET'||get.path!=='/'+featureId+'/:id'||
+     get.public!==false||get.feature!==featureId||
+     get.permissions?.length!==1||get.permissions[0]!==featureId+'.read'||
+     !HASH.test(get.contractHash)||
+     JSON.stringify(get.etag)!==JSON.stringify(etag)||
+     getRoute?.operationId!==get.operationId||
+     getRoute?.['x-fable-contract-hash']!==get.contractHash||
+     JSON.stringify(getRoute?.['x-fable-etag'])!==JSON.stringify(etag)||
+     getRoute?.responses?.['200']?.headers?.ETag?.required!==true||
+     getRoute?.responses?.['200']?.headers?.ETag?.schema?.type!=='string')
+    fail('Fresh GET ETag source not matching independently signed Backend: '+op.operationId);
+  return {operationId:get.operationId,contractHash:get.contractHash,path:get.path};
+}
+
 function validatedOwnerPatch(op,route,featureId,params,id){
   const restricted=new Set(['auth','payments','media','access_control','biometrics',
     'messaging','support','social','notifications','account_lifecycle','roles',
@@ -395,7 +428,6 @@ function validatedOwnerPatch(op,route,featureId,params,id){
      route['x-fable-permissions']?.length!==1||
      route['x-fable-permissions'][0]!==featureId+'.update'||
      op.idempotency?.required===true||
-     (op.request?.headers??[]).length!==0||
      (op.request?.query??[]).length!==0||
      op.httpStatus!==200)
     fail('PATCH requires an explicitly signed owner UUID operation without custom headers: '+id);
@@ -451,7 +483,6 @@ function validatedOwnerDelete(op,route,featureId,params,id,schema){
      route['x-fable-permissions']?.length!==1 ||
      route['x-fable-permissions'][0]!==featureId+'.delete'||
      op.idempotency?.required===true||
-     (op.request?.headers??[]).length!==0||
      (op.request?.query??[]).length!==0||
      op.request?.body!=null||
      route.requestBody!==undefined ||
@@ -513,9 +544,11 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       fail('unsafe path parameters: '+id);
     const routePathParams=(route.parameters??[]).filter(p=>p.in==='path');
     const extraParams=(route.parameters??[]).filter(p=>p.in!=='path');
+    const conditionalMutation=['PATCH','DELETE'].includes(spec.method);
     if(routePathParams.length!==params.length||
-       (extraParams.length>0&&!id.endsWith('.list.paginated'))||
-       extraParams.some(p=>p.in!=='query')||
+       (extraParams.length>0&&!id.endsWith('.list.paginated')&&!conditionalMutation)||
+       extraParams.some(p=>p.in!=='query'&&
+         !(conditionalMutation&&p.in==='header'&&p.name==='If-Match'&&p.required===true))||
        params.some(name=>!routePathParams.some(p=>
          p.name===name&&p.required===true&&p.schema?.type==='string')))
       fail('only signed path parameters and explicitly reviewed paginated queries supported: '+id);
@@ -554,6 +587,8 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       checkSignedResponseShape(op,schema.properties.data,fields);
     if(resultKind==='confirmed-delete')
       validatedOwnerDelete(op,route,featureId,params,id,schema);
+    const preconditionRead=['PATCH','DELETE'].includes(spec.method)
+      ?verifyMutationPrecondition(op,route,featureId,contract,openapi):null;
     const className=typeName(id);
     if(!/^[A-Z][A-Za-z0-9]*$/.test(className)||className.length>80||
        names.has(className))fail('unsafe/colliding Dart type name: '+id);
@@ -567,11 +602,12 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       fail('request/body/path parameter name conflicts with response fields: '+id);
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,bodyFields,resultKind,
+      ...(preconditionRead?{preconditionRead}:{}),
       supportsSearch:paginated?.searchPageSupported??false,
       filters:paginated?.filters??[],sortFields:paginated?.sortFields??[]});
   }
   return {featureId,projectId:contract.project.id,contractHash:contract.contractHash,
     operations:out.sort((a,b)=>a.operationId.localeCompare(b.operationId)),
     liveE2EVerified:false,
-    unsupportedMethods:'PUT, tenant-scoped/idempotency-required PATCH/DELETE and sensitive POST deliberately rejected'};
+    unsupportedMethods:'PUT, tenant-scoped/idempotency-required PATCH/DELETE and sensitive POST deliberately rejected; only signed fresh-GET If-Match mutation is supported'};
 }
