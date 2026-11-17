@@ -106,6 +106,7 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
       key:ValueKey<int>(_generation),
       future:active,
       builder:(context,snapshot){
+        final arabic=Localizations.localeOf(context).languageCode=='ar';
         if(!_sameVerifiedIdentity()){
           return const Text('Session changed. Reopen support tickets to verify.');
         }
@@ -114,14 +115,17 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
         }
         if(snapshot.hasError){
           return Column(mainAxisSize:MainAxisSize.min,children:[
-            const Text('Support unavailable. Please try again.'),
-            TextButton(onPressed:_manualRefresh,child:const Text('Try again')),
+            Text(arabic?'تعذّر تحميل التذاكر. حاول مجددًا.':
+              'Support unavailable. Please try again.'),
+            TextButton(onPressed:_manualRefresh,
+              child:Text(arabic?'إعادة المحاولة':'Try again')),
           ]);
         }
         return Column(mainAxisSize:MainAxisSize.min,children:[
           for(final ticket in (snapshot.data??const <FableSupportTicket>[]).take(50))
             ListTile(title:Text(ticket.subject),subtitle:Text(ticket.status)),
-          TextButton(onPressed:_manualRefresh,child:const Text('Refresh')),
+          TextButton(onPressed:_manualRefresh,
+            child:Text(arabic?'تحديث':'Refresh')),
         ]);
       },
     );
