@@ -23,4 +23,19 @@ void main() {
       client: Dio(BaseOptions(headers: <String,dynamic>{'cookie':'SECRET'}))),
       throwsArgumentError);
   });
+  test('RC355 reject operation-scoped ambient headers from injected Dio', () {
+    for(final header in <String>[
+      'X-Fable-Managed-Entity-Id','X-Fable-Managed-Account-Id',
+      'X-Security-Challenge-Id','If-Match','Idempotency-Key',
+      'Range','X-Fable-Media-Token',
+    ]) {
+      expect(() => UnifiedApiClient(
+        baseUri: Uri.parse('https://example.test'),
+        contract: _PublicOperations(),session: FableSecureSession(),
+        client:Dio(BaseOptions(headers:<String,dynamic>{header:'untrusted'}))),
+        throwsArgumentError,
+        reason:header,
+      );
+    }
+  });
 }
