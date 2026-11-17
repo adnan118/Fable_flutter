@@ -105,7 +105,8 @@ function listDto(op){
     '  final '+name+'Entity _value;',
     '  factory '+name+'Dto.fromJson(Map<String,Object?> raw){',
     "    final input=raw['items'],meta=raw['meta'];",
-    '    if(input is! List || input.length>500 || meta is! Map ||',
+    '    if(input is! List || input.length>'+
+      (op.resultKind==='paginated-list'?'20':'5000')+' || meta is! Map ||',
     ...(op.resultKind==='paginated-list'?[
       "       "+(op.supportsSearch
         ?"(meta['mode']!='page' && meta['mode']!='search')"
@@ -131,8 +132,11 @@ function listDto(op){
       "       meta['mode']!='unpaginated' ||",
       "       meta['count'] is! int || meta['maxRows'] is! int ||",
       "       meta['limitExceeded'] is! bool ||",
-      "       (meta['count'] as int)<0 || (meta['maxRows'] as int)<1 ||",
-      "       input.length>(meta['maxRows'] as int))",
+      "       (meta['count'] as int)!=input.length ||",
+      "       (meta['maxRows'] as int)<1 || (meta['maxRows'] as int)>5000 ||",
+      "       input.length>(meta['maxRows'] as int) ||",
+      "       (meta['limitExceeded']==true &&",
+      "         input.length!=(meta['maxRows'] as int)))",
       "      throw const FormatException('Invalid signed unpaginated list envelope');",
     ]),
     '    final items=<'+item+'>[];',
