@@ -28,13 +28,13 @@ function safeEntry(root,path,type){
     fail('path outside generated project');
   const parts=rel?rel.split(sep):[];
   let here=root;
-  for(const name of [null,...parts]){
-    if(name!==null)here=join(here,name);
+  for(let i=0;i<=parts.length;i++){
+    if(i>0)here=join(here,parts[i-1]);
     if(!existsSync(here))fail('missing source path: '+relative(root,here));
     const stat=lstatSync(here);
     if(stat.isSymbolicLink())fail('symlink not allowed: '+relative(root,here));
-    if(name===parts.at(-1)&&name!==null)continue;
-    if(!stat.isDirectory())fail('non-directory ancestor: '+relative(root,here));
+    if(i<parts.length&&!stat.isDirectory())
+      fail('non-directory ancestor: '+relative(root,here));
   }
   const last=lstatSync(path);
   if(type==='file'&&!last.isFile())fail('expected a regular file: '+rel);
@@ -116,9 +116,10 @@ export function verifySelectedAppBindings(pubspec,registry,ids){
   const marker='const List<FableFeature> installedFeatures = <FableFeature>[\n';
   if(registry.split(marker).length!==2)
     fail('host app registry anchor is ambiguous');
-  const registryEntries=registry.split(marker)[1].split(/^\];\s*$/m)[0];
-  if(!registry.includes(marker)||!registryEntries)
-    fail('host app feature list missing');
+  const afterMarker=registry.split(marker)[1];
+  const closing=afterMarker.match(/^\];\s*$/m);
+  if(!closing)fail('host app feature list has no canonical closing bracket');
+  const registryEntries=afterMarker.slice(0,closing.index);
   for(const id of ids){
     const {packageName,variable}=w5FeatureNames(id);
     const dep='  '+packageName+':\n    path: packages/features/'+packageName+'\n';
