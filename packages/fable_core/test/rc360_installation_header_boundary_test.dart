@@ -53,7 +53,7 @@ void main(){
     final adapter=FableTransportAdapter(catalog:catalog);
     final op=catalog.require('status.public');
     for(final value in [
-      '', 'a'*31, 'a'*33, 'A'*32, 'a'*30+'\r\n',
+      '', List<String>.filled(31,'a').join(), List<String>.filled(33,'a').join(), List<String>.filled(32,'A').join(), List<String>.filled(30,'a').join()+'\r\n',
       '../00000000000000000000000000000',
     ]){
       await expectLater(adapter.headersFor(op,_InstallSession(value)),
@@ -84,7 +84,7 @@ void main(){
       baseUri:Uri.parse('https://api.example.test'),
       contract:_fableCatalog(),
       session:_InstallSession('bad\r\nvalue'),
-      client:_instrumentedDio((_)=>sends++),
+      client:_instrumentedDio((_) {sends++;}),
     );
     addTearDown(api.dispose);
     await expectLater(api.request('status.public'),throwsFormatException);
