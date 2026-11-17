@@ -70,7 +70,8 @@ void _validateRecentAuthProof(FableAuthGateway gateway,
     FableVerifiedSensitiveProof? securityProof,int revision) {
   if(securityProof!=null &&
      (!identical(securityProof._owner,gateway)||
-      securityProof._identityRevision!=revision)) {
+      securityProof._identityRevision!=revision||
+      securityProof._consumed||securityProof._inFlight)) {
     throw StateError('Recent-auth proof belongs to another session or gateway');
   }
 }
