@@ -123,7 +123,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
        identical(old.contract,widget.contract))return;
     _bindingEpoch++;
     _managedStore?.clear();
-    widget.onCleared?.call();
+    old.onCleared?.call();
     unawaited(_events?.cancel());
     _events=null;
     _repo=FableManagedAccountsRepository(widget.gateway,widget.contract);
@@ -150,7 +150,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       if(binding!=_bindingEpoch||!identical(repo,_repo))return;
       final invites=repo.canReadInvitations?await repo.invitationsMine():<FableManagedInvitation>[];
       if(!mounted||binding!=_bindingEpoch||!identical(repo,_repo)||
-         epoch!=widget.gateway.session.identityRevision||binding!=_bindingEpoch)return;
+         epoch!=widget.gateway.session.identityRevision)return;
       setState((){
         _entities=entities;_invitations=invites;
         // A managed context is never preserved solely because its entity
@@ -377,7 +377,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       if(revokes&&!await _confirm(_ar
         ?'قد يؤدي التغيير إلى إلغاء عضويات أو دعوات حالية. هل تتابع؟'
         :'This may revoke members or pending invitations. Continue?'))return;
-      if(!mounted)return;
+      if(!mounted||binding!=_bindingEpoch)return;
       final rev=widget.gateway.session.identityRevision;
       setState((){_busy=true;_message=null;});
       try{
