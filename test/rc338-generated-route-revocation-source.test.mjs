@@ -32,7 +32,7 @@ test('RC338 infinite-scroll routes never automatically read old gateway after an
   assert.ok(page.includes('if(_revoked)return Scaffold('));
   assert.ok(page.includes('Reopen this screen from the verified feature'));
   assert.ok(page.includes('_controller.invalidate();'));
-  assert.ok(page.includes('void _bind(){\n    _revoked=false;'));
+  assert.ok(page.includes('void _bind({bool readAllowed=true}){\n    _revoked=!readAllowed;'));
 });
 test('RC338 generated read screen cannot re-read from previous project via Load button',()=>{
   for(const kind of ['single','unpaginated-list']){
@@ -42,7 +42,7 @@ test('RC338 generated read screen cannot re-read from previous project via Load 
     assert.ok(page.includes('if(_revoked)return;'));
     assert.ok(page.includes('if(_revoked)return Scaffold('));
     assert.ok(page.includes('_controller.invalidate();'));
-    assert.ok(page.includes('void _bind(){\n    _revoked=false;'));
+    assert.ok(page.includes('void _bind({bool readAllowed=true}){\n    _revoked=!readAllowed;'));
   }
 });
 test('RC338 generated POST cannot submit or reset under revoked signed project',()=>{
