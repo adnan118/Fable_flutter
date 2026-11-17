@@ -23,6 +23,7 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
  String? _copyError;
  bool _busy=false;String? _error;
  int _sourceEpoch=0;
+ int _copyEpoch=0;
  // A contract, transport or origin change invalidates every prior GET result.
  @override void didUpdateWidget(covariant FableLanguagesPage old){
   super.didUpdateWidget(old);
@@ -30,6 +31,7 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
      !identical(old.injectedGateway,widget.injectedGateway) ||
      old.backendOrigin!=widget.backendOrigin){
    _sourceEpoch++;
+   _copyEpoch++;
    _client?.dispose();
    _client=null;
    _languages=null;_copy=null;
@@ -41,14 +43,18 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
  BackendApiGateway get transport => widget.injectedGateway??(_client??=FableAuthGateway(
    baseUri:Uri.parse(chosenOrigin),contract:widget.contract,
    allowHttpForLocalDevelopment:kDebugMode));
- bool get supported=>chosenOrigin.isNotEmpty&&widget.contract.supports('languages.list');
+ // An externally authenticated gateway can read without a guessed URL.
+ bool get supported=>(widget.injectedGateway!=null||chosenOrigin.isNotEmpty)&&
+   widget.contract.supports('languages.list');
  bool get copySupported=>chosenOrigin.isNotEmpty&&widget.contract.supports('languages.clientCopy');
  Future<void> checkCopy({bool force=false})async{
   if(_checkingCopy||!copySupported)return;
   final epoch=_sourceEpoch;
+  final copyEpoch=_copyEpoch;
   final namespace=chosenOrigin;
   final locale=Localizations.localeOf(context).toLanguageTag().toLowerCase();
   bool sameRequest()=>mounted && epoch==_sourceEpoch &&
+    copyEpoch==_copyEpoch &&
     namespace==chosenOrigin &&
     Localizations.localeOf(context).toLanguageTag().toLowerCase()==locale;
   setState((){_checkingCopy=true;_copyError=null;});
@@ -81,8 +87,16 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
   if(copySupported){
    final locale=Localizations.localeOf(context).toLanguageTag().toLowerCase();
    if(_lastCopyLocale!=locale){
+    // An earlier locale's request must not strand _checkingCopy=true.
+    // Invalidate only copy, not an unrelated language list GET.
+    _copyEpoch++;
+    _checkingCopy=false;
+    _copy=null;
+    _copyError=null;
     _lastCopyLocale=locale;
-    WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)checkCopy();});
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted && _lastCopyLocale==locale)checkCopy();
+    });
    }
   }
  }
