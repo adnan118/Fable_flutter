@@ -1198,15 +1198,20 @@ function projectNavigation(plan){
       '          trailing:const Icon(Icons.chevron_right),',
       ...(op.managedScoped?[
         '          subtitle:const Text("Select a verified managed entity before opening."),',
-        '          onTap:(_managedGateway==null||_managedGateway!.store.selected==null)?null:()=>Navigator.of(context).push(',
+        '          onTap:(_managedGateway==null||_managedGateway!.store.selected==null)?null:(){',
+        '            final bound=_managedGateway;',
+        '            if(bound==null||bound.store.selected==null)return;',
       ]:[
-        '          onTap:()=>Navigator.of(context).push(',
+        '          onTap:(){',
+        '            final bound=_gateway;',
+        '            if(bound==null)return;',
       ]),
-      '            MaterialPageRoute<void>(builder:(_)=>'+op.className+'Page(',
-      '              repository:Fable'+op.className+'Repository('+
-        (op.managedScoped?'_managedGateway!':'_gateway!')+'),',
+      '            Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>',
+      '              '+op.className+'Page(',
+      '              repository:Fable'+op.className+'Repository(bound),',
       '              identityEvents:'+
-        (op.managedScoped?'_managedGateway!.scopeEvents':'_gateway!.session.identityEvents')+'))),',
+        (op.managedScoped?'bound.scopeEvents':'bound.session.identityEvents')+')));',
+      '          },',
       '        ),',
     );
   }
