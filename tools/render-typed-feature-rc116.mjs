@@ -435,7 +435,9 @@ function adapter(op,projectHash){
       '    final idempotencyKey=FableIdempotencyKey.generate();',
     ]:[]),
     '    final identity=gateway.session.identityRevision;',
+    ...(op.method==='POST'?['    var mutationStarted=false;']:[]),
     '    try {',
+    ...(op.method==='POST'?['      mutationStarted=true;']:[]),
     '      final response=await gateway.execute('+dart(op.operationId)+
       (op.params.length?',path:{'+op.params.map(p=>dart(p)+': '+p).join(', ')+'}':'')+
       (op.method==='POST'?',body:validatedCreate':'')+
@@ -508,7 +510,17 @@ function adapter(op,projectHash){
       '      // A malformed 2xx acknowledgement does not prove non-creation.',
       '      throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     ]:['      throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);']),
-    '    } on TypedReadFailure { rethrow; }',
+    '    } on TypedReadFailure catch(error){',
+    ...(op.method==='POST'?[
+      '      // The write might have committed before session identity changed.',
+      '      if(mutationStarted && const <TypedReadFailureKind>{',
+      '          TypedReadFailureKind.unauthenticated,',
+      '          TypedReadFailureKind.invalidResponse,',
+      '        }.contains(error.kind))',
+      '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
+    ]:[]),
+    '      rethrow;',
+    '    }',
     '  }','}');
   return line(...parts);
 }
@@ -1764,7 +1776,10 @@ function signedOwnerDeleteFiles(op,contractHash){
     '        _=>TypedReadFailureKind.unknown,',
     '      });',
     '    } on TypedReadFailure catch(e){',
-    '      if(mutationStarted && e.kind==TypedReadFailureKind.invalidResponse)',
+    '      if(mutationStarted && const <TypedReadFailureKind>{',
+    '          TypedReadFailureKind.invalidResponse,',
+    '          TypedReadFailureKind.unauthenticated,',
+    '        }.contains(e.kind))',
     '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     '      rethrow;',
     '    }',
@@ -2012,7 +2027,10 @@ function signedOwnerPatchFiles(op,contractHash){
     '      throw TypedReadFailure(mutationStarted?',
     '        TypedReadFailureKind.outcomeUncertain:TypedReadFailureKind.invalidResponse);',
     '    } on TypedReadFailure catch(e){',
-    '      if(mutationStarted && e.kind==TypedReadFailureKind.invalidResponse)',
+    '      if(mutationStarted && const <TypedReadFailureKind>{',
+    '          TypedReadFailureKind.invalidResponse,',
+    '          TypedReadFailureKind.unauthenticated,',
+    '        }.contains(e.kind))',
     '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     '      rethrow;',
     '    }',

@@ -55,7 +55,9 @@ for(const method of ['PATCH','DELETE']){
       assert.ok(source.indexOf('mutationStarted=true;') <
         source.lastIndexOf('final response=await gateway.execute'));
       assert.match(source,/mutationStarted && \(e.status==0\|\|e.status==408\|\|e.status>=500/);
-      assert.match(source,/e.kind==TypedReadFailureKind.invalidResponse/);
+      assert.match(source,/TypedReadFailureKind.invalidResponse,/);
+      assert.match(source,/TypedReadFailureKind.unauthenticated,/);
+      assert.match(source,/\.contains\(e.kind\)/);
       assert.match(source,/TypedReadFailureKind.outcomeUncertain/);
       assert.doesNotMatch(source,/retry\(/);
       if(managed)assert.match(source,/source.recordAccess/);

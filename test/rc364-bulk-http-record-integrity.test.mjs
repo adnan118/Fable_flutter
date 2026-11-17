@@ -54,7 +54,9 @@ for(const managed of [false,true]){
     assert.ok(source);
     assert.match(source,/entity\.id\.toLowerCase\(\)!=id\.toLowerCase\(\)/);
     assert.match(source,/TypedReadFailureKind\.invalidResponse/);
-    assert.match(source,/mutationStarted && e\.kind==TypedReadFailureKind\.invalidResponse/);
+    assert.match(source,/mutationStarted && const <TypedReadFailureKind>/);
+    assert.match(source,/TypedReadFailureKind\.invalidResponse,/);
+    assert.match(source,/TypedReadFailureKind\.unauthenticated,/);
     assert.match(source,/TypedReadFailureKind\.outcomeUncertain/);
     if(managed) assert.match(source,/op\.recordAccess/);
   });
