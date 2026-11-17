@@ -61,3 +61,7 @@ The optional Analytics package now exports a user-facing `FableAnalyticsConsentP
 ## RC316 — payment status identity fence
 
 `FablePaymentStatusCard` now requires an authenticated, monotonically revisioned host session plus identity invalidation stream before it starts a read or renders any payment status. Legacy callers without verified identity stay source-compatible but fail closed with **zero payment requests**. Account switching (including A→B→A), sign-out, late reads and changed payment selections cannot reuse a previous request's displayed result. This is a read-only safeguard, not checkout/capture/refund acceptance. [RC316 details](docs/integrations/RC316-W6-PAYMENTS-IDENTITY-FENCE.ar.md).
+
+## RC317 — secure on-demand support ticket refresh
+
+The authenticated support ticket list now provides **Try again** after a failed read and **Refresh** on a loaded list. Both actions fail closed when the account/session revision has changed, including when its invalidation notification is late. Previously loaded tickets are dropped and never automatically reused across an unverified identity change. Three deferred Flutter widget cases are part of the existing one-command Flutter suite. No support POST/creation, new Backend endpoint or live E2E approval is implied. [RC317 details](docs/integrations/RC317-W6-SUPPORT-SAFE-MANUAL-REFRESH.ar.md).
