@@ -55,7 +55,17 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
   void _manualRefresh(){
     // Only the currently bound authenticated session can start another GET.
     // Never refresh an old list under another account after A -> B -> A.
-    if(!_sameVerifiedIdentity()||!mounted)return;
+    if(!mounted)return;
+    if(!_sameVerifiedIdentity()){
+      // A delayed identity event must not leave stale tickets visible after
+      // a user interaction; drop the old snapshot without another request.
+      setState((){
+        _generation++;
+        _load=null;
+        _loadIdentity=null;
+      });
+      return;
+    }
     setState(_restart);
   }
 
