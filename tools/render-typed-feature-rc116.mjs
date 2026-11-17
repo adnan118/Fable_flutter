@@ -599,16 +599,20 @@ function infiniteListController(op){
     '  List<'+item+'> get items=>_readOnlyItems;',
     '  bool _loading=false,_completed=false,_closed=false;',
     '  int _epoch=0,_nextPage=1,_total=0;',
+    ...op.params.map(p=>'  String? _route_'+p+';'),
     ...(op.supportsSearch?['  String _search="";']:[]),
     ...(hasSort(op)?['  String? _sort;']:[]),
     ...pagedFilters(op).map(f=>'  String? _'+f.name+';'),
     '  TypedReadFailureKind? _error;',
     '  bool get isLoading=>_loading;',
     '  bool get hasMore=>!_completed;',
+    '  bool get hasRequiredPath=>'+
+      (op.params.length?op.params.map(p=>'_route_'+p+'!=null && _route_'+p+'!.isNotEmpty').join(' && '):'true')+';',
     '  int get total=>_total;',
     '  TypedReadFailureKind? get error=>_error;',
-    '  void reset('+ ((op.supportsSearch||hasSort(op)||pagedFilters(op).length)
-      ?'{'+[...(op.supportsSearch?['String search=""']:[]),
+    '  void reset('+ ((op.params.length||op.supportsSearch||hasSort(op)||pagedFilters(op).length)
+      ?'{'+[...op.params.map(p=>'String? route_'+p),
+        ...(op.supportsSearch?['String search=""']:[]),
         ...(hasSort(op)?['String? sort']:[]),
         ...pagedFilters(op).map(f=>'String? '+f.name)].join(', ')+'}'
       :'') +'){',
@@ -616,6 +620,7 @@ function infiniteListController(op){
     '    _epoch++;_items.clear();',
     '    _nextPage=1;_total=0;_loading=false;_completed=false;',
     '    _error=null;',
+    ...op.params.map(p=>'    _route_'+p+'=route_'+p+'?.trim();'),
     ...(op.supportsSearch?['    _search=search.trim();']:[]),
     ...(hasSort(op)?['    _sort=sort;']:[]),
     ...pagedFilters(op).map(f=>'    _'+f.name+'='+f.name+'?.trim();'),
@@ -623,10 +628,15 @@ function infiniteListController(op){
     '  }',
     '  Future<void> loadNext()async{',
     '    if(_closed || _loading || _completed || _error!=null)return;',
+    '    if(!hasRequiredPath){',
+    '      _error=TypedReadFailureKind.invalidInput;',
+    '      notifyListeners();return;',
+    '    }',
     '    final epoch=_epoch,requested=_nextPage;',
     '    _loading=true;notifyListeners();',
     '    try{',
     '      final result=await _read.call(page:requested'+
+      op.params.map(p=>','+p+':_route_'+p+'!').join('')+
       (op.supportsSearch?',search:_search':'')+
       (hasSort(op)?',sort:_sort':'')+
       pagedFilters(op).map(f=>','+f.name+':_'+f.name).join('')+');',
@@ -753,6 +763,7 @@ function infiniteListPage(op){
     'final class _'+name+'PageState extends State<'+name+'Page> {',
     '  late '+name+'Controller _controller;',
     '  final ScrollController _scroll=ScrollController();',
+    ...op.params.map(p=>'  final _route_'+p+'=TextEditingController();'),
     ...(op.supportsSearch?['  final TextEditingController _search=TextEditingController();']:[]),
     ...(hasSort(op)?['  String? _sort;']:[]),
     ...pagedFilters(op).map(f=>f.type!=='boolean'
@@ -761,6 +772,7 @@ function infiniteListPage(op){
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
     '  bool _revoked=false;',
+    '  bool _routeCommitted='+(!op.params.length).toString()+';',
     '  void _redraw(){',
     '    if(!mounted)return;',
     '    setState((){});',
@@ -769,18 +781,20 @@ function infiniteListPage(op){
     '    });',
     '  }',
     '  void _maybeLoadMore(){',
-    '    if(_revoked || !_scroll.hasClients || _controller.isLoading ||',
+    '    if(_revoked || !_routeCommitted || !_controller.hasRequiredPath || !_scroll.hasClients || _controller.isLoading ||',
     '       !_controller.hasMore || _controller.error!=null)return;',
     '    if(_scroll.position.extentAfter<400)',
     '      unawaited(_controller.loadNext());',
     '  }',
     '  void _bind({bool readAllowed=true}){',
     '    _revoked=!readAllowed;',
+    '    _routeCommitted='+(!op.params.length).toString()+';',
     '    _controller='+name+'Controller('+name+'UseCase(widget.repository));',
     '    _controller.addListener(_redraw);',
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
     '      _revoked=true;',
+    ...op.params.map(p=>'      _route_'+p+'.clear();'),
     ...(op.supportsSearch?['      _search.clear();']:[]),
     ...(hasSort(op)?['      _sort=null;']:[]),
     ...pagedFilters(op).map(f=>f.type!=='boolean'
@@ -790,7 +804,8 @@ function infiniteListPage(op){
     '    });',
     '    final bindingIdentity=_identityEpoch;',
     '    WidgetsBinding.instance.addPostFrameCallback((_){',
-    '      if(mounted && !_revoked && _identityEpoch==bindingIdentity)',
+    '      if(mounted && !_revoked && _identityEpoch==bindingIdentity'+
+      (op.params.length?' && _routeCommitted':'')+')',
     '        unawaited(_controller.loadNext());',
     '    });',
     '  }',
@@ -805,6 +820,7 @@ function infiniteListPage(op){
     '       !identical(old.identityEvents,widget.identityEvents)){',
     '      final freshRepository=!identical(old.repository,widget.repository);',
     '      _identityEpoch++;',
+    ...op.params.map(p=>'      _route_'+p+'.clear();'),
     ...(op.supportsSearch?['      _search.clear();']:[]),
     ...(hasSort(op)?['      _sort=null;']:[]),
     ...pagedFilters(op).map(f=>f.type!=='boolean'
@@ -819,6 +835,7 @@ function infiniteListPage(op){
     '    unawaited(_identity?.cancel());',
     '    _controller.removeListener(_redraw);_controller.dispose();',
     '    _scroll.removeListener(_maybeLoadMore);_scroll.dispose();',
+    ...op.params.map(p=>'    _route_'+p+'.dispose();'),
     ...(op.supportsSearch?['    _search.dispose();']:[]),
     ...pagedFilters(op).filter(f=>f.type!=='boolean').map(f=>
       '    _filter'+f.name+'.dispose();'),
@@ -826,8 +843,10 @@ function infiniteListPage(op){
     '  }',
     '  void _refresh(){',
     '    if(_revoked)return;',
+    '    _routeCommitted=true;',
     '    _controller.reset('+
-      [...(op.supportsSearch?['search:_search.text.trim()']:[]),
+      [...op.params.map(p=>'route_'+p+':_route_'+p+'.text.trim()'),
+        ...(op.supportsSearch?['search:_search.text.trim()']:[]),
         ...(hasSort(op)?['sort:_sort']:[]),
         ...pagedFilters(op).map(f=>f.name+':' + (f.type!=='boolean'
           ?'(_filter'+f.name+'.text.trim().isEmpty?null:_filter'+f.name+'.text.trim())'
@@ -844,6 +863,19 @@ function infiniteListPage(op){
     '    return Scaffold(',
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:SafeArea(child:Column(children:[',
+    ...op.params.flatMap(p=>[
+      '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
+      '          child:Row(children:[',
+      '            Expanded(child:TextField(controller:_route_'+p+',',
+      '              maxLength:'+(op.pathParamKinds?.find(x=>x.name===p)?.type==='uuid'?36:191)+',',
+      '              decoration:const InputDecoration(labelText:'+dart('Required route parameter: '+p)+'),',
+      '              textInputAction:TextInputAction.search,',
+      '              onChanged:(_){_routeCommitted=false;_controller.invalidate();},',
+      '              onSubmitted:(_)=>_refresh())),',
+      '            IconButton(onPressed:_refresh,',
+      '              tooltip:"Load selected scope",icon:const Icon(Icons.arrow_forward)),',
+      '          ])),',
+    ]),
     ...(op.supportsSearch?[
       '        Padding(padding:const EdgeInsets.all(12),',
       '          child:Row(children:[',
@@ -949,7 +981,12 @@ function infiniteListPage(op){
     '                return const Padding(padding:EdgeInsets.all(16),',
     '                  child:Center(child:CircularProgressIndicator()));',
     '              if(items.isEmpty)',
-    '                return const Center(child:Text("No matching records"));',
+    ...(op.params.length?[
+      '                return Center(child:Text(_routeCommitted',
+      '                  ?"No matching records":"Enter required route parameters and load results"));',
+    ]:[
+      '                return const Center(child:Text("No matching records"));',
+    ]),
     '              if(!_controller.hasMore)',
     '                return const Center(child:Text("All results loaded"));',
     '              return const SizedBox(height:32);',
@@ -1415,6 +1452,7 @@ function infiniteListPageTest(op,featureId){
     ...(hasSort(op)?['  final sorts=<String?>[];']:[]),
     ...pagedFilters(op).map(f=>'  final seen'+f.name+'=<String?>[];'),
     '  @override Future<'+name+'Entity> load({required int page'+
+      op.params.map(p=>',required String '+p).join('')+
       (op.supportsSearch?',String? search':'')+
       (hasSort(op)?',String? sort':'')+
       pagedFilters(op).map(f=>',String? '+f.name).join('')+'})async{',
@@ -1443,12 +1481,21 @@ function infiniteListPageTest(op,featureId){
     '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
     '        repository:repository,identityEvents:events.stream)));',
     '      await tester.pumpAndSettle();',
+    ...op.params.flatMap((p,i)=>[
+      '      await tester.enterText(find.byType(TextField).at('+i+'),'+
+        dart(op.pathParamKinds?.find(x=>x.name===p)?.type==='uuid'
+          ?'00000000-0000-4000-8000-000000000000':'selected-scope')+');',
+    ]),
+    ...(op.params.length?[
+      '      await tester.tap(find.byTooltip("Load selected scope").first);',
+      '      await tester.pumpAndSettle();',
+    ]:[]),
     '      expect(repository.calls,contains(1));',
     '      expect(find.byType(ListView),findsOneWidget);',
     '      expect(find.text("Previous page"),findsNothing);',
     '      expect(find.text("Next page"),findsNothing);',
     ...(op.supportsSearch?[
-      '      await tester.enterText(find.byType(TextField).first,"needle");',
+      '      await tester.enterText(find.byType(TextField).at('+op.params.length+'),"needle");',
       '      await tester.testTextInput.receiveAction(TextInputAction.search);',
       '      await tester.pumpAndSettle();',
       '      expect(repository.searches,contains("needle"));',
@@ -1465,6 +1512,15 @@ function infiniteListPageTest(op,featureId){
     '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
     '        repository:repository,identityEvents:events.stream)));',
     '      await tester.pumpAndSettle();',
+    ...op.params.flatMap((p,i)=>[
+      '      await tester.enterText(find.byType(TextField).at('+i+'),'+
+        dart(op.pathParamKinds?.find(x=>x.name===p)?.type==='uuid'
+          ?'00000000-0000-4000-8000-000000000000':'selected-scope')+');',
+    ]),
+    ...(op.params.length?[
+      '      await tester.tap(find.byTooltip("Load selected scope").first);',
+      '      await tester.pumpAndSettle();',
+    ]:[]),
     '      expect(find.textContaining("Retry failed page"),findsOneWidget);',
     '      expect(find.text("All results loaded"),findsNothing);',
     '      await tester.pumpWidget(const SizedBox.shrink());',
