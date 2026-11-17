@@ -37,6 +37,15 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
    _languages=null;_copy=null;
    _busy=false;_checkingCopy=false;
    _lastCopyLocale=null;_copyError=null;_error=null;
+   if(copySupported){
+    // didUpdateWidget does not imply didChangeDependencies. Request the new
+    // origin's copy after this frame instead of silently retaining no copy.
+    final locale=Localizations.localeOf(context).toLanguageTag().toLowerCase();
+    _lastCopyLocale=locale;
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted && _lastCopyLocale==locale)checkCopy();
+    });
+   }
   }
  }
  String get chosenOrigin=>widget.backendOrigin?.origin??origin;
