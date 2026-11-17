@@ -11,7 +11,7 @@ import {generatePinnedTypedFeature} from '../tools/generate-typed-feature-rc116.
 const hash='a'.repeat(64),opHash='c'.repeat(64);
 const idA='orders_ci.item.get',idB='orders_ci.summary.get';
 const props={
-  id:{type:'string'},quantity:{type:'integer'},total:{type:'number'},
+  id:{type:'string'},quantity:{type:'integer'},total:{type:'string'},
   active:{type:'boolean'},note:{type:'string'},
 };
 const response={type:'object',properties:{
@@ -88,9 +88,10 @@ test('RC116 generates two independent typed GET contracts with required and opti
   assert.match(domain,/final String id;/);
   assert.match(domain,/final String\? note;/);
   assert.match(domain,/final int quantity;/);
-  assert.match(domain,/final double total;/);
+  assert.match(domain,/final String total;/);
   assert.match(dto,/FormatException/);
-  assert.match(dto,/num/);
+  assert.match(dto,/Invalid total exact Decimal field/);
+  assert.doesNotMatch(dto,/total\.toDouble\(\)|double\.parse\(total\)/);
   assert.match(adapter,/FableAuthGateway/);
   assert.match(adapter,/op\.contractHash/);
   assert.match(adapter,/path:\{"id": id\}/);
@@ -181,7 +182,7 @@ test('RC116 no mutation for planning or rejected source and no fabricated APIs',
   const x=mockTypedFeatureInput();
   const plan=planTypedFeature(x);
   assert.equal(plan.liveE2EVerified,false);
-  assert.match(plan.unsupportedMethods,/PUT\/PATCH\/DELETE/);
+  assert.match(plan.unsupportedMethods,/unsigned\/unreviewed writes/);
   const files=renderTypedFeature(plan);
   for(const source of files.values()){
     assert.doesNotMatch(source,/token=|playbackToken|FirebaseAuth/);
