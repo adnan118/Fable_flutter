@@ -152,6 +152,10 @@ function listDto(op){
     parts.push('      final '+f.name+'='+property+';',
       '      if('+check+')',
       '        throw const FormatException('+dart('Invalid '+f.name+' list field')+');');
+    if(f.decimal)parts.push(
+      '      if('+f.name+'!=null && !RegExp(r"^-?(?:0|[1-9][0-9]{0,34})(?:\\.[0-9]{1,30})?(?:e[+-]?[0-9]{1,2})?$").hasMatch('+f.name+' as String))',
+      '        throw const FormatException('+dart('Invalid '+f.name+' exact Decimal field')+');',
+    );
   }
   parts.push('      items.add('+item+'(');
   for(const f of op.fields){
@@ -199,6 +203,10 @@ function dto(op){
     const guard=f.required?f.name+' is! '+(f.type==='double'?'num':f.type):
       '('+f.name+'!=null && '+f.name+' is! '+(f.type==='double'?'num':f.type)+')';
     parts.push('    if('+guard+') throw const FormatException('+dart('Invalid '+f.name+' DTO field')+');');
+    if(f.decimal)parts.push(
+      '    if('+f.name+'!=null && !RegExp(r"^-?(?:0|[1-9][0-9]{0,34})(?:\\.[0-9]{1,30})?(?:e[+-]?[0-9]{1,2})?$").hasMatch('+f.name+' as String))',
+      '      throw const FormatException('+dart('Invalid '+f.name+' exact Decimal field')+');',
+    );
   }
   parts.push('    return '+name+'Dto(');
   for(const f of op.fields){
@@ -1457,7 +1465,7 @@ function failure(){
 function listDtoTest(op,featureId){
   const file=snake(op.operationId),name=op.className;
   const fields=op.fields.map(f=>{
-    const value=f.type==='String'?dart('example'):f.type==='int'?'7':
+    const value=f.decimal?dart('19.99'):f.type==='String'?dart('example'):f.type==='int'?'7':
       f.type==='double'?'2.5':'true';
     return '        '+dart(f.name)+': '+value+',';
   });
@@ -1538,7 +1546,7 @@ function dtoTest(op,featureId){
   if(['unpaginated-list','paginated-list'].includes(op.resultKind))return listDtoTest(op,featureId);
   const file=snake(op.operationId),name=op.className;
   const valid=op.fields.map(f=>{
-    const value=f.type==='String'?dart('example'):f.type==='int'?'7':
+    const value=f.decimal?dart('19.99'):f.type==='String'?dart('example'):f.type==='int'?'7':
       f.type==='double'?'2.5':'true';
     return '    '+dart(f.name)+': '+value+',';
   });
