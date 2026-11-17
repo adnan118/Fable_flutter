@@ -752,7 +752,7 @@ function infiniteListPage(op){
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:const SafeArea(child:Center(child:Text(',
     '        "Project or login context changed. Reopen this screen from the verified feature."))));',
-    '    final items=_controller.items;
+    '    final items=_controller.items;',
     '    return Scaffold(',
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:SafeArea(child:Column(children:[',
@@ -1018,7 +1018,7 @@ function readPage(op){
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:const SafeArea(child:Center(child:Text(',
     '        "Project or login context changed. Reopen this screen from the verified feature."))));',
-    '    final state=_controller.state;
+    '    final state=_controller.state;',
     '    return Scaffold(',
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:SafeArea(child:ListView(',
