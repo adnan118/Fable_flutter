@@ -211,6 +211,9 @@ class FableAuthGateway implements BackendApiGateway {
       throw StateError('Passkey removal requires current independent authorization');
     proof._inFlight=true;
     try{
+      // A one-shot proof is spent when dispatch is ATTEMPTED, not only on
+      // a successful acknowledgement. A lost response may mean it committed.
+      proof._consumed=true;
       final response=await _api.request('passkeys.remove',
         path:{'id':passkey.id},securityChallengeId:proof._challengeId);
       if(session.identityRevision!=revision)
@@ -222,7 +225,6 @@ class FableAuthGateway implements BackendApiGateway {
       final count=(wrapper['data'] as Map)['count'];
       if(count is! int || (count!=0&&count!=1))
         throw const FormatException('Invalid Passkey removal count');
-      proof._consumed=true; // No local reuse even for a missing credential.
       return count==1;
     }finally{
       proof._inFlight=false;
@@ -286,6 +288,9 @@ class FableAuthGateway implements BackendApiGateway {
           response['clientDataJSON'] is! String||
           response['attestationObject'] is! String)
         throw const FormatException('Invalid OS Passkey registration response');
+      // Native credential creation succeeded; do not reuse the same
+      // sensitive proof if verification was accepted but its reply was lost.
+      proof._consumed=true;
       final verified=await _api.request('passkeys.registration.verify',
         path:{'challengeId':challengeId},
         body:{
@@ -298,7 +303,6 @@ class FableAuthGateway implements BackendApiGateway {
       final result=_payload(verified.data);
       if(result['verified']!=true)
         throw const FormatException('Backend did not verify Passkey registration');
-      proof._consumed=true;
       return true;
     }finally{
       proof._inFlight=false;
@@ -1145,7 +1149,7 @@ class FableAccountPasskey {
 /// Backend consumes the challenge on the first protected action if the session
 /// itself does not already satisfy the recent AAL2 policy.
 class FableVerifiedSensitiveProof {
-  const FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision,this._owner);
+  FableVerifiedSensitiveProof._(this._challengeId,this._identityRevision,this._owner);
   final String _challengeId;
   final int _identityRevision;
   final FableAuthGateway _owner;
