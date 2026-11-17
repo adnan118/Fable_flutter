@@ -247,7 +247,7 @@ function checkedManagedRead(op,route,featureId){
     fail('Managed GET must be explicitly scoped, signed, typed and read-only: '+op.operationId);
   return true;
 }
-function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
+export function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
   const signed=op.response?.data,id=op.operationId;
   if(!verifiedManaged && op.recordAccess!=null &&
      !['permission-wide','global','none'].includes(op.recordAccess))
