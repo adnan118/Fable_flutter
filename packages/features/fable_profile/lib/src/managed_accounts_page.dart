@@ -20,8 +20,8 @@ class FableManagedAccountsPage extends StatefulWidget {
 }
 class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     with WidgetsBindingObserver {
-  late final FableManagedAccountsRepository _repo=
-    FableManagedAccountsRepository(widget.gateway,widget.contract);
+  late FableManagedAccountsRepository _repo;
+  int _bindingEpoch=0; // A contract rebinding may reuse the same login revision.
   StreamSubscription<FableIdentityEvent>? _events;
   List<FableManagedAccount>? _entities;
   List<FableManagedInvitation>? _invitations;
@@ -97,13 +97,11 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
   bool _busy=false;
   String? _message;
   bool get _ar=>Localizations.localeOf(context).languageCode=='ar';
-  @override void initState(){
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _events=widget.gateway.session.identityEvents.listen((_){
-      if(!mounted)return;
-      // External project context must be cleared on logout/account switch too,
-      // even when this page is no longer the current route.
+  void _watchIdentity(){
+    final binding=_bindingEpoch,source=widget.gateway;
+    _events=source.session.identityEvents.listen((_){
+      if(!mounted||binding!=_bindingEpoch||
+         !identical(source,widget.gateway))return;
       _clearManagedSelection();
       setState((){
         _entities=null;_invitations=null;_selected=null;_busy=false;
@@ -111,19 +109,48 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         _message='Login identity changed. Refresh the new account.';
       });
     });
+  }
+  @override void initState(){
+    super.initState();
+    _repo=FableManagedAccountsRepository(widget.gateway,widget.contract);
+    WidgetsBinding.instance.addObserver(this);
+    _watchIdentity();
     WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)unawaited(_reload());});
+  }
+  @override void didUpdateWidget(covariant FableManagedAccountsPage old){
+    super.didUpdateWidget(old);
+    if(identical(old.gateway,widget.gateway)&&
+       identical(old.contract,widget.contract))return;
+    _bindingEpoch++;
+    _managedStore?.clear();
+    widget.onCleared?.call();
+    unawaited(_events?.cancel());
+    _events=null;
+    _repo=FableManagedAccountsRepository(widget.gateway,widget.contract);
+    _entities=null;_invitations=null;_selected=null;_busy=false;
+    _discardLifecycleProof();
+    _message='Backend contract changed. Verify the current managed account.';
+    _watchIdentity();
+    final next=_bindingEpoch;
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted&&next==_bindingEpoch)unawaited(_reload());
+    });
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state){
     if(state==AppLifecycleState.resumed&&mounted)unawaited(_reload());
   }
   Future<void> _reload()async{
+    final binding=_bindingEpoch;
     if(_busy||!_repo.canList)return;
+    final repo=_repo;
     final epoch=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;});
     try{
-      final entities=await _repo.listMine();
-      final invites=_repo.canReadInvitations?await _repo.invitationsMine():<FableManagedInvitation>[];
-      if(!mounted||epoch!=widget.gateway.session.identityRevision)return;
+      final entities=await repo.listMine();
+      if(binding!=_bindingEpoch||!identical(repo,_repo))return;
+      final invites=repo.canReadInvitations?await repo.invitationsMine():<FableManagedInvitation>[];
+      if(!mounted||binding!=_bindingEpoch||!identical(repo,_repo)||
+         epoch!=widget.gateway.session.identityRevision||binding!=_bindingEpoch)return;
       setState((){
         _entities=entities;_invitations=invites;
         // A managed context is never preserved solely because its entity
@@ -142,7 +169,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           _selected=null;
         }
       });
-    }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision){
+    }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision&&binding==_bindingEpoch){
       // A failed role refresh cannot preserve a privileged entity selection.
       if(_selected!=null)_clearManagedSelection();
       setState((){
@@ -151,9 +178,10 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         _message='Backend did not confirm current managed membership.';
       });
     }}
-    finally{if(mounted&&epoch==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
+    finally{if(mounted&&epoch==widget.gateway.session.identityRevision&&binding==_bindingEpoch)setState(()=>_busy=false);}
   }
   Future<void> _activate(FableManagedAccount entity)async{
+    final binding=_bindingEpoch;
     if(_busy||!_repo.canActivate)return;
     final epoch=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;_selected=null;});
@@ -162,7 +190,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     final contextEpoch=storeAtRequest?.selectionRevision;
     try{
       final selected=await _repo.activate(entity);
-      if(!mounted||epoch!=widget.gateway.session.identityRevision ||
+      if(!mounted||epoch!=widget.gateway.session.identityRevision||binding!=_bindingEpoch ||
          !identical(_managedStore,storeAtRequest) ||
          (storeAtRequest!=null&&storeAtRequest.selectionRevision!=contextEpoch)){
         return; // A different route selected an entity while activation waited.
@@ -178,9 +206,9 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         store.activate(selected);
       }
       widget.onActivated?.call(selected);
-    }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision)
+    }catch(_){if(mounted&&epoch==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
       setState(()=>_message='Backend rejected activation or membership.');}
-    finally{if(mounted&&epoch==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
+    finally{if(mounted&&epoch==widget.gateway.session.identityRevision&&binding==_bindingEpoch)setState(()=>_busy=false);}
   }
   Future<bool> _confirm(String title)async=>
     await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
@@ -190,6 +218,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Confirm')),
       ]))??false;
   Future<void> _create()async{
+    final binding=_bindingEpoch;
     if(_busy||!_repo.canCreate)return;
     final type=TextEditingController(),ar=TextEditingController(),
       en=TextEditingController(),slug=TextEditingController();
@@ -226,21 +255,21 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
           TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
           FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Create entity')),
         ])));
-      if(form!=true||!mounted)return;
+      if(form!=true||!mounted||binding!=_bindingEpoch)return;
       final rev=widget.gateway.session.identityRevision;
       setState((){_busy=true;_message=null;});
       try{
         await _repo.create(type:type.text,nameAr:ar.text,nameEn:en.text,
           slug:slug.text,visibility:visibility,
           collaborationEnabled:collaboration,managersCanInvite:managerInvites);
-        if(mounted&&rev==widget.gateway.session.identityRevision){
+        if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch){
           setState(()=>_selected=null);
           _clearManagedSelection();
           await _reloadAfterMutation();
         }
-      }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+      }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
         setState(()=>_message='Backend rejected entity creation (type, quota or authorization).');}
-      finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
+      finally{if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)setState(()=>_busy=false);}
     }finally{type.dispose();ar.dispose();en.dispose();slug.dispose();}
   }
   Future<void> _reloadAfterMutation()async{
@@ -249,12 +278,13 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     await _reload();
   }
   Future<void> _details(FableManagedAccount entity)async{
+    final binding=_bindingEpoch;
     if(_busy||!_repo.canReadDetails||entity.status!='ACTIVE')return;
     final rev=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;});
     try{
       final item=await _repo.readDetails(entity);
-      if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+      if(!mounted||rev!=widget.gateway.session.identityRevision||binding!=_bindingEpoch)return;
       await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
         title:Text(_ar?'تفاصيل الكيان':'Entity details'),
         content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,
@@ -267,20 +297,21 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         ])),
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx),
           child:Text(_ar?'إغلاق':'Close'))]));
-    }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+    }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
       setState(()=>_message='Backend denied entity details.');}
-    finally{if(mounted&&rev==widget.gateway.session.identityRevision)
+    finally{if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
       setState(()=>_busy=false);}
   }
 
   Future<void> _publicPreview(FableManagedAccount entity)async{
+    final binding=_bindingEpoch;
     if(_busy||entity.status!='ACTIVE'||entity.visibility!='PUBLIC'||
        entity.slug==null||!_repo.canViewPublic)return;
     final revision=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;});
     try{
       final publicEntity=await _repo.publicBySlug(entity.slug!);
-      if(!mounted||revision!=widget.gateway.session.identityRevision)return;
+      if(!mounted||revision!=widget.gateway.session.identityRevision||binding!=_bindingEpoch)return;
       await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
         title:Text(_ar?'الملف العام':'Public entity preview'),
         content:Column(mainAxisSize:MainAxisSize.min,
@@ -291,14 +322,15 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx),
           child:Text(_ar?'إغلاق':'Close'))]));
     }catch(_){
-      if(mounted&&revision==widget.gateway.session.identityRevision)
+      if(mounted&&revision==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
         setState(()=>_message=_ar?'تعذّر جلب الملف العام للكيان.':
           'Backend did not confirm public visibility.');
-    }finally{if(mounted&&revision==widget.gateway.session.identityRevision)
+    }finally{if(mounted&&revision==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
       setState(()=>_busy=false);}
   }
 
   Future<void> _edit(FableManagedAccount entity)async{
+    final binding=_bindingEpoch;
     if(_busy||!entity.isOwner||!_repo.canUpdateDetails||
        !const {'ACTIVE','DISABLED'}.contains(entity.status))return;
     final nameAr=TextEditingController(text:entity.nameAr),
@@ -337,7 +369,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
             FilledButton(onPressed:()=>Navigator.pop(ctx,true),
               child:Text(_ar?'حفظ':'Save')),
           ])));
-      if(save!=true||!mounted)return;
+      if(save!=true||!mounted||binding!=_bindingEpoch)return;
       final collab=visibility!='PRIVATE'&&collaboration,invite=collab&&managers;
       final revokes=(visibility=='PRIVATE'&&entity.visibility!='PRIVATE')||
         (entity.collaborationEnabled&&!collab)||
@@ -352,23 +384,24 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         await _repo.updateDetails(entity,nameAr:nameAr.text,nameEn:nameEn.text,
           visibility:visibility,collaborationEnabled:collab,
           managersCanInvite:invite,slug:slug.text);
-        if(!mounted||rev!=widget.gateway.session.identityRevision)return;
+        if(!mounted||rev!=widget.gateway.session.identityRevision||binding!=_bindingEpoch)return;
         setState(()=>_selected=null);
         _clearManagedSelection();
         await _reloadAfterMutation();
-      }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+      }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
         setState(()=>_message=_ar?'لم يؤكد الباك هذا التعديل؛ حدّث القائمة.':
           'Backend did not confirm the update; refresh the list.');}
-      finally{if(mounted&&rev==widget.gateway.session.identityRevision)
+      finally{if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
         setState(()=>_busy=false);}
     }finally{nameAr.dispose();nameEn.dispose();slug.dispose();}
   }
 
   Future<void> _invite(FableManagedAccount entity)async{
+    final binding=_bindingEpoch;
     final chosen=_effectiveSelection;
     final store=_managedStore;
     final storeRevision=store?.selectionRevision;
-    bool sameSelection()=>mounted&&identical(_effectiveSelection,chosen) &&
+    bool sameSelection()=>mounted&&binding==_bindingEpoch&&identical(_effectiveSelection,chosen) &&
       (store==null || (store.selectionRevision==storeRevision &&
       identical(store.selected,chosen)));
     if(_busy||chosen==null||chosen.id!=entity.id||!_repo.canInvite||
@@ -414,24 +447,25 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       setState((){_busy=true;_message=null;});
       try{
         await _repo.invite(entity,chosen,username:username,access:access);
-        if(sameSelection()&&rev==widget.gateway.session.identityRevision)
+        if(sameSelection()&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
           setState(()=>_message='Backend accepted the invitation.');
-      }catch(_){if(sameSelection()&&rev==widget.gateway.session.identityRevision)
+      }catch(_){if(sameSelection()&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
         setState(()=>_message='Backend denied the invitation.');}
-      finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
+      finally{if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)setState(()=>_busy=false);}
     }
   }
   Future<void> _respond(FableManagedInvitation invite,bool accept)async{
+    final binding=_bindingEpoch;
     if(_busy||!await _confirm(accept?'Accept invitation?':'Decline invitation?'))return;
-    if(!mounted)return;
+    if(!mounted||binding!=_bindingEpoch)return;
     final rev=widget.gateway.session.identityRevision;
     setState((){_busy=true;_message=null;});
     try{
       await _repo.respondToInvitation(invite.id,accept:accept);
-      if(mounted&&rev==widget.gateway.session.identityRevision)await _reloadAfterMutation();
-    }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision)
+      if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)await _reloadAfterMutation();
+    }catch(_){if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
       setState(()=>_message='Backend rejected the invitation action.');}
-    finally{if(mounted&&rev==widget.gateway.session.identityRevision)setState(()=>_busy=false);}
+    finally{if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)setState(()=>_busy=false);}
   }
   String _lifecycleLabel(String action){
     if(_ar){
@@ -451,12 +485,13 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     }
   }
   Future<void> _requestLifecycle(FableManagedAccount entity,String action) async {
+    final binding=_bindingEpoch;
     if(_busy||!entity.isOwner||!_repo.canLifecycle(action)||
        !_ownerStillListed(entity.id))return;
     final store=_managedStore;
     final contextRevision=store?.selectionRevision;
     final loginRevision=widget.gateway.session.identityRevision;
-    bool valid()=>_sameLifecycleContext(store,contextRevision) &&
+    bool valid()=>binding==_bindingEpoch&&_sameLifecycleContext(store,contextRevision) &&
       loginRevision==widget.gateway.session.identityRevision &&
       _ownerStillListed(entity.id);
     if(!await _confirm(_lifecycleLabel(action)+'?')||!valid())return;
@@ -482,12 +517,13 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
     }
   }
   Future<void> _applyLifecycle() async{
+    final binding=_bindingEpoch;
     final pending=_pendingLifecycle;
     if(_busy||pending==null)return;
     final store=_pendingLifecycleStore;
     final contextRevision=_pendingLifecycleRevision;
     final rev=widget.gateway.session.identityRevision;
-    bool valid()=>_sameLifecycleContext(store,contextRevision) &&
+    bool valid()=>binding==_bindingEpoch&&_sameLifecycleContext(store,contextRevision) &&
        identical(_pendingLifecycle,pending) &&
        rev==pending.identityRevision &&
        widget.gateway.session.identityRevision==rev &&
@@ -510,7 +546,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
       _clearManagedSelection();
       await _reloadAfterMutation();
     }catch(_){
-      if(mounted&&rev==widget.gateway.session.identityRevision){
+      if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch){
         setState((){
           // The one-time proof may have been consumed while context switched.
           // Do not replay the same challenge or lifecycle mutation.
@@ -520,7 +556,7 @@ class _FableManagedAccountsPageState extends State<FableManagedAccountsPage>
         });
       }
     }finally{
-      if(mounted&&rev==widget.gateway.session.identityRevision)
+      if(mounted&&rev==widget.gateway.session.identityRevision&&binding==_bindingEpoch)
         setState(()=>_busy=false);
     }
   }
