@@ -75,6 +75,9 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
     catalogOps.set(op.operationId,op);
   }
   let projectOperations=0;
+  // OpenAPI operationIds must be unique across routes, including when the
+  // same id also occurs in the mobile-core overlap catalog.
+  const seenProjectOperationIds=new Set();
   for (const [path, routes] of Object.entries(openapi.paths || {})) {
     if (!path.startsWith('/') || path.startsWith('//') || !routes || typeof routes!=='object' || Array.isArray(routes)) {
       fail('invalid_openapi_route');continue;
@@ -95,7 +98,11 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
           fail('mobile_core_overlap_mismatch');
         if(!overlap && ids.has(info.operationId))fail('duplicate_project_operation_id');
       }
-      if(typeof info?.operationId==='string') ids.add(info.operationId);
+      if(typeof info?.operationId==='string') {
+        if(seenProjectOperationIds.has(info.operationId)) fail('duplicate_project_operation_id');
+        seenProjectOperationIds.add(info.operationId);
+        ids.add(info.operationId);
+      }
     }
   }
   if(Array.isArray(contract.operations) && projectOperations!==contract.operations.length)fail('project_operation_count_mismatch');
