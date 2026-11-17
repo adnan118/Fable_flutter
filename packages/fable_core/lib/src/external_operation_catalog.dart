@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'fable_contract.dart';
+import 'backend_credential_provider.dart' show isAllowedExternalCredentialHeader;
 
 /// Import only catalogs produced and validated by `fable mobile backend import`.
 /// Custom backend semantics (including login/refresh payload formats) are not guessed.
@@ -17,10 +18,8 @@ class ExternalOperationCatalog implements OperationCatalog {
   final Map<String,FableOperation> operations;
   final Map<String,String> publicHeaders;
 
-  static bool _validCredentialHeader(Object? value) {
-    if (value is! String || !RegExp(r'^[A-Za-z][A-Za-z0-9-]{0,63}$').hasMatch(value)) return false;
-    return !const {'host','cookie','set-cookie','connection','content-length','transfer-encoding','origin','referer','proxy-authorization','x-forwarded-for','x-forwarded-host','forwarded','x-installation-id'}.contains(value.toLowerCase());
-  }
+  static bool _validCredentialHeader(Object? value) =>
+      isAllowedExternalCredentialHeader(value);
 
   factory ExternalOperationCatalog.fromMap(Map<String,dynamic> value) {
     if(value['schemaVersion']!=1 || value['kind']!='fable.external-operation-catalog' ||
