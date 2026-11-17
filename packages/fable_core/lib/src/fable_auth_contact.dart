@@ -32,7 +32,12 @@ extension FableVerifiedContactSecurity on FableAuthGateway {
     _requireAuthOperation(op,'POST',email?'/auth/contact/email/change':
       '/auth/contact/phone/change',requiresAuth:true);
     proof._inFlight=true;
+    if(securityProof!=null)securityProof._inFlight=true;
     try {
+      // These one-shot proofs are spent by the attempted contact mutation.
+      // A missing acknowledgement must never permit a replay from this client.
+      proof._consumed=true;
+      if(securityProof!=null)securityProof._consumed=true;
       final response=await _api.request(op,body:{
         'challengeId':proof.challengeId,
         if(email)'newEmail':destination,
@@ -49,11 +54,11 @@ extension FableVerifiedContactSecurity on FableAuthGateway {
          (data['revokedOtherSessions'] as int)<0) {
         throw const FormatException('Backend did not confirm contact change');
       }
-      proof._consumed=true;
       return FableContactChange._(
         purpose,data['revokedOtherSessions'] as int);
     } finally {
       proof._inFlight=false;
+      if(securityProof!=null)securityProof._inFlight=false;
     }
   }
 }
