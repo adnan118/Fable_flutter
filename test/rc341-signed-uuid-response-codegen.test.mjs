@@ -51,3 +51,16 @@ test('RC341 no automatic UUID rejection for an ordinary signed text identifier',
   assert.ok(!dto.includes('UUID field'));
   assert.ok(dto.includes('Invalid id DTO field'));
 });
+
+test('RC353 only RFC4122 v4 signed record UUIDs are accepted by generated DTO boundaries',()=>{
+ const canonical=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+ assert.ok(canonical.test('00000000-0000-4000-8000-000000000000'));
+ assert.ok(!canonical.test('00000000-0000-1000-8000-000000000000'));
+ assert.ok(!canonical.test('00000000-0000-7000-8000-000000000000'));
+ assert.ok(!canonical.test('00000000-0000-4000-c000-000000000000'));
+ for(const kind of ['single','unpaginated-list']){
+  const {dto}=generated(kind);
+  assert.ok(dto.includes('-4[0-9a-fA-F]{3}-[89abAB]'));
+  assert.ok(!dto.includes('-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'));
+ }
+});
