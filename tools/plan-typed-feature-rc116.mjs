@@ -83,6 +83,7 @@ function checkSignedResponseShape(op,schema,fields,signedData=op.response?.data)
     // The signed source distinguishes money/Decimal strings from ordinary
     // text: carry that identity to the generated DTO for lexical validation.
     if(field.type==='decimal')actual.decimal=true;
+    if(field.type==='uuid')actual.uuid=true;
   }
 }
 

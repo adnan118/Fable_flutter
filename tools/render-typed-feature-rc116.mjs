@@ -156,6 +156,10 @@ function listDto(op){
       '      if('+f.name+'!=null && !RegExp(r"^-?(?:0|[1-9][0-9]{0,34})(?:\\.[0-9]{1,30})?(?:e[+-]?[0-9]{1,2})?$").hasMatch('+f.name+' as String))',
       '        throw const FormatException('+dart('Invalid '+f.name+' exact Decimal field')+');',
     );
+    if(f.uuid)parts.push(
+      '      if('+f.name+'!=null && !RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+f.name+' as String))',
+      '        throw const FormatException('+dart('Invalid '+f.name+' UUID field')+');',
+    );
   }
   parts.push('      items.add('+item+'(');
   for(const f of op.fields){
@@ -206,6 +210,10 @@ function dto(op){
     if(f.decimal)parts.push(
       '    if('+f.name+'!=null && !RegExp(r"^-?(?:0|[1-9][0-9]{0,34})(?:\\.[0-9]{1,30})?(?:e[+-]?[0-9]{1,2})?$").hasMatch('+f.name+' as String))',
       '      throw const FormatException('+dart('Invalid '+f.name+' exact Decimal field')+');',
+    );
+    if(f.uuid)parts.push(
+      '    if('+f.name+'!=null && !RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+f.name+' as String))',
+      '      throw const FormatException('+dart('Invalid '+f.name+' UUID field')+');',
     );
   }
   parts.push('    return '+name+'Dto(');
@@ -1481,7 +1489,7 @@ function failure(){
 function listDtoTest(op,featureId){
   const file=snake(op.operationId),name=op.className;
   const fields=op.fields.map(f=>{
-    const value=f.decimal?dart('19.99'):f.type==='String'?dart('example'):f.type==='int'?'7':
+    const value=f.decimal?dart('19.99'):f.uuid?dart('00000000-0000-4000-8000-000000000000'):f.type==='String'?dart('example'):f.type==='int'?'7':
       f.type==='double'?'2.5':'true';
     return '        '+dart(f.name)+': '+value+',';
   });
@@ -1562,7 +1570,7 @@ function dtoTest(op,featureId){
   if(['unpaginated-list','paginated-list'].includes(op.resultKind))return listDtoTest(op,featureId);
   const file=snake(op.operationId),name=op.className;
   const valid=op.fields.map(f=>{
-    const value=f.decimal?dart('19.99'):f.type==='String'?dart('example'):f.type==='int'?'7':
+    const value=f.decimal?dart('19.99'):f.uuid?dart('00000000-0000-4000-8000-000000000000'):f.type==='String'?dart('example'):f.type==='int'?'7':
       f.type==='double'?'2.5':'true';
     return '    '+dart(f.name)+': '+value+',';
   });

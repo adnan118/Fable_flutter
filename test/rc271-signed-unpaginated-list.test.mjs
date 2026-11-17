@@ -77,6 +77,8 @@ test('RC271 signed unpaginated list produces typed immutable item DTO and naviga
   assert.match(entity,/final List<CatalogListUnpaginatedItem> items/);
   assert.match(dto,/input\.length>5000/);
   assert.match(dto,/meta\['mode'\]!='unpaginated'/);
+  assert.match(dto,/Invalid id UUID field/);
+  assert.match(dtoTest,/00000000-0000-4000-8000-000000000000/);
   assert.match(dto,/List<CatalogListUnpaginatedItem>\.unmodifiable\(items\)/);
   assert.match(adapter,/gateway\.session\.identityRevision!=identity/);
   assert.match(page,/state\.value\.items\.skip\(_rowOffset\)\.take\(100\)/);
