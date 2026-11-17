@@ -85,22 +85,24 @@ class _FablePaymentStatusCardState extends State<FablePaymentStatusCard> {
     final identityChanged=old.identityRevision!=widget.identityRevision||
         old.isAuthenticated!=widget.isAuthenticated||
         !identical(old.identityInvalidations,widget.identityInvalidations);
+    final repositoryChanged=!identical(old.repository,widget.repository);
     if(identityChanged){
       unawaited(_subscription?.cancel());
       _subscription=null;
       _bindIdentity();
+    }
+    if(identityChanged||repositoryChanged){
+      // A replacement Backend may use a different ID namespace. Never send
+      // the old payment ID to the new repository automatically or reveal a
+      // completion from the previous repository, even at the same revision.
       _generation++;
       _load=null;
       _readRevision=null;
       _needsReopen=true;
     }
     if(old.paymentId!=widget.paymentId){
-      // An explicit new payment selection can initiate the next verified GET.
+      // Only an explicitly selected new ID can begin a new verified read.
       _needsReopen=false;
-      _beginRead();
-    }else if(!identityChanged && !_needsReopen &&
-        !identical(old.repository,widget.repository)){
-      // Swapping gateways during an account change must not reopen the old ID.
       _beginRead();
     }
   }
