@@ -63,6 +63,8 @@ class _FableAnalyticsConsentPanelState
   void didUpdateWidget(covariant FableAnalyticsConsentPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tracker, widget.tracker) ||
+        !identical(oldWidget.identityRevision, widget.identityRevision) ||
+        !identical(oldWidget.mayCollect, widget.mayCollect) ||
         !identical(oldWidget.identityInvalidations,
             widget.identityInvalidations)) {
       oldWidget.tracker.setConsent(false);
