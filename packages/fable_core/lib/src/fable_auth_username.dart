@@ -50,6 +50,10 @@ extension FableUsernameOperations on FableAuthGateway {
 
   Future<FableUsernameUpdate> updateUsernameWithProof(String username,
       FableVerifiedSensitiveProof proof) {
+    // Validate local input and active contract BEFORE spending the proof.
+    _requireAuthOperation('auth.username.update','PATCH','/auth/me/username',
+      requiresAuth:true);
+    _validateUsername(username);
     if (!identical(proof._owner, this) ||
         proof._identityRevision != session.identityRevision ||
         proof._consumed || proof._inFlight) {
@@ -100,9 +104,15 @@ extension FableSocialVerifiedProof on FableAuthGateway {
   }
 
   Future<FableSocialUnlinkOutcome> unlinkSocialIdentityWithProof(
-      String provider,FableVerifiedSensitiveProof proof) =>
-    unlinkSocialIdentity(provider,
+      String provider,FableVerifiedSensitiveProof proof) {
+    // Invalid providers must not consume valid recent-auth proof objects.
+    _requireAuthOperation('auth.social.unlink','DELETE',
+      '/auth/social/:provider',requiresAuth:true);
+    if(!const {'google','apple'}.contains(provider))
+      throw ArgumentError('Unsupported social identity provider');
+    return unlinkSocialIdentity(provider,
       securityChallengeId:verifiedSocialActionChallengeId(proof));
+  }
 }
 
 extension FableSocialUnlinkSecurity on FableAuthGateway {
