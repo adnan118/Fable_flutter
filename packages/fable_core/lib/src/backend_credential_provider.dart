@@ -30,8 +30,11 @@ bool isAllowedExternalCredentialHeader(Object? value) {
   final header=value.toLowerCase();
   if (header.startsWith('x-fable-')) return false;
   return !const <String>{
-    'host','cookie','set-cookie','connection','content-length',
+    'host','cookie','set-cookie','connection','keep-alive',
+    'proxy-connection','upgrade','te','trailer','via',
+    'content-length',
     'transfer-encoding','origin','referer','proxy-authorization',
+    'proxy-authenticate','www-authenticate',
     'x-forwarded-for','x-forwarded-host','forwarded','x-installation-id',
     'dpop','idempotency-key','if-match','range',
     'x-security-challenge-id','x-csrf-token',
