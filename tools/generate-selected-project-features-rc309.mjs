@@ -13,6 +13,7 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {planPinnedTypedFeature} from './generate-typed-feature-rc116.mjs';
 import {planW5AppFeatureBinding} from './w5-app-feature-binding.mjs';
+import {verifyGeneratedSelectedFeatures} from './verify-selected-project-features-rc311.mjs';
 
 const HASH=/^[0-9a-f]{64}$/;
 const ID=/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
@@ -231,7 +232,19 @@ export function generateSelectedProjectFeatures(options){
       readFileSync(binding.pubspecPath,'utf8')!==binding.pubspec||
       readFileSync(binding.registryPath,'utf8')!==binding.registry))
       throw Error('Committed app integration differs from preflight');
+    // RC311: independent re-render of all signed sources, exact package-tree
+    // checks (including injected extras), and canonical app registry integrity.
+    // A refusal here enters the RC309 guarded rollback path.
+    const attestation=verifyGeneratedSelectedFeatures({
+      root,expectedProjectId:options.expectedProjectId,
+      expectedContractHash:options.expectedContractHash,
+      requireAppWiring:Boolean(binding),
+    });
+    if(attestation.sourceFilesVerified!==verifiedFiles)
+      throw Error('RC311 independent signed file count disagrees with commit');
     report.sourceFilesVerified=verifiedFiles;
+    report.sourceTreeAttestation=attestation.packages;
+    report.appWiringVerified=attestation.appWiringVerified;
     report.applied=true;report.appWired=Boolean(binding);
     report.preflight='COMMITTED_SOURCE_ONLY';
     report.backup=backup?relative(root,backup):null;
