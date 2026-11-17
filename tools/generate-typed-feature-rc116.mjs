@@ -51,6 +51,7 @@ function testSourceBoundaries(root,featureId,files){
 }
 export function planPinnedTypedFeature(root,{
   featureId,expectedProjectId,expectedContractHash,
+  allowExistingPackageForVerification=false,
 }={}){
   root=resolve(root);
   if(typeof featureId!=='string'||!ID.test(featureId)||featureId.length>64)
@@ -87,7 +88,8 @@ export function planPinnedTypedFeature(root,{
     throw Error('Contract changed between verification and typed feature planning');
   }
   const folder=join(root,'packages/features/fable_'+featureId);
-  if(existsSync(folder))throw Error('Refusing to overwrite an existing feature package: '+featureId);
+  if(existsSync(folder)&&allowExistingPackageForVerification!==true)
+    throw Error('Refusing to overwrite an existing feature package: '+featureId);
   const files=renderTypedFeature(plan);
   testSourceBoundaries(root,featureId,files);
   return {plan,files};

@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.10.1",
   "scripts": {
     "wizard:feature:batch": "node tools/generate-selected-project-features-rc309.mjs",
+    "wizard:feature:verify": "node tools/verify-selected-project-features-rc311.mjs",
     "fable:toolchain:check": "node tools/fable-toolchain-check-rc308.mjs",
     "fable:source-map": "node tools/fable-source-map-rc296.mjs",
     "wizard": "node tools/flutter-setup-wizard.mjs",
