@@ -231,6 +231,20 @@ class UnifiedApiClient implements BackendApiGateway {
       throw const FormatException('Unresolved backend path parameter');
     }
     final headers=await adapter.headersFor(op,session);
+    // RC360: secure-storage generation alone is not an HTTP trust boundary.
+    // Do not let an injected adapter export a device installation identifier
+    // to Other Backend or replace the single validated Fable header.
+    final installationHeaders=headers.entries.where((entry)=>
+      entry.key.toLowerCase()=='x-installation-id').toList(growable:false);
+    if(contract is FableContract){
+      if(adapter is! FableTransportAdapter ||
+         installationHeaders.length!=1 ||
+         !RegExp(r'^[a-f0-9]{32}$').hasMatch(installationHeaders.single.value)){
+        throw StateError('Fable installation header is missing or invalid');
+      }
+    }else if(installationHeaders.isNotEmpty){
+      throw StateError('External adapter attempted to expose a Fable installation identifier');
+    }
     // These headers may only be installed below after a verified explicit
     // operation argument and its security/record scope have been checked.
     // An adapter must not smuggle them into an unrelated public/private GET.
