@@ -94,9 +94,13 @@ class _FablePaymentStatusCardState extends State<FablePaymentStatusCard> {
       _readRevision=null;
       _needsReopen=true;
     }
-    if(!identical(old.repository,widget.repository)||old.paymentId!=widget.paymentId){
+    if(old.paymentId!=widget.paymentId){
       // An explicit new payment selection can initiate the next verified GET.
       _needsReopen=false;
+      _beginRead();
+    }else if(!identityChanged && !_needsReopen &&
+        !identical(old.repository,widget.repository)){
+      // Swapping gateways during an account change must not reopen the old ID.
       _beginRead();
     }
   }
