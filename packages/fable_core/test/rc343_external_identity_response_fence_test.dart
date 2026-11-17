@@ -28,7 +28,7 @@ ExternalOperationCatalog _catalog(){
   return ExternalOperationCatalog.fromMap({
     'schemaVersion':1,'kind':'fable.external-operation-catalog',
     'adapter':'openapi','baseUrl':'https://api.example.test',
-    'sourceHash':'a'*64,
+    'sourceHash':List<String>.filled(64,'a').join(),
     'operationsHash':sha256.convert(utf8.encode(jsonEncode(operations))).toString(),
     'operations':operations,
   });
