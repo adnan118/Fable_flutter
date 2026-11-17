@@ -26,7 +26,7 @@ for(const method of ['PATCH','DELETE']){
   test('RC342 '+method+' '+(managedScoped?'managed':'owner')+' route blocks stale POST-invalidation mutation',()=>{
    const page=generated(method,managedScoped);
    assert.ok(page.includes('bool _revoked=false;'));
-   assert.ok(page.includes('void _bind(){_revoked=false;'));
+   assert.ok(page.includes('void _bind({bool readAllowed=true}){_revoked=!readAllowed;'));
    assert.ok(page.includes('_epoch++;_revoked=true;'));
    assert.ok(page.includes('if(_revoked||_confirming||_controller.state is!'));
    assert.ok(page.includes('if(_revoked)return Scaffold('));
