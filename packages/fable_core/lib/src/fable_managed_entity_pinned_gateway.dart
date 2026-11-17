@@ -40,7 +40,8 @@ class FableManagedEntityPinnedGateway extends FableAuthGateway {
          !RegExp(r'^managed-entity:[A-Za-z][A-Za-z0-9_]*$').hasMatch(op.recordAccess!)||
          !(op.method=='GET'?
            ((item.key.endsWith('.get')&&op.path=='/'+item.key.split('.').first+'/{id}')||
-            (item.key.endsWith('.list.paginated')&&op.path=='/'+item.key.split('.').first)):
+            (item.key.endsWith('.list.paginated')&&op.path=='/'+item.key.split('.').first)||
+            (item.key.endsWith('.list.unpaginated')&&op.path=='/'+item.key.split('.').first+'/all')):
            (op.method=='POST'
              ?(!op.requiresIfMatch&&item.key.endsWith('.create')&&
                op.path=='/'+item.key.split('.').first)

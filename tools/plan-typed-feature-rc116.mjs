@@ -226,15 +226,20 @@ function checkedManagedRead(op,route,featureId){
      route['x-fable-record-access']!==policy ||
      op.method!=='GET' ||
      (op.operationId!==featureId+'.get' &&
-      op.operationId!==featureId+'.list.paginated') ||
+      op.operationId!==featureId+'.list.paginated' &&
+      op.operationId!==featureId+'.list.unpaginated') ||
      (op.operationId.endsWith('.get')?
        op.path!=='/'+featureId+'/:id':
-       op.path!=='/'+featureId) ||
+       op.operationId.endsWith('.list.unpaginated')?
+         op.path!=='/'+featureId+'/all':
+         op.path!=='/'+featureId) ||
      (op.request?.headers??[]).length!==0 ||
      op.request?.body!=null ||
      (op.permissions??[]).length!==1 ||
      op.permissions[0]!==
-       (op.operationId.endsWith('.get')?featureId+'.read':featureId+'.list.paginated'))
+       (op.operationId.endsWith('.get')?featureId+'.read':
+         op.operationId.endsWith('.list.unpaginated')?
+           featureId+'.list.unpaginated':featureId+'.list.paginated'))
     fail('Managed GET must be explicitly scoped, signed, typed and read-only: '+op.operationId);
   return true;
 }
