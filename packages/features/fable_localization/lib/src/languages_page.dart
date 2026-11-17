@@ -22,6 +22,21 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
  String? _lastCopyLocale;
  String? _copyError;
  bool _busy=false;String? _error;
+ int _sourceEpoch=0;
+ // A contract, transport or origin change invalidates every prior GET result.
+ @override void didUpdateWidget(covariant FableLanguagesPage old){
+  super.didUpdateWidget(old);
+  if(!identical(old.contract,widget.contract) ||
+     !identical(old.injectedGateway,widget.injectedGateway) ||
+     old.backendOrigin!=widget.backendOrigin){
+   _sourceEpoch++;
+   _client?.dispose();
+   _client=null;
+   _languages=null;_copy=null;
+   _busy=false;_checkingCopy=false;
+   _lastCopyLocale=null;_copyError=null;_error=null;
+  }
+ }
  String get chosenOrigin=>widget.backendOrigin?.origin??origin;
  BackendApiGateway get transport => widget.injectedGateway??(_client??=FableAuthGateway(
    baseUri:Uri.parse(chosenOrigin),contract:widget.contract,
@@ -30,24 +45,36 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
  bool get copySupported=>chosenOrigin.isNotEmpty&&widget.contract.supports('languages.clientCopy');
  Future<void> checkCopy({bool force=false})async{
   if(_checkingCopy||!copySupported)return;
+  final epoch=_sourceEpoch;
+  final namespace=chosenOrigin;
+  final locale=Localizations.localeOf(context).toLanguageTag().toLowerCase();
+  bool sameRequest()=>mounted && epoch==_sourceEpoch &&
+    namespace==chosenOrigin &&
+    Localizations.localeOf(context).toLanguageTag().toLowerCase()==locale;
   setState((){_checkingCopy=true;_copyError=null;});
   try{
    final client=transport;
-   final locale=Localizations.localeOf(context).toLanguageTag().toLowerCase();
-   final updated=await FableClientCopySync(client,namespace:chosenOrigin).sync(locale,force:force);
-   if(mounted)setState(()=>_copy=updated);
-  }catch(_){if(mounted)setState(()=>_copyError='Published text updates are temporarily unavailable. Bundled translations are unchanged.');}
-  finally{if(mounted)setState(()=>_checkingCopy=false);}
+   final updated=await FableClientCopySync(client,namespace:namespace).sync(locale,force:force);
+   if(sameRequest())setState(()=>_copy=updated);
+  }catch(_){
+   if(sameRequest())setState(()=>_copyError=
+     'Published text updates are temporarily unavailable. Bundled translations are unchanged.');
+  }finally{if(sameRequest())setState(()=>_checkingCopy=false);}
  }
  Future<void> load() async{
   if(_busy||!supported)return;
+  final epoch=_sourceEpoch;
+  final namespace=chosenOrigin;
+  bool sameRequest()=>mounted && epoch==_sourceEpoch &&
+    namespace==chosenOrigin;
   setState((){_busy=true;_error=null;});
   try{
    final client=transport;
    final entries=await FableLanguagesRepository(client).list();
-   if(mounted)setState(()=>_languages=entries);
-  }catch(_){if(mounted)setState(()=>_error='Could not load supported languages.');}
-  finally{if(mounted)setState(()=>_busy=false);}
+   if(sameRequest())setState(()=>_languages=entries);
+  }catch(_){
+   if(sameRequest())setState(()=>_error='Could not load supported languages.');
+  }finally{if(sameRequest())setState(()=>_busy=false);}
  }
  @override void didChangeDependencies(){
   super.didChangeDependencies();
@@ -59,7 +86,11 @@ class _FableLanguagesPageState extends State<FableLanguagesPage> {
    }
   }
  }
- @override void dispose(){_client?.dispose();super.dispose();}
+ @override void dispose(){
+  _sourceEpoch++;
+  _client?.dispose();
+  super.dispose();
+ }
  @override Widget build(BuildContext context){
   final ar=Localizations.localeOf(context).languageCode=='ar';
   final uiLocale=FableAppLocaleScope.maybeOf(context);
