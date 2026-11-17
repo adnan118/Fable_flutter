@@ -705,6 +705,15 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const okStatuses=Object.entries(route.responses??{}).filter(([k])=>
       /^2\d\d$/.test(k));
     if(okStatuses.length!==1)fail('one unambiguous success response required: '+id);
+    // The HTTP status of a generated action is part of its reviewed
+    // operation contract, not a value the UI may infer from an envelope.
+    const expectedSuccessStatus=Number(okStatuses[0][0]);
+    if(!Number.isInteger(expectedSuccessStatus)||
+       expectedSuccessStatus<200||expectedSuccessStatus>299||
+       (spec.method==='GET'&&expectedSuccessStatus!==200)||
+       (op.httpStatus!==undefined&&
+         op.httpStatus!==expectedSuccessStatus))
+      fail('Backend success status contradicts the selected OpenAPI operation: '+id);
     const schema=okStatuses[0][1]?.content?.['application/json']?.schema;
     if(!schema||schema.type!=='object'||
        schema.properties?.success?.const!==true||
@@ -745,6 +754,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     }));
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
       className,fields,params,pathParamKinds,bodyFields,resultKind,
+      expectedSuccessStatus,
       ...(managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
       ...(spec.method==='POST'&&op.idempotency?.required===true?
         {requiresIdempotency:true}:{}),
