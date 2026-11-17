@@ -14,6 +14,7 @@ import {createHash} from 'node:crypto';
 import {planPinnedTypedFeature} from './generate-typed-feature-rc116.mjs';
 import {planW5AppFeatureBinding} from './w5-app-feature-binding.mjs';
 import {verifyGeneratedSelectedFeatures} from './verify-selected-project-features-rc311.mjs';
+import {pathEntryExists,assertRegularProjectPath,generatedTreeExactlyMatches} from './rc366-safe-source-tree.mjs';
 
 const HASH=/^[0-9a-f]{64}$/;
 const ID=/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
@@ -31,13 +32,14 @@ function requireDirectory(path){
      !lstatSync(path).isDirectory())
     throw Error('RC309 requires a real, non-symlink project folder: '+path);
 }
-function requireFile(path){
-  if(!existsSync(path)||lstatSync(path).isSymbolicLink()||
+function requireFile(path,root=null){
+  if(root!==null)assertRegularProjectPath(root,path,'file');
+  else if(!pathEntryExists(path)||lstatSync(path).isSymbolicLink()||
      !lstatSync(path).isFile())throw Error('RC309 requires a real source file: '+path);
 }
 function selection(root){
   const p=join(root,'.fable/project-features.json');
-  requireFile(p);
+  requireFile(p,root);
   const parsed=JSON.parse(readFileSync(p,'utf8'));
   if(parsed.schemaVersion!==1||!Array.isArray(parsed.features)||
      parsed.features.length<1||parsed.features.length>24)
@@ -51,14 +53,14 @@ function selection(root){
 function snapshots(root){
   return new Map(SOURCES.map(name=>{
     const path=join(root,...name.split('/'));
-    requireFile(path);
+    requireFile(path,root);
     return [name,readFileSync(path,'utf8')];
   }));
 }
 function unchanged(root,saved){
   for(const [name,original] of saved){
     const path=join(root,...name.split('/'));
-    requireFile(path);
+    requireFile(path,root);
     if(readFileSync(path,'utf8')!==original)
       throw Error('A signed project input changed during source generation: '+name);
   }
@@ -70,8 +72,8 @@ function assembleBinding(root,ids){
   const pubspecPath=join(root,'pubspec.yaml');
   const registryPath=join(root,'lib/src/generated/feature_registry.dart');
   for(const dir of [root,join(root,'lib'),join(root,'lib/src'),
-      join(root,'lib/src/generated')])requireDirectory(dir);
-  for(const file of [pubspecPath,registryPath])requireFile(file);
+      join(root,'lib/src/generated')])assertRegularProjectPath(root,dir,'dir');
+  for(const file of [pubspecPath,registryPath])requireFile(file,root);
   const initialPubspec=readFileSync(pubspecPath,'utf8');
   const initialRegistry=readFileSync(registryPath,'utf8');
   let pubspec=initialPubspec,registry=initialRegistry;
@@ -111,10 +113,8 @@ function args(argv){
 }
 export function generateSelectedProjectFeatures(options){
   const root=resolve(options.root??process.cwd());
-  requireDirectory(root);
-  requireDirectory(join(root,'.fable'));
-  requireDirectory(join(root,'packages'));
-  requireDirectory(join(root,'packages/features'));
+  for(const dir of [root,join(root,'.fable'),join(root,'packages'),
+      join(root,'packages/features')])assertRegularProjectPath(root,dir,'dir');
   const ids=selection(root);
   const saved=snapshots(root);
   const all=ids.map(featureId=>{
@@ -123,7 +123,7 @@ export function generateSelectedProjectFeatures(options){
       expectedContractHash:options.expectedContractHash,
     });
     const destination=join(root,'packages/features/fable_'+featureId);
-    if(!pathWithin(root,destination)||existsSync(destination))
+    if(!pathWithin(root,destination)||pathEntryExists(destination))
       throw Error('Package destination already exists or is unsafe: '+featureId);
     return {...planned,featureId,destination};
   });
@@ -158,7 +158,7 @@ export function generateSelectedProjectFeatures(options){
   try{
     unchanged(root,saved);
     for(const x of all)
-      if(existsSync(x.destination))
+      if(pathEntryExists(x.destination))
         throw Error('Feature appeared after preflight: '+x.featureId);
     stage=mkdtempSync(join(root,'packages/features/.rc309-stage-'));
     for(const feature of all){
@@ -183,6 +183,7 @@ export function generateSelectedProjectFeatures(options){
       const backupParent=join(root,'.fable/feature-backups');
       if(!existsSync(backupParent))mkdirSync(backupParent,{recursive:true});
       requireDirectory(backupParent);
+      assertRegularProjectPath(root,backupParent,'dir');
       backup=mkdtempSync(join(backupParent,'rc309-'));
       writeFileSync(join(backup,'pubspec.yaml'),binding.initialPubspec,{
         encoding:'utf8',flag:'wx',
@@ -197,17 +198,20 @@ export function generateSelectedProjectFeatures(options){
       },null,2)+'\n',{flag:'wx'});
     }
     unchanged(root,saved);
+    if(binding){requireFile(binding.pubspecPath,root);requireFile(binding.registryPath,root);}
     if(binding&&(
       readFileSync(binding.pubspecPath,'utf8')!==binding.initialPubspec||
       readFileSync(binding.registryPath,'utf8')!==binding.initialRegistry))
       throw Error('App pubspec/feature registry changed during preflight');
     for(const feature of all){
-      if(existsSync(feature.destination))
+      if(pathEntryExists(feature.destination))
         throw Error('Package appeared while staging: '+feature.featureId);
       renameSync(join(stage,feature.featureId),feature.destination);
       created.push(feature);
     }
     if(binding){
+      requireFile(binding.pubspecPath,root);
+      requireFile(binding.registryPath,root);
       if(readFileSync(binding.pubspecPath,'utf8')!==binding.initialPubspec||
          readFileSync(binding.registryPath,'utf8')!==binding.initialRegistry)
         throw Error('App source changed while committing feature packages');
@@ -222,7 +226,7 @@ export function generateSelectedProjectFeatures(options){
       const prefix='packages/features/fable_'+feature.featureId+'/';
       for(const [name,source] of feature.files){
         const dest=join(feature.destination,...name.slice(prefix.length).split('/'));
-        requireFile(dest);
+        requireFile(dest,root);
         if(readFileSync(dest,'utf8')!==source)
           throw Error('Committed source differs from signed preflight: '+name);
         verifiedFiles++;
@@ -259,6 +263,7 @@ export function generateSelectedProjectFeatures(options){
         [binding.registryPath,binding.registry,binding.initialRegistry],
       ]){
         try{
+          requireFile(path,root);
           if(readFileSync(path,'utf8')===expected)
             writeFileSync(path,original,'utf8');
           else if(readFileSync(path,'utf8')!==original)
@@ -268,21 +273,17 @@ export function generateSelectedProjectFeatures(options){
     }
     for(const item of [...created].reverse()){
       try{
-        let safe=true;
-        for(const [name,source] of item.files){
-          const file=join(item.destination,...name.slice(
-            ('packages/features/fable_'+item.featureId+'/').length).split('/'));
-          if(!existsSync(file)||lstatSync(file).isSymbolicLink()||
-             readFileSync(file,'utf8')!==source){safe=false;break;}
-        }
-        if(safe)rmSync(item.destination,{recursive:true,force:false});
-        else warnings.push('Concurrent package edit preserved: '+item.featureId);
+        const prefix='packages/features/fable_'+item.featureId+'/';
+        // An extra file or symlink may belong to a concurrent developer.
+        if(generatedTreeExactlyMatches(item.destination,item.files,prefix))
+          rmSync(item.destination,{recursive:true,force:false});
+        else warnings.push('Concurrent package addition/edit preserved: '+item.featureId);
       }catch{warnings.push('Manual package rollback needed: '+item.featureId);}
     }
     throw Error(error.message+(warnings.length?
       '; STOP, inspect durable backups and: '+warnings.join('; '):''));
   }finally{
-    if(stage&&existsSync(stage))rmSync(stage,{recursive:true,force:true});
+    if(stage&&pathEntryExists(stage))rmSync(stage,{recursive:true,force:true});
     closeSync(fd);
     rmSync(lock,{force:true});
   }
