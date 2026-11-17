@@ -469,6 +469,14 @@ function adapter(op,projectHash){
       '      }.contains(error.code))',
       '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     ]:[]),
+    ...(op.method==='POST'?[
+      '      // A committed write may lose its response: never claim non-creation.',
+      '      if(error.status==0||error.status==408||error.status>=500||',
+      '         const <String>{"session_refreshed_retry_manually",',
+      '           "session_changed_discard_response",',
+      '           "managed_entity_context_changed_discard_response"}.contains(error.code))',
+      '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
+    ]:[]),
     '      final kind=switch(error.status){',
     '        401=>TypedReadFailureKind.unauthenticated,',
     '        403=>TypedReadFailureKind.forbidden,',
@@ -482,7 +490,10 @@ function adapter(op,projectHash){
     '      };',
     '      throw TypedReadFailure(kind);',
     '    } on FormatException {',
-    '      throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
+    ...(op.method==='POST'?[
+      '      // A malformed 2xx acknowledgement does not prove non-creation.',
+      '      throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
+    ]:['      throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);']),
     '    } on TypedReadFailure { rethrow; }',
     '  }','}');
   return line(...parts);
