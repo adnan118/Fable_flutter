@@ -46,6 +46,10 @@ function assertPlan(plan){
      !/^[a-f0-9]{64}$/.test(plan.contractHash))
     throw Error('RC116 renderer requires reviewed contract-sourced plan');
   for(const op of plan.operations){
+    if(op.expectedSuccessStatus!==undefined &&
+       (!Number.isInteger(op.expectedSuccessStatus)||
+        op.expectedSuccessStatus<200||op.expectedSuccessStatus>299))
+      throw Error('RC378 invalid reviewed operation success status');
     if(op.pathParamKinds!==undefined &&
        (!Array.isArray(op.pathParamKinds)||
         op.pathParamKinds.length!==op.params.length||
@@ -462,6 +466,8 @@ function adapter(op,projectHash){
     '      if(gateway.session.identityRevision!=identity){',
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      }',
+    '      if(response.statusCode!='+(op.expectedSuccessStatus??(op.method==='POST'?201:200))+')',
+    '        throw const FormatException("Backend success status differs from signed operation");',
     '      final envelope=response.data;',
     "      if(envelope is! Map || envelope['success']!=true || envelope['data'] is! Map){",
     "        throw const FormatException('Invalid typed read success envelope');",
@@ -2406,6 +2412,7 @@ export function renderTypedFeature(plan){
     operations:plan.operations.map(op=>({
       operationId:op.operationId,method:op.method,path:op.path,
       operationHash:op.contractHash,responseKind:op.resultKind,
+      expectedSuccessStatus:op.expectedSuccessStatus??(op.method==='POST'?201:200),
       pathParamKinds:op.pathParamKinds??[],
       requestFields:(op.bodyFields??[]).map(f=>({name:f.name,required:f.required,type:f.type})),
       ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
