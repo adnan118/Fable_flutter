@@ -182,6 +182,7 @@ class UnifiedApiClient implements BackendApiGateway {
     // server GET; never let shared cache/ARB supply a payment precondition.
     if (ifMatch != null && (contract is! FableContract ||
         !op.requiresIfMatch || !op.requiresAuth || !op.enforceAuth ||
+        op.credentialHeader != null ||
         !const <String>{'PATCH','DELETE'}.contains(op.method.toUpperCase()) ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(ifMatch))) {
       throw ArgumentError('If-Match requires a signed conditional PATCH/DELETE and SHA-256 revision');
@@ -193,7 +194,9 @@ class UnifiedApiClient implements BackendApiGateway {
     // RC304: a client-created idempotency key can leave Flutter ONLY on a
     // verified Backend mutation whose signed contract explicitly requires it.
     if(idempotencyKey!=null && (contract is! FableContract ||
-       !op.requiresIdempotency || !op.requiresAuth ||
+       !op.requiresIdempotency || !op.requiresAuth || !op.enforceAuth ||
+       op.credentialHeader != null ||
+       !const <String>{'POST','PUT','PATCH','DELETE'}.contains(op.method.toUpperCase()) ||
        !RegExp(r'^[a-f0-9]{64}$').hasMatch(idempotencyKey))){
       throw ArgumentError('Idempotency-Key is allowed only by a signed authenticated mutation');
     }
