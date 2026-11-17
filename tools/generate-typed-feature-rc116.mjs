@@ -17,10 +17,12 @@ import {planTypedFeature} from './plan-typed-feature-rc116.mjs';
 import {renderTypedFeature} from './render-typed-feature-rc116.mjs';
 import {checkLayerSource} from './enforce-feature-architecture-rc115.mjs';
 import {planW5AppFeatureBinding} from './w5-app-feature-binding.mjs';
+import {pathEntryExists,assertRegularProjectPath,generatedTreeExactlyMatches} from './rc366-safe-source-tree.mjs';
 
 const HASH=/^[a-f0-9]{64}$/;
 const ID=/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
-const read=(root,name)=>JSON.parse(readFileSync(join(root,name),'utf8'));
+const read=(root,name)=>JSON.parse(readFileSync(
+  assertRegularProjectPath(root,join(root,name),'file'),'utf8'));
 function checkSourceDir(path){
   if(!existsSync(path)||lstatSync(path).isSymbolicLink()||
      !lstatSync(path).isDirectory()){
@@ -29,7 +31,7 @@ function checkSourceDir(path){
 }
 function selectedProjectFeatures(root){
   const path=join(root,'.fable/project-features.json');
-  if(!existsSync(path))throw Error('Explicit custom feature selection manifest missing');
+  if(!pathEntryExists(path))throw Error('Explicit custom feature selection manifest missing');
   const value=read(root,'.fable/project-features.json');
   if(!Array.isArray(value.features)||value.schemaVersion!==1){
     throw Error('Invalid custom feature selection');
@@ -88,7 +90,7 @@ export function planPinnedTypedFeature(root,{
     throw Error('Contract changed between verification and typed feature planning');
   }
   const folder=join(root,'packages/features/fable_'+featureId);
-  if(existsSync(folder)&&allowExistingPackageForVerification!==true)
+  if(pathEntryExists(folder)&&allowExistingPackageForVerification!==true)
     throw Error('Refusing to overwrite an existing feature package: '+featureId);
   const files=renderTypedFeature(plan);
   testSourceBoundaries(root,featureId,files);
@@ -98,13 +100,11 @@ function prepareAppBinding(root,featureId){
   // App integration is a project-level write. Every existing ancestor and
   // destination must be real source, never a symlink to an unrelated tree.
   for(const folder of [root,join(root,'lib'),join(root,'lib/src'),
-      join(root,'lib/src/generated')])checkSourceDir(folder);
+      join(root,'lib/src/generated')])assertRegularProjectPath(root,folder,'dir');
   const yamlPath=join(root,'pubspec.yaml');
   const registryPath=join(root,'lib/src/generated/feature_registry.dart');
-  for(const file of [yamlPath,registryPath]){
-    if(!existsSync(file)||lstatSync(file).isSymbolicLink()||
-        !lstatSync(file).isFile())throw Error('RC266 unsafe app integration file');
-  }
+  for(const file of [yamlPath,registryPath])
+    assertRegularProjectPath(root,file,'file');
   const originalYaml=readFileSync(yamlPath,'utf8');
   const originalRegistry=readFileSync(registryPath,'utf8');
   return {
@@ -126,7 +126,7 @@ export function generatePinnedTypedFeature(root,options={}){
     const parent=join(root,'packages/features');
     checkSourceDir(root);checkSourceDir(join(root,'packages'));
     checkSourceDir(parent);
-    if(existsSync(destination)){
+    if(pathEntryExists(destination)){
       throw Error('RC116 concurrent feature creation: no overwrite permitted');
     }
     const stage=mkdtempSync(join(parent,'.rc116-'+plan.featureId+'-'));
@@ -156,11 +156,13 @@ export function generatePinnedTypedFeature(root,options={}){
         mkdirSync(dirname(full),{recursive:true});
         writeFileSync(full,source,{encoding:'utf8',flag:'wx'});
       }
-      if(existsSync(destination))throw Error('RC116 package appeared while staging');
+      if(pathEntryExists(destination))throw Error('RC116 package appeared while staging');
       renameSync(stage,destination);
       created=true;
       if(binding){
         // Fail rather than overwrite an independent concurrent app edit.
+        assertRegularProjectPath(root,binding.yamlPath,'file');
+        assertRegularProjectPath(root,binding.registryPath,'file');
         if(readFileSync(binding.yamlPath,'utf8')!==binding.originalYaml||
            readFileSync(binding.registryPath,'utf8')!==binding.originalRegistry){
           throw Error('RC266 app source changed during generation; sources not overwritten');
@@ -177,15 +179,19 @@ export function generatePinnedTypedFeature(root,options={}){
           [binding.registryPath,binding.registry,binding.originalRegistry],
         ]){
           try{
+            assertRegularProjectPath(root,path,'file');
             if(readFileSync(path,'utf8')===updated)
               writeFileSync(path,original,'utf8');
           }catch{/* backup retained for manual recovery */}
         }
       }
-      if(created)rmSync(destination,{recursive:true,force:false});
-      throw error;
+      // A newly added file, changed byte or symlink belongs to another writer.
+      const pristine=created&&generatedTreeExactlyMatches(destination,files,prefix);
+      if(pristine)rmSync(destination,{recursive:true,force:false});
+      throw Error(error.message+(created&&!pristine?
+        '; STOP: concurrent generated package edits preserved for manual review':''));
     }finally{
-      if(existsSync(stage))rmSync(stage,{recursive:true,force:true});
+      if(pathEntryExists(stage))rmSync(stage,{recursive:true,force:true});
     }
   }
   return {
