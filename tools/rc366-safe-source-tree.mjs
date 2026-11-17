@@ -40,7 +40,7 @@ export function assertRegularProjectPath(root,target,kind='file'){
  * entire package for manual recovery rather than risking data loss. */
 export function generatedTreeExactlyMatches(destination,files,prefix){
   if(typeof prefix!=='string'||!prefix.endsWith('/'))return false;
-  const expected=new Map();
+  const expected=new Map(),expectedDirs=new Set(['']);
   for(const [name,content] of files){
     if(typeof name!=='string'||!name.startsWith(prefix)||
        typeof content!=='string')return false;
@@ -48,6 +48,9 @@ export function generatedTreeExactlyMatches(destination,files,prefix){
     if(!rest||rest.split('/').some(x=>!x||x==='.'||x==='..'||x.includes('\\'))||
        expected.has(rest))return false;
     expected.set(rest,content);
+    const parts=rest.split('/');
+    for(let i=1;i<parts.length;i++)
+      expectedDirs.add(parts.slice(0,i).join('/'));
   }
   if(expected.size===0)return false;
   let seen=0;
@@ -58,7 +61,8 @@ export function generatedTreeExactlyMatches(destination,files,prefix){
       const name=sub?sub+'/'+entry.name:entry.name;
       const absolute=join(directory,entry.name);
       if(entry.isDirectory()){
-        if(!walk(absolute,name))return false;
+        // Even an unexpected EMPTY directory belongs to another writer.
+        if(!expectedDirs.has(name)||!walk(absolute,name))return false;
       }else if(entry.isFile()){
         if(!expected.has(name)||readFileSync(absolute,'utf8')!==expected.get(name))
           return false;
