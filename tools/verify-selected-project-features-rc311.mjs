@@ -78,21 +78,35 @@ export function verifyRenderedFeatureTree(root,featureId,files){
     if(expected.has(remainder))fail('duplicate rendered file');
     expected.set(remainder,content);
   }
-  const actual=[];
+  // Exact-tree acceptance includes directories, not only rendered files.
+  // An extra EMPTY folder was previously ignored by the source verifier,
+  // while generation rollback already considered it foreign content.
+  const expectedDirs=new Set(['']);
+  for(const name of expected.keys()){
+    const parts=name.split('/');
+    for(let i=1;i<parts.length;i++)
+      expectedDirs.add(parts.slice(0,i).join('/'));
+  }
+  const actual=[],seenDirs=new Set(['']);
   function walk(dir,relativeDir=''){
     safeEntry(root,dir,'dir');
     for(const entry of readdirSync(dir,{withFileTypes:true})){
       const sub=relativeDir?relativeDir+'/'+entry.name:entry.name;
       const full=join(dir,entry.name);
       if(entry.isSymbolicLink())fail('symlink inside package: '+sub);
-      if(entry.isDirectory())walk(full,sub);
-      else if(entry.isFile())actual.push(sub);
+      if(entry.isDirectory()){
+        if(!expectedDirs.has(sub))
+          fail('unexpected directory inside rendered package: '+featureId+'/'+sub);
+        seenDirs.add(sub);
+        walk(full,sub);
+      }else if(entry.isFile())actual.push(sub);
       else fail('unrecognized package source type: '+sub);
     }
   }
   walk(folder);
-  if(actual.length!==expected.size||actual.some(name=>!expected.has(name)))
-    fail('missing or extra package file: '+featureId);
+  if(seenDirs.size!==expectedDirs.size||
+     actual.length!==expected.size||actual.some(name=>!expected.has(name)))
+    fail('missing or extra package file/directory: '+featureId);
   const h=createHash('sha256');
   for(const name of [...expected.keys()].sort()){
     const file=join(folder,...name.split('/'));
