@@ -38,14 +38,23 @@ class _FableAnalyticsConsentPanelState
     _bindIdentity();
   }
 
+  int? _safeRevision() {
+    try {
+      return widget.identityRevision();
+    } catch (_) {
+      // Identity providers are host-supplied; a failure stays ineligible.
+      return null;
+    }
+  }
+
   void _bindIdentity() {
-    _boundIdentityRevision = widget.identityRevision();
+    _boundIdentityRevision = _safeRevision();
     _identitySubscription = widget.identityInvalidations.listen((_) {
       // Revoke immediately, before the scheduled UI rebuild.
       widget.tracker.setConsent(false);
       if (!mounted) return;
       setState(() {
-        _boundIdentityRevision = widget.identityRevision();
+        _boundIdentityRevision = _safeRevision();
       });
     });
   }
@@ -66,8 +75,9 @@ class _FableAnalyticsConsentPanelState
 
   bool _isEligible() {
     try {
-      return widget.mayCollect() &&
-          widget.identityRevision() == _boundIdentityRevision;
+      final revision = _safeRevision();
+      return revision != null && _boundIdentityRevision != null &&
+          widget.mayCollect() && revision == _boundIdentityRevision;
     } catch (_) {
       // Unknown identity or eligibility must never grant collection.
       return false;
