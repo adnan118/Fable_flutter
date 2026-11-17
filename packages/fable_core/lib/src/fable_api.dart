@@ -153,6 +153,14 @@ class UnifiedApiClient implements BackendApiGateway {
     if(managedEntityId!=null&&contextStillValid==null)
       throw ArgumentError('Managed entity requires a live selection/revision guard');
     final op=contract.require(operationId);
+    // RC361: a forged/custom OperationCatalog must not bypass the importer
+    // to use DPoP, tenant, If-Match or device headers as credentials.
+    // Authorization (e.g. Basic) and X-API-Key remain available to Other Backend.
+    if(op.credentialHeader!=null &&
+       (contract is FableContract ||
+        !isAllowedExternalCredentialHeader(op.credentialHeader))){
+      throw StateError('External credential header is reserved or not verified');
+    }
     // A source-signed managed route cannot execute without its selected
     // entity context, even when caller bypasses the managed gateway wrapper.
     if(contract is FableContract &&
