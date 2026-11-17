@@ -50,10 +50,17 @@ extension FableUsernameOperations on FableAuthGateway {
 
   Future<FableUsernameUpdate> updateUsernameWithProof(String username,
       FableVerifiedSensitiveProof proof) {
+    // Validate local input and active contract BEFORE spending the proof.
+    _requireAuthOperation('auth.username.update','PATCH','/auth/me/username',
+      requiresAuth:true);
+    _validateUsername(username);
     if (!identical(proof._owner, this) ||
-        proof._identityRevision != session.identityRevision) {
-      throw StateError('Recent-auth proof belongs to another gateway or identity');
+        proof._identityRevision != session.identityRevision ||
+        proof._consumed || proof._inFlight) {
+      throw StateError('Recent-auth proof is not active for this gateway or identity');
     }
+    // Fail closed on ambiguous response: the server may have changed the name.
+    proof._consumed=true;
     return updateUsername(username, securityChallengeId:proof._challengeId);
   }
 
@@ -84,20 +91,28 @@ extension FableUsernameOperations on FableAuthGateway {
 }
 
 extension FableSocialVerifiedProof on FableAuthGateway {
-  /// Recent-auth proof must be issued by the same gateway and current user.
-  /// Only Backend can decide whether the proof has enough assurance or expired.
+  /// Extracts and CONSUMES a one-shot proof before a sensitive social write.
+  /// Backend remains authoritative for assurance and proof expiry.
   String verifiedSocialActionChallengeId(FableVerifiedSensitiveProof proof) {
     if (!identical(proof._owner,this) ||
-        proof._identityRevision != session.identityRevision) {
-      throw StateError('Recent-auth proof belongs to another user or gateway');
+        proof._identityRevision != session.identityRevision ||
+        proof._consumed || proof._inFlight) {
+      throw StateError('Recent-auth proof is already used or belongs to another identity');
     }
+    proof._consumed=true;
     return proof._challengeId;
   }
 
   Future<FableSocialUnlinkOutcome> unlinkSocialIdentityWithProof(
-      String provider,FableVerifiedSensitiveProof proof) =>
-    unlinkSocialIdentity(provider,
+      String provider,FableVerifiedSensitiveProof proof) {
+    // Invalid providers must not consume valid recent-auth proof objects.
+    _requireAuthOperation('auth.social.unlink','DELETE',
+      '/auth/social/:provider',requiresAuth:true);
+    if(!const {'google','apple'}.contains(provider))
+      throw ArgumentError('Unsupported social identity provider');
+    return unlinkSocialIdentity(provider,
       securityChallengeId:verifiedSocialActionChallengeId(proof));
+  }
 }
 
 extension FableSocialUnlinkSecurity on FableAuthGateway {
