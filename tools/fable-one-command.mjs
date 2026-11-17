@@ -252,6 +252,7 @@ export function buildOneCommandPlan({
       'packages/features/fable_payments/test/rc316_payment_status_identity_test.dart',
       'packages/features/fable_profile/test/external_profile_repository_test.dart',
       'packages/features/fable_support/test/support_list_identity_rc225_test.dart',
+      'packages/features/fable_support/test/rc317_support_manual_refresh_test.dart',
       'packages/features/fable_messaging/test/messaging_contract_test.dart',
       'packages/features/fable_location/test/location_repository_test.dart',
       'packages/features/fable_social/test/social_auth_repository_test.dart',
