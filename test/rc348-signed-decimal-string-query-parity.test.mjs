@@ -16,7 +16,7 @@ function fixture(decimalType='string',openApiType=decimalType){
   {key:'limit',type:'integer',minimum:1,maximum:100},
   {key:'mode',type:'string',enum:['page','search']},
   ...['amount','amountMin','amountMax'].map(key=>({key,type:decimalType})),
-  ...['quantity','quantityMin','quantityMax'].map(key=>({key,type:'number'})),
+  ...['quantity','quantityMin','quantityMax'].map(key=>({key,type:'integer'})),
  ];
  const op={
   operationId:'catalog_ci.list.paginated',method:'GET',
@@ -71,6 +71,20 @@ test('RC348 exact signed Decimal strings permit typed min/max page filtering wit
  ]);
  assert.equal(plan.fields.find(f=>f.name==='amount')?.decimal,true);
 });
+test('RC350 source-signed Int32 range filters require integer not floating-point schema',()=>{
+ const x=fixture();
+ const result=signedPaginatedListFields(x.op,x.schema,x.route);
+ assert.ok(result.filters.every(f=>f.type!=='int') ||
+   result.filters.some(f=>f.name==='quantityMin'));
+ const wrong=fixture();
+ const ref=wrong.op.request.query.find(q=>q.key==='quantityMin');
+ ref.type='number';
+ const query=wrong.route.parameters.find(q=>q.name==='quantityMin');
+ query.schema.type='number';
+ const legacy=signedPaginatedListFields(wrong.op,wrong.schema,wrong.route);
+ assert.ok(!legacy.filters.some(f=>f.name==='quantityMin'));
+});
+
 test('RC348 legacy numeric Decimal contracts cannot quietly become precise filters',()=>{
  const x=fixture('number','number');
  const plan=signedPaginatedListFields(x.op,x.schema,x.route);
