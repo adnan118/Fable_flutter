@@ -134,4 +134,37 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
     await invalidations.close();
   });
+  testWidgets('RC345 swapping payment Backend never sends an old ID to the replacement repository', (tester)async{
+    final oldGateway=_ControlledGateway(),newGateway=_ControlledGateway();
+    final oldRepo=_repo(oldGateway),newRepo=_repo(newGateway);
+    final invalidations=StreamController<void>.broadcast(sync:true);
+    addTearDown(invalidations.close);
+    final revision=()=>8;
+    final authenticated=()=>true;
+    var repository=oldRepo;
+    var paymentId=firstId;
+    Widget card()=>MaterialApp(home:Scaffold(body:FablePaymentStatusCard(
+      repository:repository,paymentId:paymentId,
+      identityRevision:revision,isAuthenticated:authenticated,
+      identityInvalidations:invalidations.stream,
+    )));
+    await tester.pumpWidget(card());
+    expect(oldGateway.calls,1);
+    repository=newRepo;
+    await tester.pumpWidget(card());
+    expect(newGateway.calls,0);
+    expect(find.textContaining('Session changed'),findsOneWidget);
+    oldGateway.complete(0,firstId,'PREVIOUS PRIVATE PAYMENT');
+    await tester.pump();
+    expect(find.text('PREVIOUS PRIVATE PAYMENT'),findsNothing);
+    // Explicitly selecting a different payment ID authorizes a fresh GET.
+    paymentId=secondId;
+    await tester.pumpWidget(card());
+    expect(newGateway.calls,1);
+    newGateway.complete(0,secondId,'PENDING');
+    await tester.pump();
+    expect(find.text('PENDING'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
 }
