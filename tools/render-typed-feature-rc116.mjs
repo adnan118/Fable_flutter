@@ -891,6 +891,7 @@ function readPage(op){
     '  late '+name+'Controller _controller;',
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
+    ...(op.resultKind==='unpaginated-list'?['  int _rowOffset=0;']:[]),
     ...(op.resultKind==='paginated-list'?['  int _page=1;']:[]),
     ...(op.method==='POST'?['  bool _confirming=false;']:[]),
   ];
@@ -902,6 +903,7 @@ function readPage(op){
     '    _controller.addListener(_redraw);',
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
+    ...(op.resultKind==='unpaginated-list'?['      _rowOffset=0;']:[]),
     ...(op.resultKind==='paginated-list'?['      _page=1;']:[]),
     '      if(mounted)_controller.invalidate();',
     ...argsOf(op).map(p=>'      _'+p+'.clear();'),
@@ -913,6 +915,7 @@ function readPage(op){
     '    if(!identical(old.repository,widget.repository) ||',
     '        !identical(old.identityEvents,widget.identityEvents)){',
     '      _identityEpoch++;',
+    ...(op.resultKind==='unpaginated-list'?['      _rowOffset=0;']:[]),
     ...(op.resultKind==='paginated-list'?['      _page=1;']:[]),
     ...argsOf(op).map(p=>'      _'+p+'.clear();'),
     '      unawaited(_identity?.cancel());',
@@ -965,9 +968,23 @@ function readPage(op){
       '    }finally{_confirming=false;if(mounted)setState((){});}',
       '  }',
     ]:[
-      '  void _load(){_controller.load('+
-        [...op.params.map(p=>p+': _'+p+'.text.trim()'),
-         ...(op.resultKind==='paginated-list'?['page: _page']:[])].join(', ')+');}',
+      ...(op.resultKind==='unpaginated-list'?[
+        '  void _window(int offset){',
+        '    final ready=_controller.state;',
+        '    if(ready is! '+name+'Ready||offset<0||',
+        '       offset>=ready.value.items.length)return;',
+        '    setState(()=>_rowOffset=offset);',
+        '  }',
+        '  void _load(){',
+        '    setState(()=>_rowOffset=0);',
+        '    _controller.load('+
+          op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
+        '  }',
+      ]:[
+        '  void _load(){_controller.load('+
+          [...op.params.map(p=>p+': _'+p+'.text.trim()'),
+           ...(op.resultKind==='paginated-list'?['page: _page']:[])].join(', ')+');}',
+      ]),
       ...(op.resultKind==='paginated-list'?[
         '  void _jump(int next){',
         '    if(_controller.state is '+name+'Loading || next<1 || next>100000)return;',
@@ -1026,7 +1043,9 @@ function readPage(op){
       ]:[]),
       '            if(state.value.items.isEmpty)',
       '              const Text("No records available."),',
-      '            for(final item in state.value.items.take(100))',
+      '            for(final item in state.value.items'+
+        (op.resultKind==='unpaginated-list'?'.skip(_rowOffset)':'')+
+        '.take(100))',
       '              Card(child:Padding(',
       '                padding:const EdgeInsets.all(12),',
       '                child:Column(',
@@ -1036,8 +1055,25 @@ function readPage(op){
       '                  ],',
       '                ),',
       '              )),',
-      '            if(state.value.items.length>100)',
-      '              const Text("Displaying first 100 rows; refine the project query for more."),',
+      ...(op.resultKind==='unpaginated-list'?[
+        '            if(state.value.items.length>100)...[',
+        '              Text("Rows "+(_rowOffset+1).toString()+"–"+',
+        '                (_rowOffset+100>state.value.items.length',
+        '                  ?state.value.items.length:_rowOffset+100).toString()+',
+        '                " of "+state.value.items.length.toString()),',
+        '              Row(children:[',
+        '                OutlinedButton(',
+        '                  onPressed:_rowOffset>0',
+        '                    ?()=>_window(_rowOffset>=100?_rowOffset-100:0):null,',
+        '                  child:const Text("Previous 100")),',
+        '                const SizedBox(width:12),',
+        '                OutlinedButton(',
+        '                  onPressed:_rowOffset+100<state.value.items.length',
+        '                    ?()=>_window(_rowOffset+100):null,',
+        '                  child:const Text("Next 100")),',
+        '              ]),',
+        '            ],',
+      ]:[]),
       ...(op.resultKind==='paginated-list'?[
         '            Row(children:[',
         '              OutlinedButton(onPressed:state.value.page>1 ? ()=>_jump(state.value.page-1):null,',
