@@ -852,10 +852,9 @@ class FableAuthGateway implements BackendApiGateway {
   Future<bool> revokeOtherSession(String sessionId,{FableVerifiedSensitiveProof? proof}) async {
     if(!_uuid.hasMatch(sessionId))throw ArgumentError('Invalid session ID');
     final rev=session.identityRevision;
-    if(proof!=null && (proof._identityRevision!=rev||!identical(proof._owner,this)))
-      throw StateError('Security proof belongs to another authenticated identity or gateway');
-    final response=await _api.request(
-      _route('/auth/sessions/{id}/revoke','POST'),
+    final operation=_route('/auth/sessions/{id}/revoke','POST');
+    _consumeRecentAuthProof(this,proof,rev);
+    final response=await _api.request(operation,
       path:{'id':sessionId},securityChallengeId:proof?._challengeId);
     if(session.identityRevision!=rev)
       throw FableApiException(409,'session_changed_discard_response');
@@ -882,10 +881,9 @@ class FableAuthGateway implements BackendApiGateway {
     if(selected.isEmpty||selected.length>100||selected.any((id)=>!_uuid.hasMatch(id)))
       throw ArgumentError('Select 1-100 distinct, valid active session IDs');
     final revision=session.identityRevision;
-    if(proof!=null&&(proof._identityRevision!=revision||!identical(proof._owner,this)))
-      throw StateError('Security proof belongs to another identity or gateway');
-    final response=await _api.request(
-      _route('/auth/sessions/revoke-selected','POST'),
+    final operation=_route('/auth/sessions/revoke-selected','POST');
+    _consumeRecentAuthProof(this,proof,revision);
+    final response=await _api.request(operation,
       body:{'sessionIds':selected},securityChallengeId:proof?._challengeId);
     if(session.identityRevision!=revision)
       throw FableApiException(409,'session_changed_discard_response');
@@ -903,9 +901,9 @@ class FableAuthGateway implements BackendApiGateway {
 
   Future<int> revokeAllSessions({FableVerifiedSensitiveProof? proof}) async {
     final rev=session.identityRevision;
-    if(proof!=null && (proof._identityRevision!=rev||!identical(proof._owner,this)))
-      throw StateError('Security proof belongs to another authenticated identity or gateway');
-    final response=await _api.request(_route('/auth/logout-all','POST'),
+    final operation=_route('/auth/logout-all','POST');
+    _consumeRecentAuthProof(this,proof,rev);
+    final response=await _api.request(operation,
       securityChallengeId:proof?._challengeId);
     if(session.identityRevision!=rev)
       throw FableApiException(409,'session_changed_discard_response');
