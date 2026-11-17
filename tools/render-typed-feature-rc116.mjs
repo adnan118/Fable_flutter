@@ -157,7 +157,7 @@ function listDto(op){
       '        throw const FormatException('+dart('Invalid '+f.name+' exact Decimal field')+');',
     );
     if(f.uuid)parts.push(
-      '      if('+f.name+'!=null && !RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+f.name+' as String))',
+      '      if('+f.name+'!=null && !RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").hasMatch('+f.name+' as String))',
       '        throw const FormatException('+dart('Invalid '+f.name+' UUID field')+');',
     );
   }
@@ -212,7 +212,7 @@ function dto(op){
       '      throw const FormatException('+dart('Invalid '+f.name+' exact Decimal field')+');',
     );
     if(f.uuid)parts.push(
-      '    if('+f.name+'!=null && !RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").hasMatch('+f.name+' as String))',
+      '    if('+f.name+'!=null && !RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").hasMatch('+f.name+' as String))',
       '      throw const FormatException('+dart('Invalid '+f.name+' UUID field')+');',
     );
   }
