@@ -738,8 +738,13 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       :spec.method==='PATCH'?validatedOwnerPatch(op,route,featureId,params,id,managedScoped):[];
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
+    // Preserve signed path types: the generated Dart boundary must enforce
+    // UUID shapes before networking while leaving signed strings untouched.
+    const pathParamKinds=params.map(name=>({
+      name,type:sourceParams.find(p=>p.name===name).type,
+    }));
     out.push({operationId:id,method:spec.method,path:spec.path,contractHash:op.contractHash,
-      className,fields,params,bodyFields,resultKind,
+      className,fields,params,pathParamKinds,bodyFields,resultKind,
       ...(managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
       ...(spec.method==='POST'&&op.idempotency?.required===true?
         {requiresIdempotency:true}:{}),

@@ -45,6 +45,14 @@ function assertPlan(plan){
      !/^[a-z][a-z0-9_]*$/.test(plan.featureId)||
      !/^[a-f0-9]{64}$/.test(plan.contractHash))
     throw Error('RC116 renderer requires reviewed contract-sourced plan');
+  for(const op of plan.operations){
+    if(op.pathParamKinds!==undefined &&
+       (!Array.isArray(op.pathParamKinds)||
+        op.pathParamKinds.length!==op.params.length||
+        op.params.some(name=>op.pathParamKinds.filter(p=>
+          p?.name===name&&['uuid','string'].includes(p.type)).length!==1)))
+      throw Error('RC371 path parameter kinds must match each signed parameter');
+  }
 }
 
 // RC271: an explicit typed collection, never a dynamic list of Maps.
@@ -351,6 +359,13 @@ function adapter(op,projectHash){
     parts.push('    if('+p+'.trim().isEmpty || '+p+".contains('/') || "+
       p+".contains('?') || "+p+".contains('#') || "+p+".contains('..')){",
       '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);','    }');
+    if(op.pathParamKinds?.find(x=>x.name===p)?.type==='uuid'){
+      parts.push(
+        '    // The signed Backend/OpenAPI path declares a UUID, not a slug.',
+        '    if(!RegExp(r"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$").hasMatch('+p+'))',
+        '      throw const TypedReadFailure(TypedReadFailureKind.invalidInput);',
+      );
+    }
   }
   parts.push(
     ...(op.resultKind==='paginated-list'?[
@@ -1684,7 +1699,8 @@ function signedFreshEtagReadLines(op,identityVar){
     '        throw const TypedReadFailure(TypedReadFailureKind.unauthenticated);',
     '      final result=fresh.data;',
     '      if(fresh.statusCode!=200||result is! Map||result["success"]!=true||',
-    '         result["data"] is! Map||result["data"]["id"]!=id)',
+    '         result["data"] is! Map||result["data"]["id"] is! String||',
+    '         (result["data"]["id"] as String).toLowerCase()!=id.toLowerCase())',
     '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
     '      final etag=fresh.headers.value("etag");',
     '      if(etag==null||!RegExp(r\'^"[a-f0-9]{64}"$\').hasMatch(etag))',
@@ -2304,6 +2320,7 @@ export function renderTypedFeature(plan){
     operations:plan.operations.map(op=>({
       operationId:op.operationId,method:op.method,path:op.path,
       operationHash:op.contractHash,responseKind:op.resultKind,
+      pathParamKinds:op.pathParamKinds??[],
       requestFields:(op.bodyFields??[]).map(f=>({name:f.name,required:f.required,type:f.type})),
       ...(op.preconditionRead?{preconditionRead:op.preconditionRead}:{}),
       ...(op.managedScoped?{managedScoped:true,recordAccess:op.recordAccess}:{}),
