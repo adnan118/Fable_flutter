@@ -27,7 +27,7 @@ const output=(plan,runs=[])=>evaluateOneCommandPlan(plan,runs,{
 });
 test('RC220 Flutter and Backend full historical Node tests both run in one plan',()=>{
   const p=basePlan();
-  assert.equal(p.plan.length,12);
+  assert.equal(p.plan.length,14);
   assert.deepEqual(p.plan[0].args,[
     '--test','--test-concurrency=4','test/a.test.mjs','tools/b.test.mjs',
   ]);

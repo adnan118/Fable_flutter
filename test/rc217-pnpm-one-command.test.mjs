@@ -50,7 +50,7 @@ test('RC217 single command includes both Backend W1/W2 fast and full real genera
 });
 test('RC217 includes W0, W2, W3, W4, W5 and native W6–W7 checks in one run',()=>{
  const p=plan();
- assert.equal(p.plan.length,12);
+ assert.equal(p.plan.length,14);
  for(const part of ['W2_GENERATED_BACKEND_ARTIFACT_AUDIT',
    'W3_REAL_BACKEND_FLUTTER_HANDOFF',
    'W4_TWELVE_GUIDED_AGENT_WIZARD_SCENARIOS',
