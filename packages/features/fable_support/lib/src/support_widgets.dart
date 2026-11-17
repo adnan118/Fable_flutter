@@ -30,27 +30,34 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
     });
     _restart();
   }
+  int? _verifiedRevision(){
+    final revision=widget.identityRevision;
+    final authenticated=widget.isAuthenticated;
+    if(revision==null||authenticated==null||
+       widget.identityInvalidations==null)return null;
+    try{
+      if(!authenticated())return null;
+      final value=revision();
+      return value>=0?value:null;
+    }catch(_){
+      // A host-supplied session callback is not a source of authorization.
+      // Never issue a personal GET while its state is unknown.
+      return null;
+    }
+  }
   void _restart(){
     _generation++;
     _load=null;
     _loadIdentity=null;
-    final revision=widget.identityRevision;
-    final authenticated=widget.isAuthenticated;
-    if(revision==null||authenticated==null||
-       widget.identityInvalidations==null||!authenticated())return;
-    _loadIdentity=revision();
+    final revision=_verifiedRevision();
+    if(revision==null)return;
+    _loadIdentity=revision;
     _load=widget.repository.list();
   }
   // RC317: the FutureBuilder must recheck identity immediately before
   // displaying ticket content, even if the invalidation event is delayed.
-  bool _sameVerifiedIdentity(){
-    final revision=widget.identityRevision;
-    final authenticated=widget.isAuthenticated;
-    if(revision==null||authenticated==null||
-       widget.identityInvalidations==null||_loadIdentity==null)return false;
-    try{return authenticated()&&revision()==_loadIdentity;}
-    catch(_){return false;}
-  }
+  bool _sameVerifiedIdentity()=>_loadIdentity!=null&&
+      _verifiedRevision()==_loadIdentity;
 
   void _manualRefresh(){
     // Only the currently bound authenticated session can start another GET.
@@ -92,12 +99,13 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
     if(revision==null||authenticated==null||widget.identityInvalidations==null){
       return const Text('Connect an authenticated session to view support tickets.');
     }
-    if(!authenticated()){
-      return const Text('Sign in to view your support tickets.');
+    final verified=_verifiedRevision();
+    if(verified==null){
+      return const Text('Sign in or verify your session to view support tickets.');
     }
     // Hide every old-account ticket even if the host has not yet published
     // an identity invalidation event. A rebuilt widget must never reuse data.
-    if(_loadIdentity!=revision()){
+    if(_loadIdentity!=verified){
       return const Text('Session changed. Reopen support tickets to verify.');
     }
     final active=_load;
