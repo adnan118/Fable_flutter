@@ -49,3 +49,7 @@ pnpm run wizard:feature:verify -- --root PATH_TO_GENERATED_PROJECT --expected-pr
 ```
 
 For packages deliberately generated without host app wiring, pass `--no-app-wiring`. The verification is source-only; it does not run tests, Flutter, Gradle, SDK downloads, Prisma, networks or live E2E. Production is still NO_GO. See [RC311 details](docs/integrations/RC311-SELECTED-FEATURE-SOURCE-ATTESTATION.ar.md).
+
+## RC313 — 17 built-in feature source integrity audit (W6)
+
+`pnpm run fable:families:source` performs a **read-only**, single-command check of all 17 built-in feature families. It verifies that canonical source evidence paths are real nonempty in-repository Dart files, compares the ownership registry with the 17-family ledger, validates package names, app dependencies, Dart imports and registry entries, and reports per-file/per-family SHA-256 fingerprints. It refuses unsupported completeness claims and keeps `acceptedLiveFamilies:0` and `productionReady:false`. This is **not** execution of those features or E2E acceptance. See [RC313 source inventory guide](docs/integrations/RC313-W6-17-FAMILY-SOURCE-EVIDENCE.ar.md).
