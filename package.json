@@ -9,6 +9,7 @@
     "wizard:feature:verify": "node tools/verify-selected-project-features-rc311.mjs",
     "fable:toolchain:check": "node tools/fable-toolchain-check-rc308.mjs",
     "fable:source-map": "node tools/fable-source-map-rc296.mjs",
+    "fable:families:source": "node tools/audit-17-family-source-evidence-rc313.mjs",
     "wizard": "node tools/flutter-setup-wizard.mjs",
     "wizard:review": "node tools/flutter-setup-wizard.mjs --mode guided",
     "wizard:verify": "node tools/verify-fable-contract.mjs --mode source",
