@@ -75,3 +75,11 @@ void _validateRecentAuthProof(FableAuthGateway gateway,
     throw StateError('Recent-auth proof belongs to another session or gateway');
   }
 }
+
+/** Claim an optional recent-auth proof exactly once, before the protected
+ * request can reach Backend. Unknown responses must never allow local replay. */
+void _consumeRecentAuthProof(FableAuthGateway gateway,
+    FableVerifiedSensitiveProof? proof,int revision) {
+  _validateRecentAuthProof(gateway,proof,revision);
+  if(proof!=null)proof._consumed=true;
+}
