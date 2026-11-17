@@ -247,7 +247,7 @@ function checkedManagedRead(op,route,featureId){
     fail('Managed GET must be explicitly scoped, signed, typed and read-only: '+op.operationId);
   return true;
 }
-function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
+export function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
   const signed=op.response?.data,id=op.operationId;
   if(!verifiedManaged && op.recordAccess!=null &&
      !['permission-wide','global','none'].includes(op.recordAccess))
@@ -386,7 +386,9 @@ function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
     const min=name+(datetime?'From':'Min'),max=name+(datetime?'To':'Max');
     if(!safeIdent(min)||!safeIdent(max)||
        selected.some(f=>[name,min,max].includes(f.name)))continue;
-    const expectedType=datetime?'string':'number';
+    // Backend RC347 signs precise Decimal filters as strings so SDKs never
+    // round them through IEEE-754; Int filters remain numeric, dates ISO text.
+    const expectedType=(datetime||item.type==='decimal')?'string':'number';
     const expectedFormat=datetime?'date-time':null;
     const range=[q.get(name),q.get(min),q.get(max)];
     if(!range.every(v=>v?.type===expectedType && v.required!==true &&
