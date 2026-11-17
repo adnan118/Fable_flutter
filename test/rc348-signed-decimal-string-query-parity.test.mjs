@@ -16,7 +16,7 @@ function fixture(decimalType='string',openApiType=decimalType){
   {key:'limit',type:'integer',minimum:1,maximum:100},
   {key:'mode',type:'string',enum:['page','search']},
   ...['amount','amountMin','amountMax'].map(key=>({key,type:decimalType})),
-  ...['quantity','quantityMin','quantityMax'].map(key=>({key,type:'number'})),
+  ...['quantity','quantityMin','quantityMax'].map(key=>({key,type:'integer'})),
  ];
  const op={
   operationId:'catalog_ci.list.paginated',method:'GET',
@@ -71,6 +71,30 @@ test('RC348 exact signed Decimal strings permit typed min/max page filtering wit
  ]);
  assert.equal(plan.fields.find(f=>f.name==='amount')?.decimal,true);
 });
+function onlyIntegerFields(x){
+ x.op.response.data.item.fields=x.op.response.data.item.fields
+   .filter(f=>f.name!=='amount');
+ delete x.schema.properties.items.items.properties.amount;
+ x.schema.properties.items.items.required=x.schema.properties.items.items.required
+   .filter(f=>f!=='amount');
+ x.op.request.query=x.op.request.query.filter(q=>!q.key.startsWith('amount'));
+ x.route.parameters=x.route.parameters.filter(q=>!q.name.startsWith('amount'));
+ return x;
+}
+test('RC350 signed Int32 filter pair is selected only when its query is integer',()=>{
+ const x=onlyIntegerFields(fixture());
+ const result=signedPaginatedListFields(x.op,x.schema,x.route);
+ assert.deepEqual(result.filters,[
+   {name:'quantityMin',type:'int'},
+   {name:'quantityMax',type:'int'},
+ ]);
+ const wrong=onlyIntegerFields(fixture());
+ wrong.op.request.query.find(q=>q.key==='quantityMin').type='number';
+ wrong.route.parameters.find(q=>q.name==='quantityMin').schema.type='number';
+ const legacy=signedPaginatedListFields(wrong.op,wrong.schema,wrong.route);
+ assert.ok(!legacy.filters.some(f=>f.type==='int'));
+});
+
 test('RC348 legacy numeric Decimal contracts cannot quietly become precise filters',()=>{
  const x=fixture('number','number');
  const plan=signedPaginatedListFields(x.op,x.schema,x.route);
