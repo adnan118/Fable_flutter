@@ -5,14 +5,19 @@
  * Missing real inputs remain BLOCKED, never silently PASS.
  */
 import {execFileSync,spawnSync} from 'node:child_process';
-import {existsSync,lstatSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {existsSync,lstatSync,mkdirSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {basename,dirname,isAbsolute,join,resolve,sep} from 'node:path';
 import {auditClosureRegister} from './closure-gap-audit.mjs';
 import {readSafeFeatureEvidence} from './w5-safe-source-evidence.mjs';
+import {assertRegularProjectPath} from './rc366-safe-source-tree.mjs';
 
 const SHA=/^[a-f0-9]{40}$/;
 const HASH=/^[a-f0-9]{64}$/;
 const PROFILES=['minimal','standard','complex'];
+const GENERATED_FLUTTER_NATIVE_IDS=new Set([
+  'W5_GENERATED_PROJECT_FLUTTER_ANALYZE',
+  'W6_GENERATED_FEATURE_FLUTTER_TEST',
+]);
 const TIMEOUT={node:20*60*1000,backendFast:15*60*1000,
   backendFull:60*60*1000,flutter:40*60*1000};
 const OWNER_GATES=[
@@ -162,6 +167,54 @@ function backgroundInputs(input,flutterRoot,backendRoot){
   return {generated,backendExport,generatedBackend,projectId,hash,
     backendPin,flutterPin,profiles};
 }
+/**
+ * Enumerate the ACTUAL explicitly selected, generated feature test folders.
+ * A bare `flutter test` at the host root does NOT cover nested feature packages.
+ * The selected manifest and all discovered paths must be regular source files:
+ * no symlinked packages, traversal, hidden filename tricks or empty test suites.
+ * This is a source inventory, NOT execution or native acceptance.
+ */
+export function discoverGeneratedFeatureDartTests(root,{
+  safeRead=readSafeFeatureEvidence,
+  entries=readdirSync,
+}={}){
+  root=resolve(root);
+  assertRegularProjectPath(root,root,'dir');
+  const manifest=JSON.parse(safeRead(root,'.fable/project-features.json'));
+  const rows=manifest?.features;
+  if(manifest?.schemaVersion!==1||!Array.isArray(rows)||
+     rows.length<1||rows.length>24)
+    throw Error('INVALID_SELECTED_GENERATED_FEATURE_MANIFEST');
+  const ids=rows.map(item=>typeof item==='string'?item:item?.id);
+  if(ids.some(id=>typeof id!=='string'||id.length>64||
+       !/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(id))||
+     new Set(ids).size!==ids.length)
+    throw Error('UNSAFE_OR_DUPLICATE_GENERATED_FEATURE_ID');
+  for(const path of [
+    'pubspec.yaml','assets/config/backend.json',
+    'assets/contracts/contract.json',
+    'lib/src/generated/feature_registry.dart',
+  ])assertRegularProjectPath(root,join(root,...path.split('/')),'file');
+  const testDirs=[];
+  let testFiles=0;
+  for(const featureId of ids){
+    const rel='packages/features/fable_'+featureId+'/test';
+    const folder=join(root,...rel.split('/'));
+    assertRegularProjectPath(root,folder,'dir');
+    const listing=entries(folder,{withFileTypes:true});
+    const dart=listing.filter(entry=>{
+      if(entry.isSymbolicLink())throw Error('SYMLINKED_GENERATED_FEATURE_TEST');
+      return entry.isFile()&&/^[a-zA-Z0-9_]+_test[.]dart$/.test(entry.name);
+    });
+    if(!dart.length)throw Error('GENERATED_FEATURE_HAS_NO_DART_TESTS: '+featureId);
+    for(const file of dart)
+      assertRegularProjectPath(root,join(folder,file.name),'file');
+    testDirs.push(rel);
+    testFiles+=dart.length;
+  }
+  return {featureCount:ids.length,testFileCount:testFiles,paths:testDirs};
+}
+
 export function buildOneCommandPlan({
   root,backendRoot=null,packageScripts={},inputs={},
   flutterAvailable=true,exists=existsSync,
@@ -240,6 +293,26 @@ export function buildOneCommandPlan({
         ['--expected-project-id',args.projectId,'--expected-contract-hash',args.hash]:[]),
       '--json'],flutterRoot,null,TIMEOUT.node);
   plan.at(-1).realProjectInputsProvided=Boolean(args.generated&&args.projectId&&args.hash);
+  // RC373: the host Flutter test command does not discover nested generated
+  // package tests. Run them only for a project whose W5 source audit PASSED.
+  const requestedGenerated=Boolean(args.generated&&args.projectId&&args.hash);
+  let generatedInventory=null;
+  let generatedInventoryRefusal=null;
+  if(requestedGenerated){
+    try{generatedInventory=discoverGeneratedFeatureDartTests(args.generated);}
+    catch{generatedInventoryRefusal='GENERATED_FEATURE_TEST_INVENTORY_MISSING_OR_UNSAFE';}
+  }
+  const generatedBaseBlock=!requestedGenerated
+    ?'REAL_SIGNED_GENERATED_FLUTTER_PROJECT_REQUIRED'
+    :generatedInventoryRefusal;
+  add('W5_GENERATED_PROJECT_FLUTTER_ANALYZE','W5-W6','flutter',
+    ['analyze'],args.generated??flutterRoot,
+    generatedBaseBlock??(flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED'),
+    TIMEOUT.flutter);
+  add('W6_GENERATED_FEATURE_FLUTTER_TEST','W6','flutter',
+    ['test',...(generatedInventory?.paths??[])],args.generated??flutterRoot,
+    generatedBaseBlock??(flutterAvailable?null:'FLUTTER_SDK_NOT_INSTALLED'),
+    TIMEOUT.flutter);
   add('W0_HISTORICAL_82_ITEM_AUDIT','W0-W8','node',
     ['tools/closure-gap-audit-cli.mjs','--strict','--json'],flutterRoot);
   add('W6_W7_NATIVE_AUTH_NOTIFICATIONS_WIDGET','W6-W7','flutter',
@@ -272,6 +345,8 @@ export function buildOneCommandPlan({
     backendUnsafeTests:[...new Set(backendRejected)].sort(),
     unsupportedTestCommands:[...new Set(invalidPaths)].sort(),
     profileExportsProvided:PROFILES.filter(p=>args.profiles[p]).length,
+    generatedFeatureCount:generatedInventory?.featureCount??0,
+    generatedDartTestsDiscovered:generatedInventory?.testFileCount??0,
     independentInputsProvided:Boolean(args.backendPin&&args.flutterPin)};
 }
 /**
@@ -369,9 +444,16 @@ export function evaluateOneCommandPlan(plan,runs=[],{
   closure=null,backendCheckout=null,flutterCheckout=null,
 }={}){
   const byId=new Map(runs.map(x=>[x.id,x]));
+  const auditStep=plan.plan.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
+  const auditRun=byId.get('W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
+  const sourceAuditPassed=Boolean(auditStep&&!auditStep.blockReason&&auditRun&&
+    auditRun.exitCode===0&&!auditRun.signal&&!auditRun.error);
   const results=plan.plan.map(step=>{
     const run=byId.get(step.id);
-    const classified=classify(step,run,{
+    const classified=GENERATED_FLUTTER_NATIVE_IDS.has(step.id)&&
+      !step.blockReason&&!sourceAuditPassed
+      ?{state:'BLOCKED',reason:'SIGNED_W5_GENERATED_SOURCE_AUDIT_NOT_PASSED'}
+      :classify(step,run,{
       profileExportsProvided:plan.profileExportsProvided,closure,
       testInventoryVerified:plan.gitTestInventoryVerified,
       skippedTestScripts:plan.unsupportedTestCommands.length,
@@ -396,6 +478,9 @@ export function evaluateOneCommandPlan(plan,runs=[],{
     latestSource:{backend:backendCheckout,flutter:flutterCheckout},
     testsDiscovered:plan.filesDiscovered,
     backendTestsDiscovered:plan.backendTestsDiscovered??0,
+    generatedFeatureCount:plan.generatedFeatureCount??0,
+    generatedDartTestsDiscovered:plan.generatedDartTestsDiscovered??0,
+    generatedSourceAuditPassed:sourceAuditPassed,
     completeBackendGitTestInventoryVerified:Boolean(plan.backendGitTestInventoryVerified),
     backendUnsafeTests:plan.backendUnsafeTests??[],
     previouslyUnregisteredNodeTests:plan.unregisteredNodeTests??0,
@@ -481,6 +566,13 @@ export function runFableOneCommand(root,{
        (!repos.flutter.independentPinVerified||
         !repos.backend.independentPinVerified))
       step.blockReason='INDEPENDENT_MAIN_SOURCE_CHECKPOINT_MISMATCH';
+    if(GENERATED_FLUTTER_NATIVE_IDS.has(step.id)&&!step.blockReason){
+      const auditRun=runs.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
+      const auditStep=plan.plan.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
+      if(!auditStep||auditStep.blockReason||!auditRun||
+         auditRun.exitCode!==0||auditRun.signal||auditRun.error)
+        step.blockReason='SIGNED_W5_GENERATED_SOURCE_AUDIT_NOT_PASSED';
+    }
     if(step.blockReason)continue;
     logger('Fable '+step.stage+' '+step.id+' ...');
     try{runs.push({id:step.id,...runner(step)});}
