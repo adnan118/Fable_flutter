@@ -93,8 +93,9 @@ function checkSignedResponseShape(op,schema,fields,signedData=op.response?.data)
  * RC271: READ only source-verified unpaginated list results. No guessed
  * page/search input or fake runtime list. Use an immutable typed items model.
  */
-function signedUnpaginatedListFields(op,schema){
+function signedUnpaginatedListFields(op,schema,route){
   const signed=op.response?.data;
+  const query=op.request?.query??[];
   if(op.method!=='GET'||!op.operationId.endsWith('.list.unpaginated')||
      op.response?.kind!=='fable-success-envelope'||
      signed?.type!=='list-result'||
@@ -103,9 +104,39 @@ function signedUnpaginatedListFields(op,schema){
      !Array.isArray(signed?.meta?.modes)||
      signed.meta.modes.length!==1||
      signed.meta.modes[0]!=='unpaginated'||
-     (op.request?.query??[]).length!==0||
-     (op.request?.headers??[]).length!==0)
-    fail('list operation requires signed unpaginated response and no unbound query/header: '+op.operationId);
+     !Array.isArray(query)||query.length>48||
+     (op.request?.headers??[]).length!==0||
+     op.request?.body!=null)
+    fail('list operation requires signed unpaginated response, optional query and no custom header/body: '+op.operationId);
+  // RC333: Backend legitimately publishes optional search/sort/filter query
+  // parameters on unpaginated GET. The generated UI never sends them, but
+  // it must verify BOTH independent declarations rather than reject the read.
+  const seen=new Set(),signedQuery=new Map();
+  for(const item of query){
+    const key=item?.key;
+    if(typeof key!=='string'||seen.has(key)||!safeIdent(key)||
+       ['page','limit','mode'].includes(key)||
+       item.required===true||
+       !['string','integer','number'].includes(item.type??'string'))
+      fail('unpaginated query is ambiguous, required or unsafe: '+op.operationId);
+    seen.add(key);signedQuery.set(key,item);
+  }
+  const declared=(route.parameters??[]).filter(p=>p.in==='query');
+  if(declared.length!==signedQuery.size)
+    fail('unpaginated OpenAPI query count contradicts signed Backend: '+op.operationId);
+  for(const spec of declared){
+    const source=signedQuery.get(spec.name);
+    if(!source||spec.required===true||!spec.schema||
+       spec.schema.type!==(source.type??'string')||
+       (spec.schema.format??null)!==(source.format??null)||
+       JSON.stringify(spec.schema.enum??null)!==JSON.stringify(source.enum??null)||
+       (spec.schema.minimum??null)!==(source.minimum??null)||
+       (spec.schema.maximum??null)!==(source.maximum??null)||
+       (spec.name==='sort'&&
+         JSON.stringify(spec['x-fable-sort-allowlist']??null)!==
+           JSON.stringify(source.sortAllowedFields??null)))
+      fail('unpaginated query schema differs from signed Backend: '+op.operationId);
+  }
   if(!schema||schema.type!=='object'||!schema.properties||
      Object.keys(schema.properties).sort().join(',')!=='items,meta'||
      !Array.isArray(schema.required)||
@@ -640,7 +671,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
     const signedCreateKey=managedScoped&&spec.method==='POST'&&
       op.idempotency?.required===true;
     if(routePathParams.length!==params.length||
-       (extraParams.length>0&&!id.endsWith('.list.paginated')&&!conditionalMutation&&!signedCreateKey)||
+       (extraParams.length>0&&!id.endsWith('.list.paginated')&&!id.endsWith('.list.unpaginated')&&!conditionalMutation&&!signedCreateKey)||
        extraParams.some(p=>p.in!=='query'&&
          !(conditionalMutation&&p.in==='header'&&p.name==='If-Match'&&p.required===true)&&
          !(signedCreateKey&&p.in==='header'&&p.name==='Idempotency-Key'&&p.required===true))||
@@ -676,7 +707,7 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       ?signedPaginatedListFields(op,schema.properties?.data,route,managedScoped):null;
     const fields=resultKind==='confirmed-delete'?[]:
       resultKind==='unpaginated-list'
-      ?signedUnpaginatedListFields(op,schema.properties?.data)
+      ?signedUnpaginatedListFields(op,schema.properties?.data,route)
       :paginated?.fields??dataFields(schema.properties?.data);
     if(resultKind==='single')
       checkSignedResponseShape(op,schema.properties.data,fields);
