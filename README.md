@@ -53,3 +53,7 @@ For packages deliberately generated without host app wiring, pass `--no-app-wiri
 ## RC313 — 17 built-in feature source integrity audit (W6)
 
 `pnpm run fable:families:source` performs a **read-only**, single-command check of all 17 built-in feature families. It verifies that canonical source evidence paths are real nonempty in-repository Dart files, compares the ownership registry with the 17-family ledger, validates package names, app dependencies, Dart imports and registry entries, and reports per-file/per-family SHA-256 fingerprints. It refuses unsupported completeness claims and keeps `acceptedLiveFamilies:0` and `productionReady:false`. This is **not** execution of those features or E2E acceptance. See [RC313 source inventory guide](docs/integrations/RC313-W6-17-FAMILY-SOURCE-EVIDENCE.ar.md).
+
+## RC315 — consent and identity safety for optional Analytics
+
+The optional Analytics package now exports a user-facing `FableAnalyticsConsentPanel` with Arabic/English copy, **opt-in only** behavior and immediate unsent-event revocation when session identity changes or the host panel closes. A host must explicitly provide a reviewed tracker/sink, verified identity revision/invalidation stream and eligibility policy; Fable never chooses an analytics endpoint. The 17-family parity ledger includes the new file but does **not** advance Analytics production acceptance. See [RC315 report](docs/integrations/RC315-W6-ANALYTICS-CONSENT-IDENTITY.ar.md).
