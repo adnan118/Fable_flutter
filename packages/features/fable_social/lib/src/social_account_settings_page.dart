@@ -22,18 +22,20 @@ class _SocialAccountSettingsState extends State<FableSocialAccountSettingsPage> 
   FableSocialProvider? _provider;
   bool _link=true,_busy=false;
   int _identityRevision=0;
+  int _bindingEpoch=0;
 
   bool get _bound => identical(widget.repository.gateway,widget.gateway) &&
     identical(widget.repository.session,widget.gateway.session) &&
     widget.repository.adapter is FableSocialBackendAdapter;
 
-  @override void initState() {
-    super.initState();
+  void _watchIdentity() {
     _identityRevision=widget.gateway.session.identityRevision;
     _identity=widget.gateway.session.identityEvents.listen((_) {
       if(!mounted)return;
+      _bindingEpoch++;
       _otp.clear();
       setState((){
+        _busy=false;
         _verified=null;_challengeId=null;_provider=null;
         _identityRevision=widget.gateway.session.identityRevision;
         _message='Account changed; the pending operation was cancelled.';
@@ -41,7 +43,29 @@ class _SocialAccountSettingsState extends State<FableSocialAccountSettingsPage> 
     });
   }
 
+  @override void initState() {
+    super.initState();
+    _watchIdentity();
+  }
+
+  @override void didUpdateWidget(covariant FableSocialAccountSettingsPage old) {
+    super.didUpdateWidget(old);
+    if(!identical(old.gateway,widget.gateway) ||
+       !identical(old.repository,widget.repository)) {
+      // A new gateway may have the SAME numeric revision as the old account.
+      // Clear OTP and server proof before rebinding; old awaits are fenced.
+      _bindingEpoch++;
+      unawaited(_identity?.cancel());
+      _identity=null;
+      _otp.clear();
+      _verified=null;_challengeId=null;_provider=null;
+      _busy=false;_message=null;
+      _watchIdentity();
+    }
+  }
+
   @override void dispose() {
+    _bindingEpoch++;
     unawaited(_identity?.cancel());
     _otp.dispose();
     super.dispose();
@@ -67,6 +91,7 @@ class _SocialAccountSettingsState extends State<FableSocialAccountSettingsPage> 
         ]));
       if(yes!=true||!mounted||!_current)return;
     }
+    final epoch=_bindingEpoch;
     setState((){
       _provider=provider;_link=link;
       _challengeId=null;_verified=null;_message=null;
@@ -74,37 +99,39 @@ class _SocialAccountSettingsState extends State<FableSocialAccountSettingsPage> 
     });
     try {
       final id=await widget.gateway.requestSensitiveActionOtp();
-      if(!mounted||!_current)return;
+      if(!mounted||!_current||epoch!=_bindingEpoch)return;
       setState((){
         _challengeId=id;
         _message='A security OTP was requested; delivery is not yet confirmed.';
       });
     }catch(_){
-      if(mounted&&_current)setState(()=>_message=
+      if(mounted&&_current&&epoch==_bindingEpoch)setState(()=>_message=
         'Backend did not accept a security challenge. Check your session and 2FA.');
-    }finally{if(mounted)setState(()=>_busy=false);}
+    }finally{if(mounted&&epoch==_bindingEpoch)setState(()=>_busy=false);}
   }
 
   Future<void> _verify() async {
     final id=_challengeId;
     if(_busy||!_current||id==null)return;
+    final epoch=_bindingEpoch;
     setState(()=>_busy=true);
     try {
       final proof=await widget.gateway.verifySensitiveActionOtp(id,_otp.text.trim());
-      if(!mounted||!_current)return;
+      if(!mounted||!_current||epoch!=_bindingEpoch)return;
       _otp.clear();
       setState((){
         _verified=proof;_message='Backend verified recent authentication.';
       });
     }catch(_){
-      if(mounted&&_current)setState(()=>_message=
+      if(mounted&&_current&&epoch==_bindingEpoch)setState(()=>_message=
         'Security code was rejected, expired or belongs to another account.');
-    }finally{if(mounted)setState(()=>_busy=false);}
+    }finally{if(mounted&&epoch==_bindingEpoch)setState(()=>_busy=false);}
   }
 
   Future<void> _perform() async {
     final provider=_provider,proof=_verified;
     if(_busy||!_current||provider==null||proof==null)return;
+    final epoch=_bindingEpoch;
     setState(()=>_busy=true);
     try {
       String result;
@@ -121,20 +148,20 @@ class _SocialAccountSettingsState extends State<FableSocialAccountSettingsPage> 
           ?'Backend confirmed social account unlink.'
           :'Backend did not remove this sign-in method.';
       }
-      if(!mounted||!_current)return;
+      if(!mounted||!_current||epoch!=_bindingEpoch)return;
       setState((){
         _message=result;
         _provider=null;_challengeId=null;_verified=null;_otp.clear();
       });
     }on FableApiException catch(e){
-      if(mounted&&_current)setState(()=>_message=e.status==409
+      if(mounted&&_current&&epoch==_bindingEpoch)setState(()=>_message=e.status==409
         ?'Backend rejected this account change; refresh sign-in methods.'
         :'Backend rejected the requested account action.');
     }catch(_){
-      if(mounted&&_current)setState(()=>_message=
+      if(mounted&&_current&&epoch==_bindingEpoch)setState(()=>_message=
         'Account change unconfirmed. Re-read the server state before retrying.');
     }finally{
-      if(mounted){
+      if(mounted&&epoch==_bindingEpoch){
         setState((){
           _busy=false;_verified=null;_challengeId=null;_otp.clear();
         });
