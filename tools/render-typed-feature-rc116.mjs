@@ -996,7 +996,7 @@ function readPage(op){
         '  }',
         '  void _load(){',
         '    if(_revoked)return;',
-        '    setState(()=>_rowOffset=0);'
+        '    setState(()=>_rowOffset=0);',
         '    _controller.load('+
           op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
         '  }',
