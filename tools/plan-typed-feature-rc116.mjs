@@ -388,7 +388,7 @@ export function signedPaginatedListFields(op,schema,route,verifiedManaged=false)
        selected.some(f=>[name,min,max].includes(f.name)))continue;
     // Backend RC347 signs precise Decimal filters as strings so SDKs never
     // round them through IEEE-754; Int filters remain numeric, dates ISO text.
-    const expectedType=(datetime||item.type==='decimal')?'string':'number';
+    const expectedType=(datetime||item.type==='decimal')?'string':'integer';
     const expectedFormat=datetime?'date-time':null;
     const range=[q.get(name),q.get(min),q.get(max)];
     if(!range.every(v=>v?.type===expectedType && v.required!==true &&
