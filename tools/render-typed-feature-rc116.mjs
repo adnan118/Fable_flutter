@@ -673,6 +673,7 @@ function infiniteListPage(op){
       :'  String? _filter'+f.name+';'),
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
+    '  bool _revoked=false;',
     '  void _redraw(){',
     '    if(!mounted)return;',
     '    setState((){});',
@@ -681,16 +682,18 @@ function infiniteListPage(op){
     '    });',
     '  }',
     '  void _maybeLoadMore(){',
-    '    if(!_scroll.hasClients || _controller.isLoading ||',
+    '    if(_revoked || !_scroll.hasClients || _controller.isLoading ||',
     '       !_controller.hasMore || _controller.error!=null)return;',
     '    if(_scroll.position.extentAfter<400)',
     '      unawaited(_controller.loadNext());',
     '  }',
     '  void _bind(){',
+    '    _revoked=false;',
     '    _controller='+name+'Controller('+name+'UseCase(widget.repository));',
     '    _controller.addListener(_redraw);',
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
+    '      _revoked=true;',
     ...(op.supportsSearch?['      _search.clear();']:[]),
     ...(hasSort(op)?['      _sort=null;']:[]),
     ...pagedFilters(op).map(f=>f.type!=='boolean'
@@ -734,6 +737,7 @@ function infiniteListPage(op){
     '    super.dispose();',
     '  }',
     '  void _refresh(){',
+    '    if(_revoked)return;',
     '    _controller.reset('+
       [...(op.supportsSearch?['search:_search.text.trim()']:[]),
         ...(hasSort(op)?['sort:_sort']:[]),
@@ -744,7 +748,11 @@ function infiniteListPage(op){
     '    unawaited(_controller.loadNext());',
     '  }',
     '  @override Widget build(BuildContext context){',
-    '    final items=_controller.items;',
+    '    if(_revoked)return Scaffold(',
+    '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
+    '      body:const SafeArea(child:Center(child:Text(',
+    '        "Project or login context changed. Reopen this screen from the verified feature."))));',
+    '    final items=_controller.items;
     '    return Scaffold(',
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:SafeArea(child:Column(children:[',
@@ -899,6 +907,7 @@ function readPage(op){
     '  late '+name+'Controller _controller;',
     '  StreamSubscription<Object?>? _identity;',
     '  int _identityEpoch=0;',
+    '  bool _revoked=false;',
     ...(op.resultKind==='unpaginated-list'?['  int _rowOffset=0;']:[]),
     ...(op.resultKind==='paginated-list'?['  int _page=1;']:[]),
     ...(op.method==='POST'?['  bool _confirming=false;']:[]),
@@ -907,10 +916,12 @@ function readPage(op){
   parts.push(
     '  void _redraw(){if(mounted)setState((){});}',
     '  void _bind(){',
+    '    _revoked=false;',
     '    _controller='+name+'Controller('+name+'UseCase(widget.repository));',
     '    _controller.addListener(_redraw);',
     '    _identity=widget.identityEvents.listen((_){',
     '      _identityEpoch++;',
+    '      _revoked=true;',
     ...(op.resultKind==='unpaginated-list'?['      _rowOffset=0;']:[]),
     ...(op.resultKind==='paginated-list'?['      _page=1;']:[]),
     '      if(mounted)_controller.invalidate();',
@@ -939,7 +950,7 @@ function readPage(op){
     '  }',
     ...(op.method==='POST'?[
       '  Future<void> _load()async{',
-      '    if(_confirming || _controller.state is '+name+'Loading)return;',
+      '    if(_revoked || _confirming || _controller.state is '+name+'Loading)return;
       '    _confirming=true;',
       '    final originalIdentity=_identityEpoch;',
       '    try {',
@@ -984,12 +995,13 @@ function readPage(op){
         '    setState(()=>_rowOffset=offset);',
         '  }',
         '  void _load(){',
-        '    setState(()=>_rowOffset=0);',
+        '    if(_revoked)return;',
+        '    setState(()=>_rowOffset=0);'
         '    _controller.load('+
           op.params.map(p=>p+': _'+p+'.text.trim()').join(', ')+');',
         '  }',
       ]:[
-        '  void _load(){_controller.load('+
+        '  void _load(){if(_revoked)return;_controller.load('+
           [...op.params.map(p=>p+': _'+p+'.text.trim()'),
            ...(op.resultKind==='paginated-list'?['page: _page']:[])].join(', ')+');}',
       ]),
@@ -1002,7 +1014,11 @@ function readPage(op){
       ]:[]),
     ]),
     '  @override Widget build(BuildContext context){',
-    '    final state=_controller.state;',
+    '    if(_revoked)return Scaffold(',
+    '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
+    '      body:const SafeArea(child:Center(child:Text(',
+    '        "Project or login context changed. Reopen this screen from the verified feature."))));',
+    '    final state=_controller.state;
     '    return Scaffold(',
     '      appBar:AppBar(title:const Text('+dart(op.operationId)+')),',
     '      body:SafeArea(child:ListView(',
