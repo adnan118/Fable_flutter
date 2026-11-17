@@ -1452,6 +1452,7 @@ function infiniteListPageTest(op,featureId){
     ...(hasSort(op)?['  final sorts=<String?>[];']:[]),
     ...pagedFilters(op).map(f=>'  final seen'+f.name+'=<String?>[];'),
     '  @override Future<'+name+'Entity> load({required int page'+
+      op.params.map(p=>',required String '+p).join('')+
       (op.supportsSearch?',String? search':'')+
       (hasSort(op)?',String? sort':'')+
       pagedFilters(op).map(f=>',String? '+f.name).join('')+'})async{',
@@ -1480,12 +1481,21 @@ function infiniteListPageTest(op,featureId){
     '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
     '        repository:repository,identityEvents:events.stream)));',
     '      await tester.pumpAndSettle();',
+    ...op.params.flatMap((p,i)=>[
+      '      await tester.enterText(find.byType(TextField).at('+i+'),'+
+        dart(op.pathParamKinds?.find(x=>x.name===p)?.type==='uuid'
+          ?'00000000-0000-4000-8000-000000000000':'selected-scope')+');',
+    ]),
+    ...(op.params.length?[
+      '      await tester.tap(find.byTooltip("Load selected scope").first);',
+      '      await tester.pumpAndSettle();',
+    ]:[]),
     '      expect(repository.calls,contains(1));',
     '      expect(find.byType(ListView),findsOneWidget);',
     '      expect(find.text("Previous page"),findsNothing);',
     '      expect(find.text("Next page"),findsNothing);',
     ...(op.supportsSearch?[
-      '      await tester.enterText(find.byType(TextField).first,"needle");',
+      '      await tester.enterText(find.byType(TextField).at('+op.params.length+'),"needle");',
       '      await tester.testTextInput.receiveAction(TextInputAction.search);',
       '      await tester.pumpAndSettle();',
       '      expect(repository.searches,contains("needle"));',
@@ -1502,6 +1512,15 @@ function infiniteListPageTest(op,featureId){
     '      await tester.pumpWidget(MaterialApp(home:'+name+'Page(',
     '        repository:repository,identityEvents:events.stream)));',
     '      await tester.pumpAndSettle();',
+    ...op.params.flatMap((p,i)=>[
+      '      await tester.enterText(find.byType(TextField).at('+i+'),'+
+        dart(op.pathParamKinds?.find(x=>x.name===p)?.type==='uuid'
+          ?'00000000-0000-4000-8000-000000000000':'selected-scope')+');',
+    ]),
+    ...(op.params.length?[
+      '      await tester.tap(find.byTooltip("Load selected scope").first);',
+      '      await tester.pumpAndSettle();',
+    ]:[]),
     '      expect(find.textContaining("Retry failed page"),findsOneWidget);',
     '      expect(find.text("All results loaded"),findsNothing);',
     '      await tester.pumpWidget(const SizedBox.shrink());',
