@@ -60,6 +60,18 @@ function readBackendExport(root) {
     out[name]=readSafeDocument(root,name);
   return out;
 }
+/** Source-only W3 must validate the real imported Backend configuration too.
+ * Comparing 4 matching contract JSON documents is insufficient when
+ * assets/config/backend.json can be replaced by an unrelated symlink. */
+export function inspectW3ImportedConfig(root){
+  const cfg=readSafeDocument(root,'assets/config/backend.json');
+  if(cfg?.kind!=='fable.mobile-backend-configuration'||
+     cfg.schemaVersion!==1||cfg.backend?.kind!=='fable'||
+     cfg.backend.adapter!=='fable-contract'||
+     cfg.backend.status!=='ready'||cfg.contractImported!==true)
+    throw Error('W3 imported Backend configuration is missing or not project-ready');
+  return {backend:'fable',configurationVerified:true,sourceOnly:true};
+}
 function readFlutterImport(root) {
   const out={};
   for(const name of W3_REQUIRED_DOCUMENTS)
@@ -85,6 +97,7 @@ function verifyBackendGitCheckpoint(root,expected) {
     !dirty && branch==='main' && resolve(top)===resolve(repo) && authorized};
 }
 export function runW3CurrentHandoff(options) {
+  const frontendConfiguration=inspectW3ImportedConfig(options.flutterRoot);
   const backend=readBackendExport(options.backendExportRoot);
   const imported=readFlutterImport(options.flutterRoot);
   const repo=verifyBackendGitCheckpoint(options.backendRepoRoot,options.expectedBackendSha);
@@ -102,6 +115,7 @@ export function runW3CurrentHandoff(options) {
   // Checking a source commit does not cryptographically establish which
   // source commit produced an already exported contract. Remains unverified.
   report.backendExportProvenanceVerified=false;
+  report.frontendConfiguration=frontendConfiguration;
   return report;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){

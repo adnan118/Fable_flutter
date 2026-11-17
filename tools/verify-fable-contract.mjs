@@ -4,7 +4,8 @@
  * Source mode verifies the import graph, not a live Backend or production state.
  * Project mode requires an explicit non-fixture project identity.
  */
-import {readFileSync} from 'node:fs';
+import {readFileSync,lstatSync} from 'node:fs';
+import {assertRegularProjectPath} from './rc366-safe-source-tree.mjs';
 import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
@@ -24,8 +25,14 @@ export function verifyFableContract(root, {mode='source', expectedProjectId=null
   const failures = [];
   const fail = (code) => failures.push(code);
   const read = (path) => {
-    try {return JSON.parse(readFileSync(join(root,path), 'utf8'));}
-    catch (_) {fail(`cannot_read_or_parse:${path}`);return null;}
+    try {
+      // RC368: source-only verification must reject a symlink anywhere in
+      // the project path, including backend.json and contract ancestors.
+      const safe=assertRegularProjectPath(root,join(root,path),'file');
+      if(lstatSync(safe).size>16*1024*1024)
+        throw Error('Oversized Fable source contract');
+      return JSON.parse(readFileSync(safe,'utf8'));
+    }catch (_) {fail(`cannot_read_or_parse:${path}`);return null;}
   };
   const cfg = read('assets/config/backend.json');
   const contract = read('assets/contracts/contract.json');
