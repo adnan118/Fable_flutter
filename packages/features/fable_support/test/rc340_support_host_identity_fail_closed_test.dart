@@ -6,11 +6,16 @@ import 'package:fable_support/fable_support.dart';
 
 class _Catalog implements OperationCatalog {
   @override bool get sendsInstallationId=>false;
-  @override bool supports(String id)=>id=='tickets.list';
+  @override bool supports(String id)=>
+    const {'tickets.list','tickets.create'}.contains(id);
   @override FableOperation require(String id){
-    if(id!='tickets.list')throw StateError('Unknown operation');
-    return const FableOperation('tickets.list','GET','/support/tickets',
+    if(id=='tickets.list')return const FableOperation(
+      'tickets.list','GET','/support/tickets',
       'source',requiresAuth:true,enforceAuth:true);
+    if(id=='tickets.create')return const FableOperation(
+      'tickets.create','POST','/support/tickets',
+      'source',requiresAuth:true,enforceAuth:true);
+    throw StateError('Unknown operation');
   }
 }
 class _NoGateway implements BackendApiGateway {
@@ -26,6 +31,7 @@ class _Repository extends FableSupportRepository {
     gateway:_NoGateway(),
     operations:FableSupportOperations.fromContract(
       _Catalog(),listOperationId:'tickets.list',
+      createOperationId:'tickets.create',
     ),
     decodeList:(_)=>[],encoder:_Encoder(),
   );
