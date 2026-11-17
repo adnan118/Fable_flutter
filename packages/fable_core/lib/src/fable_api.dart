@@ -306,6 +306,11 @@ class UnifiedApiClient implements BackendApiGateway {
     if (op.credentialHeader != null) {
       final provider=credentialProvider!;
       final recovered=await provider.recoverUnauthorized(op);
+      // The host might have switched accounts while provider recovery awaited.
+      // A stale initial 401 must not be exposed as the next user's response.
+      if (session.identityRevision != requestIdentity) {
+        throw FableApiException(409,'session_changed_discard_response');
+      }
       if (!recovered) return _checked(response);
       if (!const {'GET','HEAD'}.contains(op.method)) {
         throw FableApiException(401,'session_refreshed_retry_manually');
@@ -487,6 +492,12 @@ class UnifiedApiClient implements BackendApiGateway {
           queryParameters: query, data: body, cancelToken: cancelToken,
         );
         rejectChangedContext();
+        // Every authenticated transport mode (including externally supplied
+        // credential headers) must discard responses from an old identity.
+        if (expectedIdentity != null &&
+            session.identityRevision != expectedIdentity) {
+          throw FableApiException(409, 'session_changed_discard_response');
+        }
         if (safeRead && attempt < retryPolicy.maxReadRetries &&
             retryPolicy.retryableStatus(response.statusCode ?? 0)) {
           final delay = retryPolicy.backoff(attempt,
@@ -499,6 +510,11 @@ class UnifiedApiClient implements BackendApiGateway {
         return response;
       } on DioException catch (error) {
         rejectChangedContext();
+        // Do not retry an old principal's failed request under the new one.
+        if (expectedIdentity != null &&
+            session.identityRevision != expectedIdentity) {
+          throw FableApiException(409, 'session_changed_discard_response');
+        }
         final status = error.response?.statusCode ?? 0;
         if (safeRead && attempt < retryPolicy.maxReadRetries &&
             (retryPolicy.retryableTransport(error) ||
