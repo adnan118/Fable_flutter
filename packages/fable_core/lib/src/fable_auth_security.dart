@@ -137,6 +137,9 @@ extension FableAccountSecurity on FableAuthGateway {
     _requireAuthOperation(op,'POST',path,requiresAuth:true);
     proof._inFlight=true;
     try {
+      // The server may have applied the 2FA state even if the reply is lost.
+      // Never permit a second protected mutation with the same OTP proof.
+      proof._consumed=true;
       final response=await _api.request(op,body:{'challengeId':proof.challengeId});
       if(session.identityRevision!=proof._identityRevision) {
         throw FableApiException(409,'session_changed_discard_response');
@@ -148,7 +151,6 @@ extension FableAccountSecurity on FableAuthGateway {
            DateTime.tryParse(body['enabledAt'])==null)) {
         throw const FormatException('Backend did not confirm the 2FA state');
       }
-      proof._consumed=true;
       return FableTwoFactorUpdate._(enabled,revoked);
     } finally {
       proof._inFlight=false;
