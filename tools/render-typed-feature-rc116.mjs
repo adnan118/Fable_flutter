@@ -1109,6 +1109,7 @@ function projectNavigation(plan){
   const value=plan.featureId.replace(/_([a-z])/g,(_,c)=>c.toUpperCase())+'ProjectFeature';
   const parts=[
     '// GENERATED W5: real navigation bound to a single signed Fable project.',
+    "import 'dart:async';",
     "import 'package:material_ui/material_ui.dart';",
     "import 'package:flutter/foundation.dart' show kDebugMode;",
     "import 'package:fable_core/fable_core.dart';",
@@ -1154,6 +1155,18 @@ function projectNavigation(plan){
     '}',
     'final class _'+home+'State extends State<'+home+'> {',
     '  FableAuthGateway? _gateway;',
+    '  final StreamController<Object?> _contractChanges=',
+    '    StreamController<Object?>.broadcast(sync:true);',
+    '  Stream<Object?> _eventsFor(Stream<Object?> source)=>',
+    '    Stream<Object?>.multi((controller){',
+    '      final identity=source.listen(controller.add,',
+    '        onError:controller.addError);',
+    '      final contract=_contractChanges.stream.listen(controller.add,',
+    '        onError:controller.addError);',
+    '      controller.onCancel=()async{',
+    '        await identity.cancel();await contract.cancel();',
+    '      };',
+    '    });',
     '  bool _acceptOrigin(Uri? base){',
     '    if(base==null||!base.hasAuthority||base.host.isEmpty||',
     '       base.userInfo.isNotEmpty||base.hasQuery||base.hasFragment||',
@@ -1184,6 +1197,7 @@ function projectNavigation(plan){
     '  @override void didUpdateWidget(covariant '+home+' old){',
     '    super.didUpdateWidget(old);',
     '    if(identical(old.contract,widget.contract))return;',
+    '    _contractChanges.add(Object());',
     ...(managedPresent?[
       '    _managedGateway?.dispose();_managedGateway=null;',
     ]:[]),
@@ -1212,6 +1226,7 @@ function projectNavigation(plan){
       '    super.didChangeDependencies();',
       '    final store=FableManagedEntityScope.maybeOf(context);',
       '    if(!identical(_managedStore,store)){',
+      '      _contractChanges.add(Object());',
       '      _managedGateway?.dispose();_managedGateway=null;',
       '      _managedStore=store;',
       '    }',
@@ -1219,6 +1234,8 @@ function projectNavigation(plan){
       '  }',
     ]:[]),
     '  @override void dispose(){',
+    '    _contractChanges.add(Object());',
+    '    unawaited(_contractChanges.close());',
     ...(managedPresent?['    _managedGateway?.dispose();']:[]),
     '    _gateway?.dispose();super.dispose();',
     '  }',
@@ -1249,8 +1266,8 @@ function projectNavigation(plan){
       '            Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>',
       '              '+op.className+'Page(',
       '              repository:Fable'+op.className+'Repository(bound),',
-      '              identityEvents:'+
-        (op.managedScoped?'bound.scopeEvents':'bound.session.identityEvents')+')));',
+      '              identityEvents:_eventsFor('+
+        (op.managedScoped?'bound.scopeEvents':'bound.session.identityEvents')+'))));',
       '          },',
       '        ),',
     );
