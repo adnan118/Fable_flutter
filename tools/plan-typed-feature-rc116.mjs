@@ -64,7 +64,7 @@ function checkSignedResponseShape(op,schema,fields,signedData=op.response?.data)
   const mappings={
     string:{type:'String'},text:{type:'String'},uuid:{type:'String',format:'uuid'},
     datetime:{type:'String',format:'date-time'},
-    int:{type:'int'},decimal:{type:'double'},boolean:{type:'bool'},
+    int:{type:'int'},decimal:{type:'String'},boolean:{type:'bool'},
   };
   const seen=new Set();
   for(const field of source.fields){
@@ -80,6 +80,9 @@ function checkSignedResponseShape(op,schema,fields,signedData=op.response?.data)
        (encoded.format??null)!==(expected.format??null)){
       fail('OpenAPI data schema contradicts signed Backend response: '+op.operationId);
     }
+    // The signed source distinguishes money/Decimal strings from ordinary
+    // text: carry that identity to the generated DTO for lexical validation.
+    if(field.type==='decimal')actual.decimal=true;
   }
 }
 
@@ -378,7 +381,7 @@ function signedPaginatedListFields(op,schema,route,verifiedManaged=false){
        /(?:password|secret|token|otp|pin|private|credential|session|payment|billing|accesskey)/i.test(name)||
        item.protectedAuth===true||item.sensitiveFilterSort===true||
        declared?.type!==(item.type==='int'?'int':
-         item.type==='decimal'?'double':'String'))continue;
+         item.type==='decimal'?'String':'String'))continue;
     const min=name+(datetime?'From':'Min'),max=name+(datetime?'To':'Max');
     if(!safeIdent(min)||!safeIdent(max)||
        selected.some(f=>[name,min,max].includes(f.name)))continue;
