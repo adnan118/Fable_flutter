@@ -23,7 +23,12 @@ void main() {
   });
   test('Never allow auth or spoofed transport headers from custom adapter', () {
     final catalog=_Catalog();
-    for(final key in <String>['Authorization','X-API-Key','Cookie','X-Installation-Id']) {
+    for(final key in <String>[
+      'Authorization','X-API-Key','Cookie','X-Installation-Id',
+      'X-Fable-Managed-Entity-Id','X-Fable-Managed-Account-Id',
+      'X-Security-Challenge-Id','If-Match','Idempotency-Key',
+      'X-Fable-Media-Token','Range',
+    ]) {
       expect(()=>ExternalTransportAdapter(catalog:catalog,publicHeaders:{key:'secret'}),throwsArgumentError);
     }
   });

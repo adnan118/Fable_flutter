@@ -10,7 +10,33 @@ class _PublicOperations implements OperationCatalog {
         requiresAuth: false, enforceAuth: true);
 }
 
+class _SpoofedHeadersAdapter implements BackendTransportAdapter {
+  _SpoofedHeadersAdapter(this.catalog,this.header);
+  @override final OperationCatalog catalog;
+  final String header;
+  @override BackendSessionMode get sessionMode=>BackendSessionMode.anonymous;
+  @override Future<Map<String,String>> headersFor(
+      FableOperation op,FableSecureSession session) async=>
+        <String,String>{header:'unverified'};
+}
+
 void main() {
+  test('RC355 a custom adapter cannot smuggle tenant/step-up headers into a public operation', () async {
+    for(final header in <String>[
+      'X-Fable-Managed-Entity-Id','X-Fable-Managed-Account-Id',
+      'X-Security-Challenge-Id','If-Match','Idempotency-Key',
+      'Range','X-Fable-Media-Token',
+    ]) {
+      final catalog=_PublicOperations();
+      final client=UnifiedApiClient(baseUri:Uri.parse('https://example.test'),
+        contract:catalog,session:FableSecureSession(),
+        adapter:_SpoofedHeadersAdapter(catalog,header));
+      try {
+        await expectLater(client.execute('public.health'),
+          throwsA(isA<StateError>()),reason:header);
+      }finally {client.dispose();}
+    }
+  });
   test('Reject ambient Authorization in injected Dio BaseOptions', () {
     expect(() => UnifiedApiClient(baseUri: Uri.parse('https://example.test'),
       contract: _PublicOperations(), session: FableSecureSession(),
@@ -22,5 +48,20 @@ void main() {
       contract: _PublicOperations(), session: FableSecureSession(),
       client: Dio(BaseOptions(headers: <String,dynamic>{'cookie':'SECRET'}))),
       throwsArgumentError);
+  });
+  test('RC355 reject operation-scoped ambient headers from injected Dio', () {
+    for(final header in <String>[
+      'X-Fable-Managed-Entity-Id','X-Fable-Managed-Account-Id',
+      'X-Security-Challenge-Id','If-Match','Idempotency-Key',
+      'Range','X-Fable-Media-Token',
+    ]) {
+      expect(() => UnifiedApiClient(
+        baseUri: Uri.parse('https://example.test'),
+        contract: _PublicOperations(),session: FableSecureSession(),
+        client:Dio(BaseOptions(headers:<String,dynamic>{header:'untrusted'}))),
+        throwsArgumentError,
+        reason:header,
+      );
+    }
   });
 }

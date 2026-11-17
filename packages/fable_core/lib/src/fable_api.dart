@@ -57,6 +57,11 @@ class UnifiedApiClient implements BackendApiGateway {
     // operations even when our own request headers contain no token.
     const ambientCredentials = <String>{
       'authorization', 'cookie', 'proxy-authorization', 'x-api-key', 'dpop',
+      // A supplied Dio BaseOptions must not bypass operation-scoped
+      // verified tenant/If-Match/step-up/header provenance checks.
+      'idempotency-key', 'if-match', 'range', 'x-fable-media-token',
+      'x-security-challenge-id', 'x-fable-managed-entity-id',
+      'x-fable-managed-account-id',
     };
     if (_dio.options.headers.keys.any((key) =>
         ambientCredentials.contains(key.toString().toLowerCase()))) {
@@ -210,8 +215,17 @@ class UnifiedApiClient implements BackendApiGateway {
       throw const FormatException('Unresolved backend path parameter');
     }
     final headers=await adapter.headersFor(op,session);
-    if(headers.keys.any((key)=>key.toLowerCase()=='idempotency-key'))
-      throw StateError('An ambient Idempotency-Key is not permitted');
+    // These headers may only be installed below after a verified explicit
+    // operation argument and its security/record scope have been checked.
+    // An adapter must not smuggle them into an unrelated public/private GET.
+    const scopedHeaders=<String>{
+      'idempotency-key','if-match','range','x-fable-media-token',
+      'x-security-challenge-id','x-fable-managed-entity-id',
+      'x-fable-managed-account-id',
+    };
+    if(headers.keys.any((key)=>scopedHeaders.contains(key.toLowerCase()))) {
+      throw StateError('Backend adapter attempted to inject operation-scoped headers');
+    }
     if (ifMatch != null) headers['If-Match']='"$ifMatch"';
     if (idempotencyKey != null) headers['Idempotency-Key']=idempotencyKey;
     if(mediaRange!=null){

@@ -67,6 +67,10 @@ class ExternalTransportAdapter implements BackendTransportAdapter {
       'x-installation-id', 'x-forwarded-for', 'x-forwarded-host', 'forwarded',
       'proxy-authorization', 'dpop', 'content-length', 'transfer-encoding', 'connection',
       'idempotency-key', 'x-csrf-token', 'content-type',
+      // Reserved for explicit source-verified request parameters; never
+      // configurable as ambient public headers of an arbitrary backend.
+      'if-match', 'range', 'x-fable-media-token', 'x-security-challenge-id',
+      'x-fable-managed-entity-id', 'x-fable-managed-account-id',
     };
     for (final entry in headers.entries) {
       final key = entry.key;
