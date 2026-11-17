@@ -41,6 +41,34 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
     _loadIdentity=revision();
     _load=widget.repository.list();
   }
+  // RC317: the FutureBuilder must recheck identity immediately before
+  // displaying ticket content, even if the invalidation event is delayed.
+  bool _sameVerifiedIdentity(){
+    final revision=widget.identityRevision;
+    final authenticated=widget.isAuthenticated;
+    if(revision==null||authenticated==null||
+       widget.identityInvalidations==null||_loadIdentity==null)return false;
+    try{return authenticated()&&revision()==_loadIdentity;}
+    catch(_){return false;}
+  }
+
+  void _manualRefresh(){
+    // Only the currently bound authenticated session can start another GET.
+    // Never refresh an old list under another account after A -> B -> A.
+    if(!mounted)return;
+    if(!_sameVerifiedIdentity()){
+      // A delayed identity event must not leave stale tickets visible after
+      // a user interaction; drop the old snapshot without another request.
+      setState((){
+        _generation++;
+        _load=null;
+        _loadIdentity=null;
+      });
+      return;
+    }
+    setState(_restart);
+  }
+
   @override void didUpdateWidget(covariant FableSupportTicketList old){
     super.didUpdateWidget(old);
     if(!identical(old.repository,widget.repository)||
@@ -78,15 +106,26 @@ class _FableSupportTicketListState extends State<FableSupportTicketList> {
       key:ValueKey<int>(_generation),
       future:active,
       builder:(context,snapshot){
+        final arabic=Localizations.localeOf(context).languageCode=='ar';
+        if(!_sameVerifiedIdentity()){
+          return const Text('Session changed. Reopen support tickets to verify.');
+        }
         if(snapshot.connectionState!=ConnectionState.done){
           return const Center(child:CircularProgressIndicator());
         }
         if(snapshot.hasError){
-          return const Text('Support unavailable. Please retry later.');
+          return Column(mainAxisSize:MainAxisSize.min,children:[
+            Text(arabic?'تعذّر تحميل التذاكر. حاول مجددًا.':
+              'Support unavailable. Please try again.'),
+            TextButton(onPressed:_manualRefresh,
+              child:Text(arabic?'إعادة المحاولة':'Try again')),
+          ]);
         }
         return Column(mainAxisSize:MainAxisSize.min,children:[
           for(final ticket in (snapshot.data??const <FableSupportTicket>[]).take(50))
             ListTile(title:Text(ticket.subject),subtitle:Text(ticket.status)),
+          TextButton(onPressed:_manualRefresh,
+            child:Text(arabic?'تحديث':'Refresh')),
         ]);
       },
     );
