@@ -99,7 +99,7 @@ function exactInstantDtoValidator(){
   return [
     'bool _validFableInstant(Object? input){',
     '  if(input is! String || input.length>40 ||',
-    '     !RegExp(r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,9})?(?:Z|[+-](?:0[0-9]|1[0-4]):[0-5][0-9])$").hasMatch(input))',
+    '     !RegExp(r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,9})?(?:Z|[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00))$").hasMatch(input))',
     '    return false;',
     '  if(DateTime.tryParse(input)==null)return false;',
     '  final y=int.parse(input.substring(0,4));',
