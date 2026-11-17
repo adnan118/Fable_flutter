@@ -57,3 +57,7 @@ For packages deliberately generated without host app wiring, pass `--no-app-wiri
 ## RC315 — consent and identity safety for optional Analytics
 
 The optional Analytics package now exports a user-facing `FableAnalyticsConsentPanel` with Arabic/English copy, **opt-in only** behavior and immediate unsent-event revocation when session identity changes or the host panel closes. A host must explicitly provide a reviewed tracker/sink, verified identity revision/invalidation stream and eligibility policy; Fable never chooses an analytics endpoint. The 17-family parity ledger includes the new file but does **not** advance Analytics production acceptance. See [RC315 report](docs/integrations/RC315-W6-ANALYTICS-CONSENT-IDENTITY.ar.md).
+
+## RC316 — payment status identity fence
+
+`FablePaymentStatusCard` now requires an authenticated, monotonically revisioned host session plus identity invalidation stream before it starts a read or renders any payment status. Legacy callers without verified identity stay source-compatible but fail closed with **zero payment requests**. Account switching (including A→B→A), sign-out, late reads and changed payment selections cannot reuse a previous request's displayed result. This is a read-only safeguard, not checkout/capture/refund acceptance. [RC316 details](docs/integrations/RC316-W6-PAYMENTS-IDENTITY-FENCE.ar.md).
