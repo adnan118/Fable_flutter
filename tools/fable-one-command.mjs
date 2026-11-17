@@ -446,7 +446,8 @@ export function evaluateOneCommandPlan(plan,runs=[],{
   const byId=new Map(runs.map(x=>[x.id,x]));
   const auditStep=plan.plan.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
   const auditRun=byId.get('W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
-  const sourceAuditPassed=Boolean(auditStep&&!auditStep.blockReason&&auditRun&&
+  const sourceAuditPassed=Boolean(auditStep&&!auditStep.blockReason&&
+    auditStep.realProjectInputsProvided===true&&auditRun&&
     auditRun.exitCode===0&&!auditRun.signal&&!auditRun.error);
   const results=plan.plan.map(step=>{
     const run=byId.get(step.id);
@@ -569,7 +570,8 @@ export function runFableOneCommand(root,{
     if(GENERATED_FLUTTER_NATIVE_IDS.has(step.id)&&!step.blockReason){
       const auditRun=runs.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
       const auditStep=plan.plan.find(x=>x.id==='W5_COMPLETE_SELECTED_FEATURE_SOURCE_AUDIT');
-      if(!auditStep||auditStep.blockReason||!auditRun||
+      if(!auditStep||auditStep.blockReason||
+         auditStep.realProjectInputsProvided!==true||!auditRun||
          auditRun.exitCode!==0||auditRun.signal||auditRun.error)
         step.blockReason='SIGNED_W5_GENERATED_SOURCE_AUDIT_NOT_PASSED';
     }
