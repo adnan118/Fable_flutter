@@ -21,9 +21,10 @@ test('RC313 source inventory accepts canonical feature pubspec and registry only
     assert.ok(inspectBuiltInFamilyBinding(
       f.pubspec.replace('packages/features/','packages/untrusted/'),
       f.registry,f.packagePubspec,id).length);
+    const variable=id.replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase())+'Feature';
     assert.ok(inspectBuiltInFamilyBinding(
-      f.pubspec,f.registry.replace(id==='access_control'?'accessControlFeature':'authFeature','rogueFeature'),
-      f.packagePubspec,id).length||id==='analytics'||id==='deeplinks');
+      f.pubspec,f.registry.replace(variable,'rogueFeature'),
+      f.packagePubspec,id).length);
   }
 });
 test('RC313 refuses duplicate dependency/import/entry or wrong package identity',()=>{
