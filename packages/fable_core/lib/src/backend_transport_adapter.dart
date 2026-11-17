@@ -42,7 +42,13 @@ class FableTransportAdapter implements BackendTransportAdapter {
       }
       headers['X-App-Version'] = appVersion!;
     }
-    headers['X-Installation-Id'] = await session.installationId();
+    // لا تثق بقيمة معرّف التثبيت عند حدود HTTP، حتى مع Session محقونة.
+    // المعرّف بيانات جهاز وليست إثبات مصادقة؛ امنع الحقن والتسريب.
+    final installationId = await session.installationId();
+    if (!RegExp(r'^[a-f0-9]{32}$').hasMatch(installationId)) {
+      throw const FormatException('Invalid Fable installation identifier');
+    }
+    headers['X-Installation-Id'] = installationId;
     return headers;
   }
 }
