@@ -75,11 +75,11 @@ test('RC271 signed unpaginated list produces typed immutable item DTO and naviga
   const pageTest=files.get(root+'test/catalog_list_unpaginated_page_test.dart');
   assert.match(entity,/final class CatalogListUnpaginatedItem/);
   assert.match(entity,/final List<CatalogListUnpaginatedItem> items/);
-  assert.match(dto,/input\.length>500/);
+  assert.match(dto,/input\.length>5000/);
   assert.match(dto,/meta\['mode'\]!='unpaginated'/);
   assert.match(dto,/List<CatalogListUnpaginatedItem>\.unmodifiable\(items\)/);
   assert.match(adapter,/gateway\.session\.identityRevision!=identity/);
-  assert.match(page,/state\.value\.items\.take\(100\)/);
+  assert.match(page,/state\.value\.items\.skip\(_rowOffset\)\.take\(100\)/);
   assert.match(page,/state\.value\.limitExceeded/);
   assert.match(page,/No records available/);
   assert.match(dtoTest,/json\.remove\("meta"\)/);
@@ -123,4 +123,62 @@ test('RC271 preserves a strict one-object GET contract without inventing list me
   const page=result.get('packages/features/fable_catalog/lib/src/presentation/catalog_item_get_page.dart');
   assert.match(page,/Authenticated source-bound GET/);
   assert.doesNotMatch(page,/limitExceeded/);
+});
+
+test('RC333 optionally signed unpaginated filters do not block safe read-only typed UI',()=>{
+  const f=listFixture();
+  const signed=[
+    {key:'q',type:'string'},
+    {key:'sort',type:'string',sortAllowedFields:['createdAt']},
+    {key:'createdAtFrom',type:'string',format:'date-time'},
+    {key:'createdAtTo',type:'string',format:'date-time'},
+    {key:'fableRevisionMin',type:'number'},
+  ];
+  f.contract.operations[0].request.query=signed;
+  f.openapi.paths['/catalog'].get.parameters=signed.map(q=>({
+    name:q.key,in:'query',required:false,
+    schema:{type:q.type,...(q.format?{format:q.format}:{})},
+    ...(q.sortAllowedFields?{'x-fable-sort-allowlist':q.sortAllowedFields}:{}),
+  }));
+  const plan=planTypedFeature(f);
+  assert.equal(plan.operations[0].resultKind,'unpaginated-list');
+  assert.equal(plan.operations[0].filters.length,0);
+  const files=renderTypedFeature(plan);
+  const repo=files.get(
+    'packages/features/fable_catalog/lib/src/data/fable_catalog_list_unpaginated_repository.dart');
+  assert.ok(repo.includes('gateway.execute("catalog.list.unpaginated")'));
+  assert.doesNotMatch(repo,/query:<String,dynamic>/);
+  const page=files.get(
+    'packages/features/fable_catalog/lib/src/presentation/catalog_list_unpaginated_page.dart');
+  assert.ok(page.includes('Previous 100'));
+  assert.ok(page.includes('Next 100'));
+});
+
+test('RC333 refuses unpaginated query spoofing, required filters and OpenAPI drift',()=>{
+  const make=()=>{
+    const f=listFixture();
+    f.contract.operations[0].request.query=[
+      {key:'q',type:'string'},
+    ];
+    f.openapi.paths['/catalog'].get.parameters=[
+      {name:'q',in:'query',required:false,schema:{type:'string'}},
+    ];
+    return f;
+  };
+  const changes=[
+    f=>{f.contract.operations[0].request.query[0].required=true;},
+    f=>{f.openapi.paths['/catalog'].get.parameters[0].required=true;},
+    f=>{f.openapi.paths['/catalog'].get.parameters[0].schema.type='number';},
+    f=>{f.openapi.paths['/catalog'].get.parameters[0].name='sneaky';},
+    f=>{f.contract.operations[0].request.query.push({key:'q',type:'string'});},
+    f=>{f.contract.operations[0].request.query[0].key='page';},
+    f=>{f.contract.operations[0].request.query[0].key='__proto__';},
+    f=>{f.contract.operations[0].request.query[0].type='object';},
+    f=>{f.openapi.paths['/catalog'].get.parameters.push({name:'X-Admin',in:'header'});},
+    f=>{f.contract.operations[0].request.headers=['X-Unbound-Context'];},
+  ];
+  for(const change of changes){
+    const f=make();change(f);
+    assert.throws(()=>planTypedFeature(f),/RC116 typed feature/);
+  }
 });
