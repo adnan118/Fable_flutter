@@ -794,7 +794,7 @@ function infiniteListPage(op){
     ]:f.type!=='boolean'?[
       '        Padding(padding:const EdgeInsets.symmetric(horizontal:12),',
       '          child:TextField(controller:_filter'+f.name+',maxLength:'+
-        (f.type==='text'?'191':'32')+',',
+        (f.type==='text'?'191':f.type==='decimal'?'67':'11')+',',
       ...(['int','decimal'].includes(f.type)?[
         '            keyboardType:const TextInputType.numberWithOptions('+
           'signed:true,decimal:'+(f.type==='decimal'?'true':'false')+'),',
