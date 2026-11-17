@@ -950,7 +950,7 @@ function readPage(op){
     '  }',
     ...(op.method==='POST'?[
       '  Future<void> _load()async{',
-      '    if(_revoked || _confirming || _controller.state is '+name+'Loading)return;
+      '    if(_revoked || _confirming || _controller.state is '+name+'Loading)return;',
       '    _confirming=true;',
       '    final originalIdentity=_identityEpoch;',
       '    try {',
