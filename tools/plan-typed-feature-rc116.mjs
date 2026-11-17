@@ -84,6 +84,7 @@ function checkSignedResponseShape(op,schema,fields,signedData=op.response?.data)
     // text: carry that identity to the generated DTO for lexical validation.
     if(field.type==='decimal')actual.decimal=true;
     if(field.type==='uuid')actual.uuid=true;
+    if(field.type==='datetime')actual.datetime=true;
   }
 }
 
