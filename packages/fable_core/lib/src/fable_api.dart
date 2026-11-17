@@ -55,16 +55,7 @@ class UnifiedApiClient implements BackendApiGateway {
     // An injected Dio is a trusted transport dependency, but MUST NOT carry
     // ambient credentials in BaseOptions. Such defaults could leak to public
     // operations even when our own request headers contain no token.
-    const ambientCredentials = <String>{
-      'authorization', 'cookie', 'proxy-authorization', 'x-api-key', 'dpop',
-      // A supplied Dio BaseOptions must not bypass operation-scoped
-      // verified tenant/If-Match/step-up/header provenance checks.
-      'idempotency-key', 'if-match', 'range', 'x-fable-media-token',
-      'x-security-challenge-id', 'x-fable-managed-entity-id',
-      'x-fable-managed-account-id',
-    };
-    if (_dio.options.headers.keys.any((key) =>
-        ambientCredentials.contains(key.toString().toLowerCase()))) {
+    if (_dio.options.headers.keys.any(_unsafeDioHeader)) {
       throw ArgumentError('Do not put authentication credentials in Dio BaseOptions');
     }
     if (this.dpopProofSigner != null && (contract is! FableContract || this.adapter is! FableTransportAdapter)) {
@@ -76,6 +67,25 @@ class UnifiedApiClient implements BackendApiGateway {
     // Pin even injected Dio transports to the verified origin. Preserve
     // operation-relative paths for interceptors and race-condition tests.
     _dio.options.baseUrl = _baseUri.origin;
+  }
+  // RC364: Dio's injected BaseOptions remain mutable even after construction.
+  // Assert again immediately before EVERY send, after awaiting native signing.
+  // No ambient auth, tenancy or device header may bypass per-operation checks.
+  static bool _unsafeDioHeader(Object? key) {
+    final name=key.toString().toLowerCase();
+    return name.startsWith('x-fable-') || const <String>{
+      'authorization','cookie','set-cookie','proxy-authorization','x-api-key',
+      'dpop','idempotency-key','if-match','range','x-installation-id',
+      'x-security-challenge-id','x-csrf-token',
+      'host','content-length','transfer-encoding','connection',
+      'x-forwarded-for','x-forwarded-host','forwarded',
+    }.contains(name);
+  }
+  void _assertDioTransportStillPinned() {
+    if (_dio.options.baseUrl != _baseUri.origin ||
+        _dio.options.headers.keys.any(_unsafeDioHeader)) {
+      throw StateError('Pinned Backend origin or transport headers changed');
+    }
   }
   final Uri _baseUri;
   final OperationCatalog contract;
@@ -538,6 +548,9 @@ class UnifiedApiClient implements BackendApiGateway {
         if (cancelToken?.isCancelled ?? false) {
           throw FableApiException(0, 'request_cancelled');
         }
+        // An injected Dio can be mutated while secure native signing waits.
+        // Reject credential redirection / ambient header spoofing before I/O.
+        _assertDioTransportStillPinned();
         final response = await _dio.request<dynamic>(
           endpoint,
           options: Options(method: op.method, headers: attemptHeaders,

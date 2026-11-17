@@ -156,6 +156,14 @@ function listDto(op){
       "         input.length!=(meta['maxRows'] as int)))",
       "      throw const FormatException('Invalid signed unpaginated list envelope');",
     ]),
+    ...(op.resultKind==='paginated-list'?[
+      '    // Signed total and page must describe precisely these records.',
+      '    final remaining=(meta["total"] as int)-((meta["page"] as int)-1)*20;',
+      '    if(((meta["total"] as int)==0 && input.isNotEmpty) ||',
+      '       ((meta["total"] as int)>0 &&',
+      '        input.length!=(remaining>20?20:remaining)))',
+      '      throw const FormatException("Inconsistent signed page item count");',
+    ]:[]),
     '    final items=<'+item+'>[];',
     '    for(final record in input){',
     '      if(record is! Map || record.keys.any((k)=>k is! String))',
@@ -446,6 +454,12 @@ function adapter(op,projectHash){
     '      }',
     '      final data=Map<String,Object?>.from(raw);',
     '      final entity='+name+'Dto.fromJson(data).toDomain();',
+    ...(op.method==='GET'&&op.resultKind==='single'&&
+        op.params.includes('id')&&
+        op.fields.some(f=>f.name==='id'&&f.uuid&&f.required)?[
+      '      if(entity.id.toLowerCase()!=id.toLowerCase())',
+      '        throw const FormatException("Mismatched signed record identifier");',
+    ]:[]),
     ...(op.resultKind==='paginated-list'?[
       '      if(entity.page!=page)',
       '        throw const FormatException("Unexpected page in Backend response");',
@@ -1972,7 +1986,12 @@ function signedOwnerPatchFiles(op,contractHash){
     '      final raw=envelope["data"] as Map;',
     '      if(raw.keys.any((key)=>key is! String))',
     '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
-    '      return '+name+'Dto.fromJson(Map<String,Object?>.from(raw)).toDomain();',
+    '      final entity='+name+'Dto.fromJson(Map<String,Object?>.from(raw)).toDomain();',
+    ...(op.fields.some(f=>f.name==='id'&&f.uuid&&f.required)?[
+      '      if(entity.id.toLowerCase()!=id.toLowerCase())',
+      '        throw const TypedReadFailure(TypedReadFailureKind.invalidResponse);',
+    ]:[]),
+    '      return entity;',
     '    } on FableApiException catch(e){',
     '      if(mutationStarted && (e.status==0||e.status==408||e.status>=500||',
     '         const <String>{"session_refreshed_retry_manually",',
