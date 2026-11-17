@@ -16,3 +16,25 @@ abstract interface class BackendCredentialProvider {
   /// Temporary network failures should throw instead of returning false.
   Future<bool> recoverUnauthorized(FableOperation operation);
 }
+
+
+/// A provider credential may use e.g. Authorization (HTTP Basic) or X-API-Key,
+/// but must never masquerade as a transport, tenant, replay or proof header.
+/// Check this both when importing Other Backend catalogs and at dispatch:
+/// a test/host-supplied OperationCatalog can bypass the asset importer.
+bool isAllowedExternalCredentialHeader(Object? value) {
+  if (value is! String ||
+      !RegExp(r'^[A-Za-z][A-Za-z0-9-]{0,63}$').hasMatch(value)) {
+    return false;
+  }
+  final header=value.toLowerCase();
+  if (header.startsWith('x-fable-')) return false;
+  return !const <String>{
+    'host','cookie','set-cookie','connection','content-length',
+    'transfer-encoding','origin','referer','proxy-authorization',
+    'x-forwarded-for','x-forwarded-host','forwarded','x-installation-id',
+    'dpop','idempotency-key','if-match','range',
+    'x-security-challenge-id','x-csrf-token',
+    'accept','accept-language','accept-encoding','content-type',
+  }.contains(header);
+}
