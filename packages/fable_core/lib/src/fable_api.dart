@@ -598,6 +598,13 @@ class UnifiedApiClient implements BackendApiGateway {
             error.type == DioExceptionType.cancel) {
           throw FableApiException(0, 'request_cancelled');
         }
+        // RC400: injected/custom Dio transports may throw a 403 as a
+        // DioException instead of returning the response to _checked().
+        // The session's protected-screen revocation signal must work in both
+        // paths. Identity and selected-entity guards have already been
+        // checked above, so a late former user's denial cannot revoke a
+        // different account.
+        if (status == 403) session.reportAuthorizationDenied();
         final payload = error.response?.data;
         final code = payload is Map
             ? (payload['errorCode'] ?? payload['code'] ?? 'network_error').toString()
