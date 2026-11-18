@@ -10,6 +10,7 @@ import {createInterface} from 'node:readline/promises';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {verifyFableContract} from './verify-fable-contract.mjs';
+import {pathEntryExists,assertRegularProjectPath} from './rc366-safe-source-tree.mjs';
 import {validateSessionPolicyForWizard} from './read-session-policy.mjs';
 import {classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 import {readFrontendOwnedDecisions,saveFrontendOwnedDecisions} from './frontend-owned-decisions.mjs';
@@ -40,20 +41,35 @@ function explicitKeys(options){
 }
 function sourceFiles(source){
   const candidate=resolve(source);
-  const dir=existsSync(join(candidate,'contract.json'))?candidate:resolve(candidate,'assets/contracts');
-  for(const file of CONTRACT_FILES)if(!existsSync(join(dir,file)))throw Error('Missing backend export: '+file);
+  const dir=pathEntryExists(join(candidate,'contract.json'))
+    ?candidate:resolve(candidate,'assets/contracts');
+  // The import must never copy the contents of a symlinked contract or an
+  // entire symlinked source directory. All four documents are regular files
+  // with regular path ancestors, including a dangling-symlink case.
+  assertRegularProjectPath(dir,dir,'dir');
+  for(const file of CONTRACT_FILES){
+    const path=join(dir,file);
+    if(!pathEntryExists(path))
+      throw Error('Missing backend export: '+file);
+    assertRegularProjectPath(dir,path,'file');
+  }
+  const optional=join(dir,'frontend-setup.json');
+  if(pathEntryExists(optional))
+    assertRegularProjectPath(dir,optional,'file');
   return dir;
 }
 // Fingerprint the exact review bundle, not just its advertised contractHash.
 // A changed handoff, OpenAPI file, or standalone decision record must not be
 // applied after the developer has approved a different version.
 function bundleFingerprint(dir){
-  const parts=CONTRACT_FILES.concat(existsSync(join(dir,'frontend-setup.json'))
+  const parts=CONTRACT_FILES.concat(pathEntryExists(join(dir,'frontend-setup.json'))
     ?['frontend-setup.json']:[]);
   const hash=createHash('sha256');
   for(const file of parts){
     hash.update(file+'\0');
-    const buffer=readFileSync(join(dir,file));
+    const source=join(dir,file);
+    assertRegularProjectPath(dir,source,'file');
+    const buffer=readFileSync(source);
     hash.update(String(buffer.length)+':');
     hash.update(buffer);
   }
@@ -123,7 +139,7 @@ export function importBackendDecisions(source,{expectedProjectId=null,expectedCo
     const handoff=asJson(join(dir,'flutter-handoff.json'));
     const decisions=assertMatchingSetup(contract,handoff);
     const standalone=join(dir,'frontend-setup.json');
-    if(existsSync(standalone)){
+    if(pathEntryExists(standalone)){
       const payload=asJson(standalone);
       if(payload.kind!=='fable.frontend-setup-handoff' || payload.schemaVersion!==1 ||
         payload.backendContractHash!==contract.contractHash ||
@@ -371,12 +387,24 @@ function saveFrontendSetupUnretired(root,snapshot,{apply=false,sourceDir=null}={
     const to=resolve(project,'assets/contracts');
     mkdirSync(to,{recursive:true});
     for(const file of CONTRACT_FILES){const from=resolve(dir,file),dest=resolve(to,file);if(from!==dest)copyFileSync(from,dest);}
-    if(existsSync(join(dir,'frontend-setup.json'))){const from=resolve(dir,'frontend-setup.json'),dest=resolve(to,'frontend-setup.json');if(from!==dest)copyFileSync(from,dest);}
+    if(pathEntryExists(join(dir,'frontend-setup.json'))){const from=resolve(dir,'frontend-setup.json'),dest=resolve(to,'frontend-setup.json');if(from!==dest)copyFileSync(from,dest);}
     outputFile(project,'assets/config/backend.json',{
       schemaVersion:1,kind:'fable.mobile-backend-configuration',
       backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
       contractImported:true,
     });
+    // A source can change between the preflight hash and the final copy.
+    // The imported assets must satisfy the independent pinned verifier, not
+    // merely carry the original unsigned review decision in memory.
+    const imported=verifyFableContract(project,{
+      mode:snapshot.projectBound?'project':'source',
+      expectedProjectId:snapshot.projectBound?snapshot.projectId:null,
+      expectedContractHash:snapshot.projectBound?snapshot.contractHash:null,
+    });
+    if(!imported.ok||imported.contractHash!==snapshot.contractHash||
+       imported.projectId!==snapshot.projectId)
+      throw Error('W3 imported project contract differs from the reviewed Backend source: '+
+        imported.failures.join(','));
   }else{
     // A non-Fable project must not inherit a stale fable-contract selection.
     // External operations remain unavailable until a separately verified
