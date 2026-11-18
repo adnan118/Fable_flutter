@@ -519,7 +519,22 @@ export function syncProjectFeatures(root,verified,{apply=false,prune=false}={}){
     throw Error('RC115 feature architecture gate rejected project apply: '+
       architecture.findings.join('; '));
   }
-  return {...plan,...applyPrune(root,plan,{prune}),
+  const applied=applyPrune(root,plan,{prune});
+  // This is a provenance statement about completed source writes only,
+  // never evidence of Flutter SDK execution, live DB/HTTP or device E2E.
+  return {...plan,...applied,
+    w6SourceReceipt:{
+      schemaVersion:1,kind:'fable.w6-source-integration',
+      status:'SOURCE_APPLIED_RUNTIME_UNVERIFIED',
+      selectedProjectFeatures:plan.wiredProjectFeatures,
+      pendingProjectFeatures:plan.pendingProjectFeatures,
+      registryUpdated:applied.applied===true,
+      packageArchives:applied.archivedPackages,
+      blockers:applied.blocked,
+      sourceOnly:true,testsExecuted:false,
+      realBackendExecuted:false,flutterSdkExecuted:false,
+      nativeDeviceE2EVerified:false,productionReady:false,
+    },
     architecture:{enforced:architecture.adopted,
       legacyNotCertified:architecture.legacy,findings:[]}};
 }
