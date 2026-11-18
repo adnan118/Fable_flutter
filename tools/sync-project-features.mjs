@@ -6,6 +6,7 @@
  */
 import {existsSync,readFileSync,writeFileSync,mkdirSync,readdirSync,statSync,lstatSync,cpSync,rmSync,renameSync} from 'node:fs';
 import {resolve,join,dirname,relative,sep} from 'node:path';
+import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {importBackendDecisions} from './flutter-setup-wizard.mjs';
 import {auditFeatureArchitectures} from './enforce-feature-architecture-rc115.mjs';
@@ -18,6 +19,7 @@ const REQUIRED=new Set(REQUIRED_CORE);
 const KEEP_CLIENT_ONLY=new Set(FEATURE_IDS.filter(id=>FEATURE_OWNERSHIP[id]==='client'));
 const pathOf=id=>'packages/features/fable_'+id;
 const safeFile=(root,file)=>resolve(root,file);
+const sha256=value=>createHash('sha256').update(value).digest('hex');
 function json(path){return JSON.parse(readFileSync(path,'utf8'));}
 function writeJSON(p,v){mkdirSync(dirname(p),{recursive:true});writeFileSync(p,JSON.stringify(v,null,2)+'\n');}
 function allSource(root,skip=new Set()){
@@ -78,6 +80,23 @@ export function wiredTypedProjectFeatures(root,selected){
       throw Error('RC382 registered custom feature is incomplete: '+id);
     found.push(id);
   }
+  // The manifest must describe EVERY custom feature that remains installed
+  // in the app. Missing or truncated manifests previously erased these
+  // imports on the next regenerated feature registry.
+  const installed=new Set();
+  const importPattern=/^import 'package:fable_([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\/fable_\1\.dart';\r?$/gm;
+  for(const match of current.matchAll(importPattern))
+    if(!FEATURE_IDS.includes(match[1]))installed.add(match[1]);
+  const dependencyPattern=/^  fable_([a-z][a-z0-9]*(?:_[a-z0-9]+)*):\r?\n    path: packages\/features\/fable_\1(?:\r?\n|$)/gm;
+  for(const match of yaml.matchAll(dependencyPattern))
+    if(!FEATURE_IDS.includes(match[1]))installed.add(match[1]);
+  for(const id of installed)
+    if(!ids.has(id))
+      throw Error('RC385 previously installed custom feature absent from manifest: '+id);
+  const declaredVariables=new Set(found.map(id=>w5FeatureNames(id).variable));
+  for(const match of current.matchAll(/^  ([A-Za-z][A-Za-z0-9]*ProjectFeature),\r?$/gm))
+    if(!declaredVariables.has(match[1]))
+      throw Error('RC385 unmanifested custom feature registry entry: '+match[1]);
   return found;
 }
 
@@ -120,8 +139,13 @@ export function planFeatureSync(root,verified,{prune=false}={}){
   }
   const local=existsSync(join(rootDir,'.fable','mobile-features.json'))?
     json(join(rootDir,'.fable','mobile-features.json')):null;
-  const externalProjectFeatures=existsSync(join(rootDir,'.fable','project-features.json'))?
-    json(join(rootDir,'.fable','project-features.json')):{features:[]};
+  const manifestFile=join(rootDir,'.fable','project-features.json');
+  if(pathEntryExists(manifestFile))
+    assertRegularProjectPath(rootDir,manifestFile,'file');
+  const manifestSource=pathEntryExists(manifestFile)
+    ?readFileSync(manifestFile,'utf8'):null;
+  const externalProjectFeatures=manifestSource===null
+    ?{features:[]}:JSON.parse(manifestSource);
   // Project-specific features are never inferred to be unused; they need
   // their own exact operation/permission mapping audit before any retirement.
   const protectedProjectFeatures=externalProjectFeatures?.features??[];
@@ -139,6 +163,7 @@ export function planFeatureSync(root,verified,{prune=false}={}){
     ownership:ownership.decisions,
     clientOnlyReview:declared.clientOnlyReview,
     protectedProjectFeatureCount:protectedProjectFeatures.length,
+    projectFeatureManifestSha256:manifestSource===null?null:sha256(manifestSource),
     wiredProjectFeatures,
     requestedSource:local?.selectionSource??null,
     pruneAvailable:verified.projectBound===true,
@@ -162,7 +187,12 @@ function applyPrune(root,plan,{prune=false}={}){
   const manifestPath=join(project,'.fable/project-features.json');
   if(pathEntryExists(manifestPath))
     assertRegularProjectPath(project,manifestPath,'file');
-  const selected=pathEntryExists(manifestPath)?json(manifestPath).features:[];
+  const manifestSource=pathEntryExists(manifestPath)
+    ?readFileSync(manifestPath,'utf8'):null;
+  if((manifestSource===null?null:sha256(manifestSource))!==
+     plan.projectFeatureManifestSha256)
+    throw Error('RC385 custom feature manifest changed since sync planning');
+  const selected=manifestSource===null?[]:JSON.parse(manifestSource).features;
   const actualWired=wiredTypedProjectFeatures(project,selected);
   if(actualWired.length!==plan.wiredProjectFeatures.length||
      actualWired.some((id,i)=>id!==plan.wiredProjectFeatures[i])||
