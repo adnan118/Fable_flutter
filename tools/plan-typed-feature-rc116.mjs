@@ -749,6 +749,15 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       fail('request/body/path parameter name conflicts with response fields: '+id);
     // Prevent Dart declarations that collide with generated factory/member
     // methods, as well as a signed route parameter shadowing page/search/sort.
+    // All generated DTOs, entities and requests inherit Object. Members
+    // named hashCode/runtimeType/toString/noSuchMethod cannot be emitted as
+    // unconstrained String/int fields without overriding incompatible APIs.
+    const inheritedMembers=new Set([
+      'hashCode','runtimeType','toString','noSuchMethod',
+    ]);
+    if(fields.some(f=>inheritedMembers.has(f.name))||
+       bodyFields.some(f=>inheritedMembers.has(f.name)))
+      fail('signed field collides with inherited Dart Object member: '+id);
     if(resultKind==='single' &&
        fields.some(f=>f.name==='fromJson'||f.name==='toDomain'))
       fail('response field collides with generated Dart DTO method: '+id);
