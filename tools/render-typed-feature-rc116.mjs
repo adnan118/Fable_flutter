@@ -46,6 +46,18 @@ function assertPlan(plan){
      !/^[a-f0-9]{64}$/.test(plan.contractHash))
     throw Error('RC116 renderer requires reviewed contract-sourced plan');
   for(const op of plan.operations){
+    // Generated Dart symbols have fixed method and pagination names.
+    const pathArguments=op.params??[];
+    const reserved=op.resultKind==='paginated-list'
+      ?new Set(['page',...(op.supportsSearch?['search']:[]),
+        ...((op.sortFields??[]).length?['sort']:[]),
+        ...(op.filters??[]).map(f=>f.name)]):new Set();
+    if(pathArguments.some(name=>reserved.has(name))||
+       (op.resultKind==='single'&&(op.fields??[]).some(f=>
+         ['fromJson','toDomain'].includes(f.name)))||
+       (['POST','PATCH'].includes(op.method)&&(op.bodyFields??[]).some(f=>
+         f.name==='toJson')))
+      throw Error('RC380 reviewed operation uses colliding generated Dart symbols');
     if(op.expectedSuccessStatus!==undefined &&
        (!Number.isInteger(op.expectedSuccessStatus)||
         op.expectedSuccessStatus<200||op.expectedSuccessStatus>299))
@@ -178,13 +190,13 @@ function listDto(op){
       '      throw const FormatException("Inconsistent signed page item count");',
     ]:[]),
     '    final items=<'+item+'>[];',
-    '    for(final record in input){',
-    '      if(record is! Map || record.keys.any((k)=>k is! String))',
+    '    for(final _sourceRecord in input){',
+    '      if(_sourceRecord is! Map || _sourceRecord.keys.any((k)=>k is! String))',
     "        throw const FormatException('Invalid list item object');",
-    '      final row=Map<String,Object?>.from(record);',
+    '      final _sourceRow=Map<String,Object?>.from(_sourceRecord);',
   ];
   for(const f of op.fields){
-    const property="row["+dart(f.name)+"]";
+    const property="_sourceRow["+dart(f.name)+"]";
     const check=f.required?f.name+' is! '+(f.type==='double'?'num':f.type):
       '('+f.name+'!=null && '+f.name+' is! '+(f.type==='double'?'num':f.type)+')';
     parts.push('      final '+f.name+'='+property+';',
@@ -242,10 +254,10 @@ function dto(op){
     'final class '+name+'Dto {',
     '  const '+name+'Dto({'+op.fields.map(f=>(f.required?'required this.':'this.')+f.name).join(', ')+'});',
     ...op.fields.map(f=>'  final '+fieldType(f)+' '+f.name+';'),
-    '  factory '+name+'Dto.fromJson(Map<String,Object?> raw){',
+    '  factory '+name+'Dto.fromJson(Map<String,Object?> _sourceRaw){',
   ];
   for(const f of op.fields){
-    const property="raw["+dart(f.name)+"]";
+    const property="_sourceRaw["+dart(f.name)+"]";
     parts.push('    final '+f.name+' = '+property+';');
     const guard=f.required?f.name+' is! '+(f.type==='double'?'num':f.type):
       '('+f.name+'!=null && '+f.name+' is! '+(f.type==='double'?'num':f.type)+')';
