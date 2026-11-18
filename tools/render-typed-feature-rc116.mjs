@@ -52,12 +52,17 @@ function assertPlan(plan){
       ?new Set(['page',...(op.supportsSearch?['search']:[]),
         ...((op.sortFields??[]).length?['sort']:[]),
         ...(op.filters??[]).map(f=>f.name)]):new Set();
+    const inheritedMembers=new Set([
+      'hashCode','runtimeType','toString','noSuchMethod',
+    ]);
     if(pathArguments.some(name=>reserved.has(name))||
+       (op.fields??[]).some(f=>inheritedMembers.has(f.name))||
+       (op.bodyFields??[]).some(f=>inheritedMembers.has(f.name))||
        (op.resultKind==='single'&&(op.fields??[]).some(f=>
          ['fromJson','toDomain'].includes(f.name)))||
        (['POST','PATCH'].includes(op.method)&&(op.bodyFields??[]).some(f=>
          f.name==='toJson')))
-      throw Error('RC380 reviewed operation uses colliding generated Dart symbols');
+      throw Error('RC395 reviewed operation uses colliding generated Dart symbols');
     if(op.expectedSuccessStatus!==undefined &&
        (!Number.isInteger(op.expectedSuccessStatus)||
         op.expectedSuccessStatus<200||op.expectedSuccessStatus>299))
