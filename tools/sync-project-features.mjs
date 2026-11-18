@@ -149,6 +149,61 @@ export function declaredFeaturePackageDependents(root,featureId){
   return found.sort();
 }
 
+/**
+ * RC403 W6: a generated registry is an owned source file, but it can have
+ * been manually extended by a developer. Validate all live imports and
+ * installed-feature entries before rebuilding it from signed selections.
+ * Never silently discard foreign Dart declarations, entries or imports.
+ */
+export function assertManagedFeatureRegistry(source,customIds=[]){
+  if(typeof source!=='string'||source.length>1_000_000||
+     !Array.isArray(customIds))
+    throw Error('RC403 invalid generated registry source');
+  const marker='const List<FableFeature> installedFeatures = <FableFeature>[';
+  if(source.split(marker).length!==2)
+    throw Error('RC403 ambiguous generated feature registry declaration');
+  const [prefix,rest]=source.split(marker);
+  const closing=rest.indexOf('];');
+  if(closing<0||rest.slice(closing+2).trim().length)
+    throw Error('RC403 foreign Dart code after generated registry list');
+  const knownVars=new Map(FEATURE_IDS.map(id=>[
+    id==='access_control'?'accessControlFeature':id+'Feature',id,
+  ]));
+  for(const id of customIds){
+    if(FEATURE_IDS.includes(id))throw Error('RC403 custom feature ID shadows built-in');
+    const variable=w5FeatureNames(id).variable;
+    if(knownVars.has(variable))throw Error('RC403 custom variable conflicts with installed feature');
+    knownVars.set(variable,id);
+  }
+  const imports=new Set();
+  for(const line of prefix.split(/\r?\n/)){
+    const value=line.trim();
+    if(!value||value.startsWith('//')||
+       value==="import 'package:fable_feature_contract/fable_feature_contract.dart';")
+      continue;
+    const match=value.match(/^import 'package:fable_([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\/fable_\1\.dart';$/);
+    if(!match||(!FEATURE_IDS.includes(match[1])&&!customIds.includes(match[1]))||
+       imports.has(match[1]))
+      throw Error('RC403 untracked or repeated Dart import in feature registry');
+    imports.add(match[1]);
+  }
+  const entries=new Set();
+  for(const line of rest.slice(0,closing).split(/\r?\n/)){
+    const value=line.trim();
+    if(!value)continue;
+    const match=value.match(/^([A-Za-z][A-Za-z0-9]*),$/);
+    const id=knownVars.get(match?.[1]);
+    if(!id||entries.has(id))
+      throw Error('RC403 foreign or repeated installed FableFeature in registry');
+    entries.add(id);
+  }
+  if(imports.size!==entries.size||
+     [...imports].some(id=>!entries.has(id)))
+    throw Error('RC403 existing generated imports and installed feature entries disagree');
+  return {knownInstalled:entries.size,customInstalled:[...entries]
+    .filter(id=>customIds.includes(id))};
+}
+
 function registry(features,projectFeatures=[]) {
   const all=[...features,...projectFeatures];
   const imports=all.map(id=>"import 'package:fable_"+id+"/fable_"+id+".dart';").join('\n');
@@ -263,6 +318,10 @@ function applyPrune(root,plan,{prune=false}={}){
     throw Error('Flutter project source missing');
   for(const path of [registryPath,appPath,packageYaml])
     assertRegularProjectPath(project,path,'file');
+  // Rebuilding from a signed plan must never erase a developer's extra
+  // feature or executable Dart extension in the current registry.
+  assertManagedFeatureRegistry(readFileSync(registryPath,'utf8'),
+    plan.wiredProjectFeatures);
   const fableDir=join(project,'.fable');
   assertRegularProjectPath(project,fableDir,'dir');
   // Refuse to follow an external inventory symlink when writing selection.
@@ -445,7 +504,7 @@ function applyPrune(root,plan,{prune=false}={}){
 }
 export function syncProjectFeatures(root,verified,{apply=false,prune=false}={}){
   if(prune&&!apply)throw Error('--prune requires --apply');
-  const plan=planFeatureSync(root,verified,{prune});
+  const plan=planFeatureSync(root,verified,{prune,allowPendingCustom:!apply});
   // Every project apply checks the physical source before mutations/backups.
   // Legacy is explicitly reported as NOT certified, and any new feature
   // package without typed layers fails closed. The preview never mutates.
