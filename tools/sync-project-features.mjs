@@ -61,17 +61,13 @@ export function wiredTypedProjectFeatures(root,selected){
     const {packageName,variable}=w5FeatureNames(id);
     const packageRoot=join(root,'packages/features',packageName);
     const source=join(packageRoot,'lib/src/project_feature.dart');
-    const exported=join(packageRoot,'lib',packageName+'.dart');
     const pub='  '+packageName+':\n    path: packages/features/'+packageName;
     const imp="import 'package:"+packageName+"/"+packageName+".dart';";
-    if(!pathEntryExists(packageRoot)||!pathEntryExists(source)||
-       !pathEntryExists(exported))
+    if(!pathEntryExists(packageRoot)||!pathEntryExists(source))
       throw Error('RC382 declared custom feature source missing: '+id);
     assertRegularProjectPath(root,packageRoot,'dir');
     assertRegularProjectPath(root,source,'file');
-    assertRegularProjectPath(root,exported,'file');
     if(!readFileSync(source,'utf8').includes('const '+variable+'=')||
-       !readFileSync(exported,'utf8').includes("export 'src/project_feature.dart';")||
        !yaml.includes(pub)||!current.includes(imp)||
        !new RegExp('^\\s*'+variable+',\\s*$','m').test(current))
       throw Error('RC382 registered custom feature is incomplete: '+id);
