@@ -26,6 +26,7 @@ const DEFAULT_SOURCE=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const COPY_EXCLUDES=new Set([
   '.git','node_modules','.dart_tool','.gradle','.idea','.vscode','.pub-cache',
   'build','coverage','dist','Pods','.next','.env','.env.local',
+  'feature-backups','retired-fable-contracts','source-backups',
 ]);
 const REQUIRED_OUTPUTS=Object.freeze([
   'assets/config/backend.json','assets/config/frontend-setup.json',
@@ -100,8 +101,10 @@ function copyStarter(source,destination){
       if(rel==='' || rel==='.')return true;
       const segments=rel.split(sep);
       if(segments.some(s=>COPY_EXCLUDES.has(s)||
-          /^\\.env(?:\\.|$)/.test(s)||
-          /\\.(?:keystore|jks|p12|p8|pem|key)$/i.test(s)))return false;
+          /^\.env(?:\.|$)/.test(s)||
+          /^(?:\.npmrc|\.pypirc|\.netrc|credentials\.json|service-account\.json|google-services\.json|google-service-info\.plist)$/i.test(s)||
+          /(?:firebase-adminsdk.*\.json|\.mobileprovision)$/i.test(s)||
+          /\.(?:keystore|jks|p12|p8|pem|key)$/i.test(s)))return false;
       if(lstatSync(path).isSymbolicLink())
         throw Error('Flutter starter contains a symbolic link: '+rel);
       copied++;
@@ -138,11 +141,16 @@ function outputAudit(root,kind,profile,sourcePin){
     if(!existsSync(join(root,path)))issues.push('Missing actual Wizard output: '+path);
   const config=JSON.parse(readFileSync(join(root,'assets/config/backend.json'),'utf8'));
   const decisions=JSON.parse(readFileSync(join(root,'assets/config/frontend-setup.json'),'utf8'));
+  const projectDecisions=JSON.parse(readFileSync(join(root,'.fable/frontend-setup.json'),'utf8'));
+  if(JSON.stringify(decisions)!==JSON.stringify(projectDecisions))
+    issues.push('W4 app and project reviewed Wizard decision copies disagree');
   if(kind==='fable'){
     if(config.backend?.kind!=='fable'||config.backend?.adapter!=='fable-contract'||
         config.backend?.status!=='ready'||config.contractImported!==true)
       issues.push('Fable adapter did not import a verified ready contract');
-    if(decisions.projectBound!==true||decisions.contractHash!==sourcePin?.expectedContractHash||
+    if(decisions.projectBound!==true||decisions.backendAuthority!==true||
+       decisions.source!=='backend-contract-export'||
+       decisions.contractHash!==sourcePin?.expectedContractHash||
        decisions.projectId!==sourcePin?.expectedProjectId)
       issues.push('Fable setup does not match independent project and contract pins');
     for(const name of ['contract.json','flutter-handoff.json','openapi.json',
@@ -151,7 +159,8 @@ function outputAudit(root,kind,profile,sourcePin){
         issues.push('Fable imported contract missing: '+name);
   }else{
     if(config.backend?.kind!=='other'||config.backend?.status!=='pending'||
-       config.contractImported!==false||decisions.backendAuthority!==false)
+       config.contractImported!==false||decisions.backendAuthority!==false||
+       decisions.projectBound!==false)
       issues.push('External Backend was incorrectly activated as Fable');
     if(existsSync(join(root,'assets/contracts/contract.json')))
       issues.push('Stale Fable contract still active in Other Backend project');
