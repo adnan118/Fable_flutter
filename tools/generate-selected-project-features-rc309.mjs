@@ -13,7 +13,7 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {planPinnedTypedFeature} from './generate-typed-feature-rc116.mjs';
 import {planW5AppFeatureBinding} from './w5-app-feature-binding.mjs';
-import {verifyGeneratedSelectedFeatures} from './verify-selected-project-features-rc311.mjs';
+import {verifyGeneratedSelectedFeatures,verifySelectedAppBindings} from './verify-selected-project-features-rc311.mjs';
 import {pathEntryExists,assertRegularProjectPath,generatedTreeExactlyMatches} from './rc366-safe-source-tree.mjs';
 
 const HASH=/^[0-9a-f]{64}$/;
@@ -68,7 +68,7 @@ function unchanged(root,saved){
 function pathWithin(root,target){
   return target.startsWith(root+sep)&&target!==root;
 }
-function assembleBinding(root,ids){
+function assembleBinding(root,ids,alreadyPresent){
   const pubspecPath=join(root,'pubspec.yaml');
   const registryPath=join(root,'lib/src/generated/feature_registry.dart');
   for(const dir of [root,join(root,'lib'),join(root,'lib/src'),
@@ -77,12 +77,18 @@ function assembleBinding(root,ids){
   const initialPubspec=readFileSync(pubspecPath,'utf8');
   const initialRegistry=readFileSync(registryPath,'utf8');
   let pubspec=initialPubspec,registry=initialRegistry;
-  // Compute ALL registry/pubspec edits in memory before touching the project.
+  // Reuse only exact and fully wired existing packages, never insert a
+  // duplicate dependency/registry entry or re-write their source files.
+  const reused=ids.filter(id=>alreadyPresent.has(id));
+  if(reused.length)
+    verifySelectedAppBindings(pubspec,registry,reused);
   for(const featureId of ids){
+    if(alreadyPresent.has(featureId))continue;
     const next=planW5AppFeatureBinding({pubspec,registry,featureId});
     pubspec=next.pubspec;
     registry=next.registry;
   }
+  verifySelectedAppBindings(pubspec,registry,ids);
   return {pubspecPath,registryPath,initialPubspec,initialRegistry,pubspec,registry};
 }
 function args(argv){
@@ -118,16 +124,27 @@ export function generateSelectedProjectFeatures(options){
   const ids=selection(root);
   const saved=snapshots(root);
   const all=ids.map(featureId=>{
+    const destination=join(root,'packages/features/fable_'+featureId);
+    if(!pathWithin(root,destination))
+      throw Error('Package destination escaped selected project: '+featureId);
+    const existing=pathEntryExists(destination);
     const planned=planPinnedTypedFeature(root,{
       featureId,expectedProjectId:options.expectedProjectId,
       expectedContractHash:options.expectedContractHash,
+      allowExistingPackageForVerification:existing,
     });
-    const destination=join(root,'packages/features/fable_'+featureId);
-    if(!pathWithin(root,destination)||pathEntryExists(destination))
-      throw Error('Package destination already exists or is unsafe: '+featureId);
-    return {...planned,featureId,destination};
+    // Reuse an existing package only when its *entire tree* exactly matches
+    // today's independently signed render. A modified or foreign package
+    // is preserved, and the whole batch refuses before any new write.
+    if(existing && !generatedTreeExactlyMatches(destination,planned.files,
+       'packages/features/fable_'+featureId+'/'))
+      throw Error('Existing generated feature differs from signed source: '+featureId+
+        '; preserve it and review before adding new features');
+    return {...planned,featureId,destination,existing};
   });
-  const binding=options.wireApp===true?assembleBinding(root,ids):null;
+  const reused=new Set(all.filter(x=>x.existing).map(x=>x.featureId));
+  const pending=all.filter(x=>!x.existing);
+  const binding=options.wireApp===true?assembleBinding(root,ids,reused):null;
   const totalFiles=all.reduce((sum,item)=>sum+item.files.size,0);
   if(totalFiles>2400)throw Error('RC309 feature batch exceeds safe file cap');
   const report={
@@ -135,7 +152,8 @@ export function generateSelectedProjectFeatures(options){
     projectId:options.expectedProjectId,
     projectContractHash:options.expectedContractHash,
     selected:ids.length,operations:all.reduce((n,x)=>n+x.plan.operations.length,0),
-    files:totalFiles,appWiringRequested:Boolean(binding),
+    files:totalFiles,reusedPackages:reused.size,createdPackages:pending.length,
+    appWiringRequested:Boolean(binding),
     features:all.map(x=>({
       featureId:x.featureId,files:x.files.size,
       methods:[...new Set(x.plan.operations.map(op=>op.method))].sort(),
@@ -157,11 +175,15 @@ export function generateSelectedProjectFeatures(options){
   const created=[];
   try{
     unchanged(root,saved);
-    for(const x of all)
+    for(const x of pending)
       if(pathEntryExists(x.destination))
         throw Error('Feature appeared after preflight: '+x.featureId);
+    for(const x of all.filter(feature=>feature.existing))
+      if(!generatedTreeExactlyMatches(x.destination,x.files,
+          'packages/features/fable_'+x.featureId+'/'))
+        throw Error('Existing feature changed since batch planning: '+x.featureId);
     stage=mkdtempSync(join(root,'packages/features/.rc309-stage-'));
-    for(const feature of all){
+    for(const feature of pending){
       const base='packages/features/fable_'+feature.featureId+'/';
       const directory=join(stage,feature.featureId);
       mkdirSync(directory,{recursive:false});
@@ -203,7 +225,7 @@ export function generateSelectedProjectFeatures(options){
       readFileSync(binding.pubspecPath,'utf8')!==binding.initialPubspec||
       readFileSync(binding.registryPath,'utf8')!==binding.initialRegistry))
       throw Error('App pubspec/feature registry changed during preflight');
-    for(const feature of all){
+    for(const feature of pending){
       if(pathEntryExists(feature.destination))
         throw Error('Package appeared while staging: '+feature.featureId);
       renameSync(join(stage,feature.featureId),feature.destination);
@@ -215,9 +237,11 @@ export function generateSelectedProjectFeatures(options){
       if(readFileSync(binding.pubspecPath,'utf8')!==binding.initialPubspec||
          readFileSync(binding.registryPath,'utf8')!==binding.initialRegistry)
         throw Error('App source changed while committing feature packages');
-      writeFileSync(binding.pubspecPath,binding.pubspec,'utf8');
-      writeFileSync(binding.registryPath,binding.registry,'utf8');
-
+      // Do not rewrite app files when every selected source is already wired.
+      if(binding.pubspec!==binding.initialPubspec)
+        writeFileSync(binding.pubspecPath,binding.pubspec,'utf8');
+      if(binding.registry!==binding.initialRegistry)
+        writeFileSync(binding.registryPath,binding.registry,'utf8');
     }
     // Source receipt: compare every committed file to the fully verified
     // preflight source before announcing source-level success (not a test).
@@ -292,7 +316,7 @@ function main(){
   const options=args(process.argv.slice(2));
   if(options.help){
     console.log('pnpm run wizard:feature:batch -- --expected-project-id <ID> --expected-contract-hash <SHA256> [--apply --wire-app] [--root PATH]');
-    console.log('Preview first with --wire-app (no writes); --apply stages all selected feature packages and --wire-app binds app. No tests or downloads.');
+    console.log('Preview first with --wire-app (no writes); --apply preserves byte-exact existing generated packages and stages only missing selected features; --wire-app binds any new packages without duplicating existing links. No tests or downloads.');
     return;
   }
   console.log(JSON.stringify(generateSelectedProjectFeatures(options),null,2));
