@@ -8,6 +8,7 @@ import {resolve,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {compareW3CurrentHandoff,W3_REQUIRED_DOCUMENTS} from './w3-handoff-integrity.mjs';
+import {pathEntryExists} from './rc366-safe-source-tree.mjs';
 import {verifyFableContract} from './verify-fable-contract.mjs';
 
 const REQUIRED_KEYS=new Set([
@@ -78,6 +79,43 @@ function readFlutterImport(root) {
     out[name]=readSafeDocument(root,'assets/contracts/'+name);
   return out;
 }
+/** Verify BOTH copies of the reviewed W3 wizard decision snapshot.
+ * A matching copied contract alone must not authorize an unrelated Wizard
+ * choice, or a source-mode import masquerading as a pinned project. */
+export function inspectW3ReviewedWizard(root,contract,handoff){
+  const paths=['assets/config/frontend-setup.json','.fable/frontend-setup.json'];
+  const snapshots=paths.map(path=>readSafeDocument(root,path));
+  const [app,project]=snapshots;
+  const expected=contract?.core?.frontendSetup;
+  if(!expected||expected.kind!=='fable.frontend-setup-decisions'||
+     expected.schemaVersion!==1||expected.projectId!==contract?.project?.id||
+     JSON.stringify(expected)!==JSON.stringify(handoff?.frontendSetup))
+    throw Error('W3 backend contract does not carry matching reviewed Wizard decisions');
+  for(const snapshot of snapshots){
+    if(snapshot?.kind!=='fable.flutter-frontend-setup'||
+       snapshot.schemaVersion!==1||snapshot.source!=='backend-contract-export'||
+       snapshot.backendAuthority!==true||snapshot.projectBound!==true||
+       snapshot.projectId!==contract.project.id||
+       snapshot.contractHash!==contract.contractHash||
+       snapshot.mode!=='import'&&snapshot.mode!=='manual-review'||
+       JSON.stringify(snapshot.decisionSnapshot)!==JSON.stringify(expected))
+      throw Error('W3 Flutter Wizard decisions are not pinned to the imported Backend project');
+  }
+  if(JSON.stringify(app)!==JSON.stringify(project))
+    throw Error('W3 Flutter app/project Wizard copies disagree');
+  const standalone=join(root,'assets/contracts/frontend-setup.json');
+  if(pathEntryExists(standalone)){
+    const imported=readSafeDocument(root,'assets/contracts/frontend-setup.json');
+    if(imported?.kind!=='fable.frontend-setup-handoff'||
+       imported.schemaVersion!==1||
+       imported.backendContractHash!==contract.contractHash||
+       imported.project?.id!==contract.project.id||
+       JSON.stringify(imported.setup)!==JSON.stringify(expected))
+      throw Error('W3 standalone frontend setup conflicts with signed contract');
+  }
+  return {reviewedWizardDecisionsPinned:true,decisionCopies:paths.length,
+    standaloneSetupPresent:pathEntryExists(standalone),sourceOnly:true};
+}
 function verifyBackendGitCheckpoint(root,expected) {
   // Git protects committed source identity; a dirty tracked tree refuses
   // acceptance, and an old historical commit is NOT substituted for main.
@@ -100,6 +138,8 @@ export function runW3CurrentHandoff(options) {
   const frontendConfiguration=inspectW3ImportedConfig(options.flutterRoot);
   const backend=readBackendExport(options.backendExportRoot);
   const imported=readFlutterImport(options.flutterRoot);
+  const wizard=inspectW3ReviewedWizard(options.flutterRoot,
+    backend['contract.json'],backend['flutter-handoff.json']);
   const repo=verifyBackendGitCheckpoint(options.backendRepoRoot,options.expectedBackendSha);
   const verified=verifyFableContract(options.flutterRoot,{
     mode:'project',
@@ -116,6 +156,10 @@ export function runW3CurrentHandoff(options) {
   // source commit produced an already exported contract. Remains unverified.
   report.backendExportProvenanceVerified=false;
   report.frontendConfiguration=frontendConfiguration;
+  report.frontendWizard=wizard;
+  report.w3SourceClosure={contractAndWizardSourceBound:report.passed,
+    backendExportGenerationProvenanceEstablished:false,
+    realProjectAcceptanceExecuted:false,productionReady:false};
   return report;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
