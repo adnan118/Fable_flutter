@@ -1354,8 +1354,8 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC309",
-    "date": "2026-11-16",
+    "lastSourceUpdate": "RC391",
+    "date": "2026-11-18",
     "backendReferenceCommit": "0604d91ba22277f84fe1f4715b981683e0139754",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
     "sourceImplemented": [
@@ -1388,7 +1388,8 @@
       "RC308 Flutter 3.50.0/Dart 3.14.0 source-pinned; official Flutter template defaults Gradle 9.5/AGP 9.3.1/Kotlin KGP 2.4.20/Java 17 and SDK 36/36/24/NDK 28.2.13676358",
       "RC308 one-command read-only project toolchain guard verifies source tuple or exact installed Flutter/Dart before builds; Flutter SDK installation is never done by project",
       "RC309 one-command W4/W5 source batch uses project-pinned signed contracts for all selected custom features, previews all operations, composes pubspec and registry once, and stages source packages before app writes",
-      "RC309 verifies committed source bytes against preflight, uses durable backup and compare-before-rollback to avoid overwriting unrelated concurrent edits"
+      "RC309 verifies committed source bytes against preflight, uses durable backup and compare-before-rollback to avoid overwriting unrelated concurrent edits",
+      "RC387–RC391 W3/W4 source corrections: reviewed Flutter Wizard snapshots bound to signed Backend handoff, source symlink refusal, secure 12-path Wizard materialization with real project package names, and independent W3 verification inside W4 Fable scenarios"
     ],
     "sourceTestEvidence": "RC309 source parser inspected; regression tests authored but deliberately not executed per user request. No Flutter 3.50 Android build or real Backend integration performed.",
     "unverified": [
@@ -1415,7 +1416,8 @@
       "RC306 Flutter typed failure compile and real idempotency recovery E2E deferred to user; no automatic result recovery endpoint claimed",
       "RC308 Flutter 3.50 real Android plugin dependency resolution, Gradle build, Kotlin built-in compatibility and native device E2E left for user",
       "RC309 multi-selected generated Dart feature packages / Flutter 3.50 compilation and end-to-end navigation left to user; staged batch source does not certify production",
-      "RC309 supports only signed typed selected features; unsupported operations halt the whole batch until reviewed"
+      "RC309 supports only signed typed selected features; unsupported operations halt the whole batch until reviewed",
+      "RC391 W3/W4 source delivered but no current real Backend export and Flutter project handoff or 12-case materialized Wizard matrix executed by owner; Backend export generation origin provenance and native builds remain unverified"
     ],
     "w5Closed": false,
     "w6Closed": false,
@@ -1440,5 +1442,34 @@
     "reference": "toolchain/fable-flutter-3.50.json",
     "realBuildVerified": false,
     "deviceE2EVerified": false
+  },
+  "w3W4SourceMilestone": {
+    "schemaVersion": 1,
+    "kind": "fable.w3-w4-source-delivery",
+    "lastSourceUpdate": "RC391",
+    "date": "2026-11-18",
+    "w3SourceCodeDelivered": true,
+    "w4SourceCodeDelivered": true,
+    "w3Components": [
+      "Current Backend export compared with imported contract/OpenAPI/mobile operations",
+      "Imported Backend and Flutter project identity pinned to independent project ID and signed contract SHA256",
+      "Reviewed Wizard app+project decision snapshots compared to signed Backend setup",
+      "Non-symlinked source document import and post-copy independent project contract verification"
+    ],
+    "w4Components": [
+      "Fable versus Other Backend guided developer/agent and minimal/standard/complex scenario orchestration",
+      "Full Flutter starter materialization with secret exclusion and project-specific package renaming",
+      "Config-only scenarios not mislabeled as full Flutter projects",
+      "Fable scenarios reuse independent W3 contract and reviewed Wizard source checks",
+      "Other Backend remains unverified/pending without inheriting Fable Auth or DPoP"
+    ],
+    "w3ExportOriginProvenanceVerified": false,
+    "w3RealGeneratedProjectExecuted": false,
+    "w4TwelveMaterializedScenariosExecuted": false,
+    "nativeDartFlutterExecuted": false,
+    "sourceOnly": true,
+    "w3RuntimeAccepted": false,
+    "w4RuntimeAccepted": false,
+    "productionReady": false
   }
 }
