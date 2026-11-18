@@ -555,6 +555,14 @@ function adapter(op,projectHash){
     ]:[]),
     '      rethrow;',
     '    }',
+    ...(op.method==='POST'?[
+      '    } catch(_){',
+      '      // The unexpected failure may occur after Backend committed CREATE.',
+      '      // Do not report definite failure or encourage an automatic retry.',
+      '      if(mutationStarted)',
+      '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
+      '      throw const TypedReadFailure(TypedReadFailureKind.unknown);',
+    ]:[]),
     '  }','}');
   return line(...parts);
 }
@@ -1919,6 +1927,11 @@ function signedOwnerDeleteFiles(op,contractHash){
     '        }.contains(e.kind))',
     '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     '      rethrow;',
+    '    } catch(_){',
+    '      // A write may have committed before an unrecognized failure.',
+    '      if(mutationStarted)',
+    '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
+    '      throw const TypedReadFailure(TypedReadFailureKind.unknown);',
     '    }',
     '  }',
     '}');
@@ -2170,6 +2183,12 @@ function signedOwnerPatchFiles(op,contractHash){
     '        }.contains(e.kind))',
     '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     '      rethrow;',
+    '    } catch(_){',
+    '      // An unrecognized transport/decoder failure after PATCH dispatch',
+    '      // cannot prove the Backend rejected the mutation.',
+    '      if(mutationStarted)',
+    '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
+    '      throw const TypedReadFailure(TypedReadFailureKind.unknown);',
     '    }',
     '  }',
     '}');
