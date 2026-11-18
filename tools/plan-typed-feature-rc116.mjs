@@ -747,6 +747,22 @@ export function planTypedFeature({featureId,contract,openapi,requirements,select
       :spec.method==='PATCH'?validatedOwnerPatch(op,route,featureId,params,id,managedScoped):[];
     if(bodyFields.some(f=>params.includes(f.name)))
       fail('request/body/path parameter name conflicts with response fields: '+id);
+    // Prevent Dart declarations that collide with generated factory/member
+    // methods, as well as a signed route parameter shadowing page/search/sort.
+    if(resultKind==='single' &&
+       fields.some(f=>f.name==='fromJson'||f.name==='toDomain'))
+      fail('response field collides with generated Dart DTO method: '+id);
+    if(['POST','PATCH'].includes(spec.method)&&
+       bodyFields.some(f=>f.name==='toJson'))
+      fail('write field collides with generated Dart request serializer: '+id);
+    if(resultKind==='paginated-list'){
+      const queryNames=new Set(['page',
+        ...(paginated?.searchPageSupported?['search']:[]),
+        ...(paginated?.sortFields.length?['sort']:[]),
+        ...(paginated?.filters??[]).map(f=>f.name)]);
+      if(params.some(name=>queryNames.has(name)))
+        fail('signed path parameter collides with generated paging/query arguments: '+id);
+    }
     // Preserve signed path types: the generated Dart boundary must enforce
     // UUID shapes before networking while leaving signed strings untouched.
     const pathParamKinds=params.map(name=>({
