@@ -1354,7 +1354,7 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC391",
+    "lastSourceUpdate": "RC404",
     "date": "2026-11-18",
     "backendReferenceCommit": "0604d91ba22277f84fe1f4715b981683e0139754",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
@@ -1389,7 +1389,10 @@
       "RC308 one-command read-only project toolchain guard verifies source tuple or exact installed Flutter/Dart before builds; Flutter SDK installation is never done by project",
       "RC309 one-command W4/W5 source batch uses project-pinned signed contracts for all selected custom features, previews all operations, composes pubspec and registry once, and stages source packages before app writes",
       "RC309 verifies committed source bytes against preflight, uses durable backup and compare-before-rollback to avoid overwriting unrelated concurrent edits",
-      "RC387–RC391 W3/W4 source corrections: reviewed Flutter Wizard snapshots bound to signed Backend handoff, source symlink refusal, secure 12-path Wizard materialization with real project package names, and independent W3 verification inside W4 Fable scenarios"
+      "RC387–RC391 W3/W4 source corrections: reviewed Flutter Wizard snapshots bound to signed Backend handoff, source symlink refusal, secure 12-path Wizard materialization with real project package names, and independent W3 verification inside W4 Fable scenarios",
+      "RC402 W6 reviewed Wizard now preflights newly selected unbound features, imports signed Backend, generates missing selected typed packages via RC401, wires them to app and applies strict W6 sync",
+      "RC403 W6 refuses to silently erase unknown installed feature registry imports/entries, while previews explicitly report pending selected features",
+      "RC404 W6 source-delivery receipt distinguishes finalized signed source integration from unexecuted Flutter SDK, Backend runtime and device tests"
     ],
     "sourceTestEvidence": "RC309 source parser inspected; regression tests authored but deliberately not executed per user request. No Flutter 3.50 Android build or real Backend integration performed.",
     "unverified": [
@@ -1417,7 +1420,8 @@
       "RC308 Flutter 3.50 real Android plugin dependency resolution, Gradle build, Kotlin built-in compatibility and native device E2E left for user",
       "RC309 multi-selected generated Dart feature packages / Flutter 3.50 compilation and end-to-end navigation left to user; staged batch source does not certify production",
       "RC309 supports only signed typed selected features; unsupported operations halt the whole batch until reviewed",
-      "RC391 W3/W4 source delivered but no current real Backend export and Flutter project handoff or 12-case materialized Wizard matrix executed by owner; Backend export generation origin provenance and native builds remain unverified"
+      "RC391 W3/W4 source delivered but no current real Backend export and Flutter project handoff or 12-case materialized Wizard matrix executed by owner; Backend export generation origin provenance and native builds remain unverified",
+      "W6 source pipeline delivered in RC404; current real generated project, 12 Wizard scenarios, Backend execution and Flutter/Android/iOS live E2E were intentionally not executed under owner instruction; release gate remains NO_GO"
     ],
     "w5Closed": false,
     "w6Closed": false,
@@ -1471,5 +1475,48 @@
     "w3RuntimeAccepted": false,
     "w4RuntimeAccepted": false,
     "productionReady": false
+  },
+  "w6SourceMilestone": {
+    "schemaVersion": 1,
+    "kind": "fable.w6-reviewed-feature-source-delivery",
+    "lastSourceUpdate": "RC404",
+    "date": "2026-11-18",
+    "w6SourceCodeDelivered": true,
+    "w6SourceIntegrationClosed": true,
+    "backendContractRequired": true,
+    "independentProjectAndContractPinRequired": true,
+    "workflow": [
+      "Review explicit project-feature selection with a trusted signed Backend handoff",
+      "Preflight missing-but-unbound selected feature IDs without installing incomplete packages",
+      "Import pinned contract and Flutter-owned decisions with durable backup and conditional recovery",
+      "Generate missing selected packages from signed operations and retain byte-exact existing packages",
+      "Wire only new package dependencies and Flutter feature registry entries",
+      "Run strict final W6 synchronization, rejecting any remaining missing package or orphan registration",
+      "Preserve custom/foreign registry changes, cross-package pubspec dependencies and Dart imports before any package archive",
+      "Archive rather than erase eligible removed packages and retain source recovery receipt",
+      "Report sourceApplied versus native-runtime verification separately"
+    ],
+    "requiredSourceControls": {
+      "signedOperationPlanner": true,
+      "incrementalGeneration": true,
+      "selectedPackageBindings": true,
+      "pendingOnlyDuringPreview": true,
+      "strictFinalSync": true,
+      "identityAndContractPinned": true,
+      "sourceTreeIntegrity": true,
+      "preserveExistingProjectCode": true,
+      "preserveCustomRegistryEntries": true,
+      "declaredDependencyPruneProtection": true,
+      "archivesAndConditionalRecovery": true
+    },
+    "pendingSourceSteps": [],
+    "backendLiveE2EExecuted": false,
+    "flutterSDKBuildExecuted": false,
+    "twelveWizardProjectsRun": false,
+    "deviceTested": false,
+    "sourceOnly": true,
+    "releaseAcceptanceW6Closed": false,
+    "productionReady": false,
+    "ownerDirection": "No tests executed; source milestones are complete but cannot certify runtime behavior."
   }
 }
