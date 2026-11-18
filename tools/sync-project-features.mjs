@@ -421,11 +421,19 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).hr
       expectedProjectId:o['expected-project-id']??null,
       expectedContractHash:o['expected-contract-hash']??null,
     });
-    // The explicit import writes matching client assets before feature sync.
+    // RC396: there must be ONE protected apply path. Copying W3 assets and
+    // applying W6 separately used to bypass the durable RC394 rollback
+    // when the CLI (rather than the interactive Wizard) was invoked.
     if(o.apply){
-      const {saveFrontendSetup}=await import('./flutter-setup-wizard.mjs');
-      saveFrontendSetup(root,imported,{apply:true,sourceDir:o.source??root});
+      const {applyReviewedSnapshot}=await import('./flutter-setup-wizard.mjs');
+      const result=await applyReviewedSnapshot(root,imported,{
+        source:o.source??root,prune:Boolean(o.prune),
+      });
+      console.log(JSON.stringify(result,null,2));
+    }else{
+      console.log(JSON.stringify(
+        syncProjectFeatures(root,imported,{apply:false,prune:Boolean(o.prune)}),
+        null,2));
     }
-    console.log(JSON.stringify(syncProjectFeatures(root,imported,{apply:Boolean(o.apply),prune:Boolean(o.prune)}),null,2));
   }catch(e){console.error(String(e?.message??e));process.exitCode=1;}
 }
