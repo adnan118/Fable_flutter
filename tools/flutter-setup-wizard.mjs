@@ -371,8 +371,14 @@ export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={
   requirePruningPin(snapshot,prune);
   const hasFeatures=snapshot.backendAuthority && snapshot.decisionSnapshot?.decisions?.frontendFeatures;
   const sync=hasFeatures?await import('./sync-project-features.mjs'):null;
-  // Preflight feature inventory before copying any project assets.
-  if(sync && snapshot.projectBound)sync.planFeatureSync(root,snapshot,{prune});
+  // RC402: a newly selected feature cannot be installed before W3 has
+  // imported its signed Backend catalog. Allow its *absence only during
+  // preflight*; actual W6 apply still requires a fully rendered package.
+  const pendingFeatures=sync&&snapshot.projectBound
+    ?sync.planFeatureSync(root,snapshot,{
+      prune,allowPendingCustom:true,
+    }).pendingProjectFeatures
+    :[];
   // W3 import and W6 feature sync must not leave a mixed project if sync
   // refuses a signed feature after the Backend assets have been replaced.
   const protect=Boolean(sync&&snapshot.projectBound);
@@ -380,6 +386,7 @@ export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={
   const backup=protect?durableWizardSetupBackup(root,before):null;
   const written=new Map();
   let result;
+  let featureBatchCommitted=false;
   try{
     result=saveFrontendSetup(root,snapshot,{
       apply:true,sourceDir:source??null,
@@ -387,12 +394,33 @@ export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={
         ?(name,bytes)=>written.set(name,Buffer.from(bytes))
         :null,
     });
+    if(pendingFeatures.length){
+      // Only this reviewed, independently pinned project may create the
+      // selected packages. RC309 checks every package against the signed
+      // operation contract and never overwrites edited existing sources.
+      const {generateSelectedProjectFeatures}=await import(
+        './generate-selected-project-features-rc309.mjs');
+      result.featureGeneration=generateSelectedProjectFeatures({
+        root,expectedProjectId:snapshot.projectId,
+        expectedContractHash:snapshot.contractHash,
+        apply:true,wireApp:true,
+      });
+      featureBatchCommitted=true;
+    }
     if(sync)
       result.featureSync=sync.syncProjectFeatures(root,snapshot,{
         apply:snapshot.projectBound,prune});
   }catch(error){
-    // May have failed after the FIRST individual file write, not only after
-    // the entire setup copy. Restore each proven write independently.
+    // If codegen already committed new signed packages, reverting the W3
+    // contract here would leave their signed operation hashes pointing to
+    // the wrong Backend. Preserve both the signed import and the generated
+    // code and require an explicit W6 sync recovery, never silent rollback.
+    if(featureBatchCommitted)
+      throw Error('W6 sync incomplete after signed source generation: '+
+        error.message+'; keep generated package sources and imported contract; '+
+        'rerun W6 sync after fixing the reported issue'+
+        (backup?'; prior source backup: '+backup:''));
+    // An earlier partial import can still be rolled back byte-for-byte.
     const warnings=protect
       ?restoreWizardSetupIfUnchanged(root,before,written):[];
     if(protect&&written.size===0)
