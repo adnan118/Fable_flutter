@@ -44,7 +44,7 @@ function allSource(root,skip=new Set()){
   walk(join(root,'packages'));
   return out;
 }
-export function wiredTypedProjectFeatures(root,selected){
+export function wiredTypedProjectFeatures(root,selected,{allowPending=false,pending=[]}={}){
   // A declared custom feature is NEVER optional during feature sync.
   // Omitting a missing package from the registry would silently remove it
   // from app navigation even though the project still requests it.
@@ -70,8 +70,19 @@ export function wiredTypedProjectFeatures(root,selected){
     const source=join(packageRoot,'lib/src/project_feature.dart');
     const pub='  '+packageName+':\n    path: packages/features/'+packageName;
     const imp="import 'package:"+packageName+"/"+packageName+".dart';";
-    if(!pathEntryExists(packageRoot)||!pathEntryExists(source))
+    if(!pathEntryExists(packageRoot)||!pathEntryExists(source)){
+      // RC402: an explicitly selected *new* feature may be generated during
+      // this same reviewed Wizard apply, but may not be inserted in the app
+      // registry until the exact signed package exists. Existing damaged
+      // packages and orphan bindings remain hard errors.
+      if(allowPending&&!pathEntryExists(packageRoot)&&
+         !yaml.includes(pub)&&!current.includes(imp)&&
+         !new RegExp('^\\s*'+variable+',\\s*$','m').test(current)){
+        pending.push(id);
+        continue;
+      }
       throw Error('RC382 declared custom feature source missing: '+id);
+    }
     assertRegularProjectPath(root,packageRoot,'dir');
     assertRegularProjectPath(root,source,'file');
     if(!readFileSync(source,'utf8').includes('const '+variable+'=')||
@@ -153,7 +164,7 @@ function registry(features,projectFeatures=[]) {
     "\nconst List<FableFeature> installedFeatures = <FableFeature>[\n"+
     descriptors+"\n];\n";
 }
-export function planFeatureSync(root,verified,{prune=false}={}){
+export function planFeatureSync(root,verified,{prune=false,allowPendingCustom=false}={}){
   if(verified?.kind!=='fable.flutter-frontend-setup'||verified.backendAuthority!==true||
      verified.source!=='backend-contract-export'||typeof verified.contractHash!=='string')
      throw Error('Verified Fable Backend project setup required for feature sync');
@@ -188,7 +199,10 @@ export function planFeatureSync(root,verified,{prune=false}={}){
   // their own exact operation/permission mapping audit before any retirement.
   const protectedProjectFeatures=externalProjectFeatures?.features??[];
   if(!Array.isArray(protectedProjectFeatures))throw Error('Malformed project feature manifest');
-  const wiredProjectFeatures=wiredTypedProjectFeatures(rootDir,protectedProjectFeatures);
+  const pendingProjectFeatures=[];
+  const wiredProjectFeatures=wiredTypedProjectFeatures(rootDir,
+    protectedProjectFeatures,{allowPending:allowPendingCustom,
+      pending:pendingProjectFeatures});
   return {
     kind:'fable.flutter-feature-prune-plan',schemaVersion:1,
     projectId:verified.projectId,contractHash:verified.contractHash,
@@ -202,7 +216,7 @@ export function planFeatureSync(root,verified,{prune=false}={}){
     clientOnlyReview:declared.clientOnlyReview,
     protectedProjectFeatureCount:protectedProjectFeatures.length,
     projectFeatureManifestSha256:manifestSource===null?null:sha256(manifestSource),
-    wiredProjectFeatures,
+    wiredProjectFeatures,pendingProjectFeatures,
     requestedSource:local?.selectionSource??null,
     pruneAvailable:verified.projectBound===true,
     note:'Backend routes use enabled; hybrid and local Flutter packages are retained even if unsupported on the server; physical pruning is restricted to disabled server-only features.',
@@ -219,6 +233,8 @@ function removePushSections(src){
   return src;
 }
 function applyPrune(root,plan,{prune=false}={}){
+  if(plan.pendingProjectFeatures?.length)
+    throw Error('RC402 cannot apply W6 sync before pending signed features are generated');
   const project=resolve(root),current=json(join(project,'assets/contracts/contract.json'));
   // A second source-side authorization at the point of mutation protects
   // custom features added, removed or replaced after the preview/planning.
