@@ -23,11 +23,16 @@ function writeJSON(p,v){mkdirSync(dirname(p),{recursive:true});writeFileSync(p,J
 function allSource(root,skip=new Set()){
   const out=[];
   function walk(dir){
-    if(!existsSync(dir))return;
+    if(!pathEntryExists(dir))return;
+    // A dangling symlink to a source directory is still a project source.
+    // It must not disappear silently from the import-reference graph.
+    assertRegularProjectPath(root,dir,'dir');
     for(const ent of readdirSync(dir,{withFileTypes:true})){
       if(ent.name==='.git'||ent.name==='build'||ent.name==='.dart_tool'||ent.name==='node_modules'||ent.name==='backups')continue;
       const p=join(dir,ent.name),rel=relative(root,p).split(sep).join('/');
       if([...skip].some(part=>rel===part || rel.startsWith(part+'/')))continue;
+      if(ent.isSymbolicLink())
+        throw Error('RC383 source reference scan refuses symlink: '+rel);
       if(ent.isDirectory())walk(p);
       else if(ent.isFile()&&p.endsWith('.dart'))out.push(p);
     }
@@ -169,8 +174,16 @@ function applyPrune(root,plan,{prune=false}={}){
   const inventoryPath=join(project,'.fable/mobile-features.json');
   const appPath=join(project,'lib/src/app.dart');
   const packageYaml=join(project,'pubspec.yaml');
-  if(!existsSync(registryPath)||!existsSync(appPath)||!existsSync(packageYaml))
+  if(!pathEntryExists(registryPath)||!pathEntryExists(appPath)||
+     !pathEntryExists(packageYaml))
     throw Error('Flutter project source missing');
+  for(const path of [registryPath,appPath,packageYaml])
+    assertRegularProjectPath(project,path,'file');
+  const fableDir=join(project,'.fable');
+  assertRegularProjectPath(project,fableDir,'dir');
+  // Refuse to follow an external inventory symlink when writing selection.
+  if(pathEntryExists(inventoryPath))
+    assertRegularProjectPath(project,inventoryPath,'file');
   // The checked-in ci_fable repository is a reusable validation fixture,
   // not a customer project. Never physically delete template packages.
   if(prune &&
@@ -181,7 +194,8 @@ function applyPrune(root,plan,{prune=false}={}){
   }
   // Apply only after a real pinned Backend; source-only staging can preview.
   if(!plan.projectBound)throw Error('Feature removal requires an independently pinned Backend project ID and contract hash');
-  const pkgDirs=plan.disabled.map(id=>({id,rel:pathOf(id)})).filter(x=>existsSync(join(project,x.rel)));
+  const pkgDirs=plan.disabled.map(id=>({id,rel:pathOf(id)}))
+    .filter(x=>pathEntryExists(join(project,x.rel)));
   let app=readFileSync(appPath,'utf8');
   let yaml=readFileSync(packageYaml,'utf8');
   const blocked=[];
@@ -195,6 +209,21 @@ function applyPrune(root,plan,{prune=false}={}){
   // No unknown/custom source file is deleted.
   for(const {id,rel} of pkgDirs){
     if(!prune)continue;
+    const candidate=join(project,rel);
+    assertRegularProjectPath(project,candidate,'dir');
+    // A symlink anywhere inside a removed package is user-controlled source.
+    // Never delete that package until its ownership is reviewed explicitly.
+    function rejectLinks(dir){
+      for(const entry of readdirSync(dir,{withFileTypes:true})){
+        const child=join(dir,entry.name);
+        if(entry.isSymbolicLink())
+          throw Error('RC383 pruning a symlinked feature source is forbidden: '+relative(project,child));
+        if(entry.isDirectory())rejectLinks(child);
+        else if(!entry.isFile())
+          throw Error('RC383 unknown feature source type: '+relative(project,child));
+      }
+    }
+    rejectLinks(candidate);
     const importNeedle="package:fable_"+id+"/";
     const others=allSource(project,new Set([rel,'lib/src/generated']))
       .filter(file=>file!==appPath && readFileSync(file,'utf8').includes(importNeedle));
@@ -210,11 +239,20 @@ function applyPrune(root,plan,{prune=false}={}){
   // previous backup or delete any source tree before making the snapshot.
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
   const backup=resolve(project,'.fable','feature-backups',stamp);
-  if(existsSync(backup))throw Error('Backup collision');
-  const paths=[...archivePaths].filter(rel=>existsSync(join(project,rel)));
+  const backupParent=join(fableDir,'feature-backups');
+  if(pathEntryExists(backupParent))
+    assertRegularProjectPath(project,backupParent,'dir');
+  else mkdirSync(backupParent,{recursive:true});
+  assertRegularProjectPath(project,backupParent,'dir');
+  if(pathEntryExists(backup))throw Error('Backup collision');
+  const paths=[...archivePaths].filter(rel=>pathEntryExists(join(project,rel)));
   for(const rel of paths){
     const dst=join(backup,rel),src=join(project,rel);
+    // Backups are durable project sources; do not write through symlinks.
+    const isDirectory=lstatSync(src).isDirectory();
+    assertRegularProjectPath(project,src,isDirectory?'dir':'file');
     mkdirSync(dirname(dst),{recursive:true});
+    assertRegularProjectPath(project,dirname(dst),'dir');
     cpSync(src,dst,{recursive:true,force:false,errorOnExist:true});
   }
   const inventory={
