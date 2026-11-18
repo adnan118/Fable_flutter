@@ -152,7 +152,8 @@ export function generateSelectedProjectFeatures(options){
     projectId:options.expectedProjectId,
     projectContractHash:options.expectedContractHash,
     selected:ids.length,operations:all.reduce((n,x)=>n+x.plan.operations.length,0),
-    files:totalFiles,reusedPackages:reused.size,createdPackages:pending.length,
+    files:totalFiles,reusedPackages:reused.size,
+    plannedNewPackages:pending.length,createdPackages:0,
     appWiringRequested:Boolean(binding),
     features:all.map(x=>({
       featureId:x.featureId,files:x.files.size,
@@ -274,6 +275,7 @@ export function generateSelectedProjectFeatures(options){
     report.sourceTreeAttestation=attestation.packages;
     report.appWiringVerified=attestation.appWiringVerified;
     report.applied=true;report.appWired=Boolean(binding);
+    report.createdPackages=pending.length;
     report.preflight='COMMITTED_SOURCE_ONLY';
     report.backup=backup?relative(root,backup):null;
     return report;
