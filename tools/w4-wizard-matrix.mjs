@@ -18,6 +18,8 @@ import {
   runGuidedFlutterSetup,importBackendDecisions,manualFrontendDecisions,
   saveFrontendSetup,applyReviewedSnapshot,
 } from './flutter-setup-wizard.mjs';
+import {verifyFableContract} from './verify-fable-contract.mjs';
+import {inspectW3ReviewedWizard} from './verify-current-w3-handoff.mjs';
 
 export const W4_PROFILES=Object.freeze(['minimal','standard','complex']);
 export const W4_KINDS=Object.freeze(['fable','other']);
@@ -202,6 +204,22 @@ function outputAudit(root,kind,profile,sourcePin,materialized=false){
       'mobile-core-operations.json'])
       if(!existsSync(join(root,'assets/contracts',name)))
         issues.push('Fable imported contract missing: '+name);
+    // Run the SAME signed-project import verifier as W3 over the produced
+    // full Flutter app. A matching local config alone is never sufficient.
+    const signed=verifyFableContract(root,{
+      mode:'project',expectedProjectId:sourcePin.expectedProjectId,
+      expectedContractHash:sourcePin.expectedContractHash,
+    });
+    if(!signed.ok)
+      issues.push('W4 generated Fable contract failed independent W3 verification: '+
+        signed.failures.join(','));
+    else {
+      const contract=JSON.parse(readFileSync(
+        join(root,'assets/contracts/contract.json'),'utf8'));
+      const handoff=JSON.parse(readFileSync(
+        join(root,'assets/contracts/flutter-handoff.json'),'utf8'));
+      inspectW3ReviewedWizard(root,contract,handoff);
+    }
   }else{
     if(config.backend?.kind!=='other'||config.backend?.status!=='pending'||
        config.contractImported!==false||decisions.backendAuthority!==false||
