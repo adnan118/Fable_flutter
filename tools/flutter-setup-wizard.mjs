@@ -378,18 +378,25 @@ export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={
   const protect=Boolean(sync&&snapshot.projectBound);
   const before=protect?setupFileSnapshot(root):null;
   const backup=protect?durableWizardSetupBackup(root,before):null;
-  let written=null,result;
+  const written=new Map();
+  let result;
   try{
-    result=saveFrontendSetup(root,snapshot,{apply:true,sourceDir:source??null});
-    if(protect)written=setupFileSnapshot(root);
+    result=saveFrontendSetup(root,snapshot,{
+      apply:true,sourceDir:source??null,
+      onProtectedWrite:protect
+        ?(name,bytes)=>written.set(name,Buffer.from(bytes))
+        :null,
+    });
     if(sync)
       result.featureSync=sync.syncProjectFeatures(root,snapshot,{
         apply:snapshot.projectBound,prune});
   }catch(error){
-    const warnings=protect&&written
-      ?restoreWizardSetupIfUnchanged(root,before,written):[
-        'Wizard import may be incomplete; recover from the durable source backup',
-      ];
+    // May have failed after the FIRST individual file write, not only after
+    // the entire setup copy. Restore each proven write independently.
+    const warnings=protect
+      ?restoreWizardSetupIfUnchanged(root,before,written):[];
+    if(protect&&written.size===0)
+      warnings.push('No completed source writes recorded; inspect any partial copy in backup');
     throw Error('W3/W6 reviewed project apply refused: '+error.message+
       (backup?'; backup preserved: '+backup:'')+
       (warnings.length?'; review: '+warnings.join('; '):''));
@@ -443,8 +450,15 @@ export function reconcileManualWithBackend(manual,verified) {
       instructions:'Manual choices were checked against the verified Fable Backend; build and runtime authorization remain backend-owned.'}};
 }
 
-function saveFrontendSetupUnretired(root,snapshot,{apply=false,sourceDir=null}={}){
+function saveFrontendSetupUnretired(root,snapshot,{
+    apply=false,sourceDir=null,onProtectedWrite=null}={}){
   const project=resolve(root);
+  const recordWrite=rel=>{
+    if(onProtectedWrite==null)return;
+    const file=join(project,rel);
+    assertRegularProjectPath(project,file,'file');
+    onProtectedWrite(rel,readFileSync(file));
+  };
   if(snapshot?.kind!=='fable.flutter-frontend-setup')throw Error('Refusing unsupported frontend setup');
   const frontendOwned=readFrontendOwnedDecisions(project,snapshot.projectId);
   const summary={
@@ -473,13 +487,24 @@ function saveFrontendSetupUnretired(root,snapshot,{apply=false,sourceDir=null}={
       throw Error('Backend decisions changed since the terminal review');
     const to=resolve(project,'assets/contracts');
     mkdirSync(to,{recursive:true});
-    for(const file of CONTRACT_FILES){const from=resolve(dir,file),dest=resolve(to,file);if(from!==dest)copyFileSync(from,dest);}
-    if(pathEntryExists(join(dir,'frontend-setup.json'))){const from=resolve(dir,'frontend-setup.json'),dest=resolve(to,'frontend-setup.json');if(from!==dest)copyFileSync(from,dest);}
+    for(const file of CONTRACT_FILES){
+      const from=resolve(dir,file),dest=resolve(to,file);
+      if(from!==dest){copyFileSync(from,dest);recordWrite('assets/contracts/'+file);}
+    }
+    if(pathEntryExists(join(dir,'frontend-setup.json'))){
+      const from=resolve(dir,'frontend-setup.json');
+      const dest=resolve(to,'frontend-setup.json');
+      if(from!==dest){
+        copyFileSync(from,dest);
+        recordWrite('assets/contracts/frontend-setup.json');
+      }
+    }
     outputFile(project,'assets/config/backend.json',{
       schemaVersion:1,kind:'fable.mobile-backend-configuration',
       backend:{kind:'fable',adapter:'fable-contract',status:'ready'},
       contractImported:true,
     });
+    recordWrite('assets/config/backend.json');
     // A source can change between the preflight hash and the final copy.
     // The imported assets must satisfy the independent pinned verifier, not
     // merely carry the original unsigned review decision in memory.
@@ -505,8 +530,12 @@ function saveFrontendSetupUnretired(root,snapshot,{apply=false,sourceDir=null}={
     });
   }
   outputFile(project,OUTPUT_PATH,snapshot);
+  recordWrite(OUTPUT_PATH);
   outputFile(project,PROJECT_PATH,snapshot);
-  saveFrontendOwnedDecisions(project,frontendOwned,{apply:true});
+  recordWrite(PROJECT_PATH);
+  saveFrontendOwnedDecisions(project,frontendOwned,{
+    apply:true,onWrite:onProtectedWrite,
+  });
   summary.frontendOwnedChoicesPreserved=true;
   if(!snapshot.backendAuthority)
     reportSelectedFeatureGapsAfterApply(project,summary); // manual / Other Backend
@@ -514,13 +543,16 @@ function saveFrontendSetupUnretired(root,snapshot,{apply=false,sourceDir=null}={
 }
 // Every explicit Other Backend apply protects previous Fable source; a
 // rejected manual configuration is rolled back with the active contract.
-export function saveFrontendSetup(root,snapshot,{apply=false,sourceDir=null}={}){
+export function saveFrontendSetup(root,snapshot,{
+    apply=false,sourceDir=null,onProtectedWrite=null}={}){
   if(apply && snapshot?.kind==='fable.flutter-frontend-setup' &&
      snapshot.backendAuthority!==true){
     return applyOtherBackendWithArchivedFable(root,()=>saveFrontendSetupUnretired(
-      root,snapshot,{apply,sourceDir}));
+      root,snapshot,{apply,sourceDir,onProtectedWrite}));
   }
-  return saveFrontendSetupUnretired(root,snapshot,{apply,sourceDir});
+  return saveFrontendSetupUnretired(root,snapshot,{
+    apply,sourceDir,onProtectedWrite,
+  });
 }
 async function interactiveManual(question=null,{backendAdapter='custom'}={}){
   const cli=question?null:createInterface({input:process.stdin,output:process.stdout});
