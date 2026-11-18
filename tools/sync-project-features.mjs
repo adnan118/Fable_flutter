@@ -11,6 +11,7 @@ import {importBackendDecisions} from './flutter-setup-wizard.mjs';
 import {auditFeatureArchitectures} from './enforce-feature-architecture-rc115.mjs';
 import {FEATURE_IDS,FEATURE_OWNERSHIP,REQUIRED_CORE,classifyFeatureDecisions} from './frontend-feature-ownership.mjs';
 import {w5FeatureNames} from './w5-app-feature-binding.mjs';
+import {assertRegularProjectPath,pathEntryExists} from './rc366-safe-source-tree.mjs';
 
 const KNOWN=FEATURE_IDS;
 const REQUIRED=new Set(REQUIRED_CORE);
@@ -37,31 +38,39 @@ function allSource(root,skip=new Set()){
   return out;
 }
 export function wiredTypedProjectFeatures(root,selected){
+  // A declared custom feature is NEVER optional during feature sync.
+  // Omitting a missing package from the registry would silently remove it
+  // from app navigation even though the project still requests it.
+  root=resolve(root);
+  if(!Array.isArray(selected)||selected.length>24)
+    throw Error('RC382 malformed project feature selection');
   const yamlPath=join(root,'pubspec.yaml');
   const registryPath=join(root,'lib/src/generated/feature_registry.dart');
-  const yaml=existsSync(yamlPath)?readFileSync(yamlPath,'utf8'):'';
-  const current=existsSync(registryPath)?readFileSync(registryPath,'utf8'):'';
-  const found=[];
-  const ids=new Set();
+  assertRegularProjectPath(root,yamlPath,'file');
+  assertRegularProjectPath(root,registryPath,'file');
+  const yaml=readFileSync(yamlPath,'utf8');
+  const current=readFileSync(registryPath,'utf8');
+  const found=[],ids=new Set();
   for(const feature of selected){
     const id=typeof feature==='string'?feature:feature?.id;
-    if(typeof id!=='string'||ids.has(id))continue;
+    if(typeof id!=='string'||id.length>64||
+       !/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(id)||
+       FEATURE_IDS.includes(id)||ids.has(id))
+      throw Error('RC382 invalid, built-in or duplicate declared custom feature');
     ids.add(id);
-    if(!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(id)||
-        id.length>64||FEATURE_IDS.includes(id))continue;
     const {packageName,variable}=w5FeatureNames(id);
-    const source=join(root,'packages/features',packageName,'lib/src/project_feature.dart');
     const packageRoot=join(root,'packages/features',packageName);
+    const source=join(packageRoot,'lib/src/project_feature.dart');
     const pub='  '+packageName+':\n    path: packages/features/'+packageName;
     const imp="import 'package:"+packageName+"/"+packageName+".dart';";
-    if(!existsSync(source)||!existsSync(packageRoot))continue;
-    if(lstatSync(source).isSymbolicLink()||
-        lstatSync(packageRoot).isSymbolicLink())
-      throw Error('RC266 symlinked typed feature cannot be preserved');
+    if(!pathEntryExists(packageRoot)||!pathEntryExists(source))
+      throw Error('RC382 declared custom feature source missing: '+id);
+    assertRegularProjectPath(root,packageRoot,'dir');
+    assertRegularProjectPath(root,source,'file');
     if(!readFileSync(source,'utf8').includes('const '+variable+'=')||
        !yaml.includes(pub)||!current.includes(imp)||
        !new RegExp('^\\s*'+variable+',\\s*$','m').test(current))
-      throw Error('RC266 previously registered typed feature is incomplete: '+id);
+      throw Error('RC382 registered custom feature is incomplete: '+id);
     found.push(id);
   }
   return found;
@@ -143,6 +152,17 @@ function removePushSections(src){
 }
 function applyPrune(root,plan,{prune=false}={}){
   const project=resolve(root),current=json(join(project,'assets/contracts/contract.json'));
+  // A second source-side authorization at the point of mutation protects
+  // custom features added, removed or replaced after the preview/planning.
+  const manifestPath=join(project,'.fable/project-features.json');
+  if(pathEntryExists(manifestPath))
+    assertRegularProjectPath(project,manifestPath,'file');
+  const selected=pathEntryExists(manifestPath)?json(manifestPath).features:[];
+  const actualWired=wiredTypedProjectFeatures(project,selected);
+  if(actualWired.length!==plan.wiredProjectFeatures.length||
+     actualWired.some((id,i)=>id!==plan.wiredProjectFeatures[i])||
+     selected.length!==plan.protectedProjectFeatureCount)
+    throw Error('RC382 custom feature selection changed since sync planning');
   if(current.contractHash!==plan.contractHash ||
     current.project?.id!==plan.projectId)throw Error('Imported project changed since feature planning');
   const registryPath=join(project,'lib/src/generated/feature_registry.dart');
