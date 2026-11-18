@@ -22,6 +22,75 @@ const CONTRACT_FILES=['contract.json','flutter-handoff.json','openapi.json','mob
 const OUTPUT_PATH='assets/config/frontend-setup.json';
 const PROJECT_PATH='.fable/frontend-setup.json';
 const asJson=file=>JSON.parse(readFileSync(file,'utf8'));
+/** RC394: immutable reviewed-setup copy before W6 mutates the feature graph.
+ * Keep an on-disk backup; never silently restore over a concurrent edit. */
+const REVIEWED_IMPORT_FILES=Object.freeze([
+  ...CONTRACT_FILES.map(name=>'assets/contracts/'+name),
+  'assets/contracts/frontend-setup.json',
+  'assets/config/backend.json',
+  'assets/config/frontend-setup.json',
+  '.fable/frontend-setup.json',
+  'assets/config/frontend-owned-decisions.json',
+  '.fable/frontend-owned-decisions.json',
+]);
+function setupFileSnapshot(root){
+  const project=resolve(root),files=new Map();
+  for(const rel of REVIEWED_IMPORT_FILES){
+    const path=join(project,rel);
+    if(!pathEntryExists(path)){files.set(rel,null);continue;}
+    assertRegularProjectPath(project,path,'file');
+    files.set(rel,readFileSync(path));
+  }
+  return files;
+}
+function durableWizardSetupBackup(root,snapshot){
+  const project=resolve(root),state=join(project,'.fable');
+  assertRegularProjectPath(project,project,'dir');
+  if(!pathEntryExists(state))mkdirSync(state,{recursive:true});
+  assertRegularProjectPath(project,state,'dir');
+  const parent=join(state,'wizard-apply-backups');
+  if(!pathEntryExists(parent))mkdirSync(parent,{recursive:true});
+  assertRegularProjectPath(project,parent,'dir');
+  const folder=mkdtempSync(join(parent,'rc394-'));
+  for(const [name,bytes] of snapshot){
+    if(bytes===null)continue;
+    const path=join(folder,'original',name);
+    mkdirSync(dirname(path),{recursive:true});
+    writeFileSync(path,bytes,{flag:'wx'});
+  }
+  writeFileSync(join(folder,'source-receipt.json'),JSON.stringify({
+    schemaVersion:1,kind:'fable.wizard-pre-sync-rollback',
+    capturedPaths:[...snapshot].map(([path,bytes])=>({
+      path,previouslyPresent:bytes!==null,
+      previousSha256:bytes===null?null:createHash('sha256').update(bytes).digest('hex'),
+    })),
+    sourceOnly:true,testsExecuted:false,productionReady:false,
+  },null,2)+'\n',{flag:'wx'});
+  return folder;
+}
+/** Only revert bytes written by THIS apply. Never discard a concurrent edit. */
+function restoreWizardSetupIfUnchanged(root,before,applied){
+  const project=resolve(root),warnings=[];
+  for(const [rel,expected] of applied){
+    const path=join(project,rel),original=before.get(rel);
+    try{
+      const present=pathEntryExists(path);
+      if(!present){
+        if(expected!==null)warnings.push('Changed or missing: '+rel);
+        continue;
+      }
+      assertRegularProjectPath(project,path,'file');
+      const actual=readFileSync(path);
+      if(expected===null||!actual.equals(expected)){
+        warnings.push('Concurrent change preserved: '+rel);
+        continue;
+      }
+      if(original===null)rmSync(path,{force:false});
+      else writeFileSync(path,original);
+    }catch{warnings.push('Manual recovery required: '+rel);}
+  }
+  return warnings;
+}
 function outputFile(root,path,value){
   const file=resolve(root,path);
   mkdirSync(dirname(file),{recursive:true});
@@ -304,10 +373,28 @@ export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={
   const sync=hasFeatures?await import('./sync-project-features.mjs'):null;
   // Preflight feature inventory before copying any project assets.
   if(sync && snapshot.projectBound)sync.planFeatureSync(root,snapshot,{prune});
-  const result=saveFrontendSetup(root,snapshot,{apply:true,sourceDir:source??null});
-  if(sync){
-    result.featureSync=sync.syncProjectFeatures(root,snapshot,{apply:snapshot.projectBound,prune});
+  // W3 import and W6 feature sync must not leave a mixed project if sync
+  // refuses a signed feature after the Backend assets have been replaced.
+  const protect=Boolean(sync&&snapshot.projectBound);
+  const before=protect?setupFileSnapshot(root):null;
+  const backup=protect?durableWizardSetupBackup(root,before):null;
+  let written=null,result;
+  try{
+    result=saveFrontendSetup(root,snapshot,{apply:true,sourceDir:source??null});
+    if(protect)written=setupFileSnapshot(root);
+    if(sync)
+      result.featureSync=sync.syncProjectFeatures(root,snapshot,{
+        apply:snapshot.projectBound,prune});
+  }catch(error){
+    const warnings=protect&&written
+      ?restoreWizardSetupIfUnchanged(root,before,written):[
+        'Wizard import may be incomplete; recover from the durable source backup',
+      ];
+    throw Error('W3/W6 reviewed project apply refused: '+error.message+
+      (backup?'; backup preserved: '+backup:'')+
+      (warnings.length?'; review: '+warnings.join('; '):''));
   }
+  if(backup)result.preSyncBackup=backup;
   if(result.applied&&snapshot.backendAuthority)
     reportSelectedFeatureGapsAfterApply(root,result); // AFTER final feature sync
   return result;
