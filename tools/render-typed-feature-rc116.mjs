@@ -307,17 +307,21 @@ function createRequestDto(op){
     ...fs.map(f=>'  final String'+(f.required?'':'?')+' '+f.name+';'),
     '  Map<String,Object?> toJson(){',
   ];
-  for(const field of fs){
+  for(const [index,field] of fs.entries()){
     const val=field.name;
-    const validation=val+'.trim().isEmpty || '+val+'.length>'+field.maxLength+
-      ' || '+val+'.codeUnits.any((c)=>c<32||c==127)';
+    // RC406: only local variables can be promoted from String? to String
+    // in all supported Dart targets. Public DTO fields are not promotable.
+    const checked='_validatedValue'+index;
+    const validation=checked+'.trim().isEmpty || '+checked+'.length>'+field.maxLength+
+      ' || '+checked+'.codeUnits.any((c)=>c<32||c==127)';
     parts.push(
-      '    if('+(field.required?validation:val+'!=null && ('+validation+')')+')',
+      '    final '+checked+'='+val+';',
+      '    if('+(field.required?validation:checked+'!=null && ('+validation+')')+')',
       '      throw const FormatException('+dart('Invalid '+val+' create field')+');',
     );
     if(field.uuid)parts.push(
-      '    if('+(field.required?'':val+'!=null && ')+
-        '!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").hasMatch('+val+'))',
+      '    if('+(field.required?'':checked+'!=null && ')+
+        '!RegExp(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").hasMatch('+checked+'))',
       '      throw const FormatException('+dart('Invalid '+val+' UUID')+');',
     );
   }
