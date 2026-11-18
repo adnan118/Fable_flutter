@@ -8,7 +8,7 @@
  */
 import {
   cpSync,existsSync,lstatSync,mkdtempSync,mkdirSync,readFileSync,
-  readdirSync,rmSync,
+  readdirSync,rmSync,writeFileSync,
 } from 'node:fs';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
@@ -114,6 +114,46 @@ function copyStarter(source,destination){
   });
   return copied;
 }
+/** Turn an actually copied validation starter into a distinct generated app.
+ * The agent/developer paths of a profile must have the SAME package identity;
+ * only the initiator changes, never the expected project sources. */
+export function bindW4MaterializedProjectName(root,kind,profile){
+  if(!W4_KINDS.includes(kind)||!W4_PROFILES.includes(profile))
+    throw Error('W4 cannot name an unknown project scenario');
+  const appName='w4_'+kind+'_'+profile;
+  const pubspec=join(root,'pubspec.yaml');
+  const current=readFileSync(pubspec,'utf8');
+  const names=[...current.matchAll(/^name:[ \t]*([a-z][a-z0-9_]*)[ \t]*$/gm)];
+  if(names.length!==1)throw Error('W4 Flutter root pubspec package name missing or ambiguous');
+  const oldName=names[0][1];
+  if(oldName!=='ci_fable'&&oldName!==appName)
+    throw Error('W4 full materialization requires the original Fable starter');
+  if(oldName!==appName){
+    writeFileSync(pubspec,current.replace(
+      /^name:[ \t]*[a-z][a-z0-9_]*[ \t]*$/m,()=> 'name: '+appName),'utf8');
+    const dirs=['lib','test','integration_test','tool','bin'];
+    for(const directory of dirs){
+      const start=join(root,directory);
+      if(!existsSync(start))continue;
+      function visit(folder){
+        for(const entry of readdirSync(folder,{withFileTypes:true})){
+          const path=join(folder,entry.name);
+          if(entry.isSymbolicLink())
+            throw Error('W4 materialized project contains an unsafe Dart link');
+          if(entry.isDirectory())visit(path);
+          else if(entry.isFile()&&entry.name.endsWith('.dart')){
+            const source=readFileSync(path,'utf8');
+            const updated=source.split('package:'+oldName+'/')
+              .join('package:'+appName+'/');
+            if(updated!==source)writeFileSync(path,updated,'utf8');
+          }
+        }
+      }
+      visit(start);
+    }
+  }
+  return appName;
+}
 function sha(value){return createHash('sha256').update(value).digest('hex');}
 function fingerprintProject(root){
   const files=[];
@@ -135,8 +175,13 @@ function fingerprintProject(root){
   const lines=files.map(([p,h])=>p+'\0'+h).join('\n');
   return {fileCount:files.length,fingerprint:sha(lines),files};
 }
-function outputAudit(root,kind,profile,sourcePin){
+function outputAudit(root,kind,profile,sourcePin,materialized=false){
   const issues=[];
+  if(materialized){
+    const yaml=readFileSync(join(root,'pubspec.yaml'),'utf8');
+    if(!new RegExp('^name:[ \\t]*w4_'+kind+'_'+profile+'[ \\t]*$','m').test(yaml))
+      issues.push('Materialized Flutter application retained wrong starter package name');
+  }
   for(const path of REQUIRED_OUTPUTS)
     if(!existsSync(join(root,path)))issues.push('Missing actual Wizard output: '+path);
   const config=JSON.parse(readFileSync(join(root,'assets/config/backend.json'),'utf8'));
@@ -217,7 +262,10 @@ export async function runW4WizardMatrix({
         if(readdirSync(project).length)throw Error('W4 scenario destination is not empty: '+project);
       }else mkdirSync(project,{recursive:true});
       try{
-        if(materializeFlutterSource)copyStarter(flutterSourceRoot,project);
+        if(materializeFlutterSource){
+          copyStarter(flutterSourceRoot,project);
+          bindW4MaterializedProjectName(project,kind,profile);
+        }
         let applied;
         if(kind==='fable'){
           if(initiator==='developer')applied=await runGuidedFlutterSetup({
@@ -241,15 +289,19 @@ export async function runW4WizardMatrix({
           else applied=saveFrontendSetup(project,manualFrontendDecisions(other),{apply:true});
         }
         if(applied?.applied!==true)throw Error('Wizard did not apply the reviewed configuration');
-        const safety=outputAudit(project,kind,profile,pin);
+        const safety=outputAudit(project,kind,profile,pin,
+          Boolean(materializeFlutterSource));
         const inventory=fingerprintProject(project);
         const pairKey=kind+':'+profile;
         const partner=pairs.get(pairKey);
         const parity=partner?partner.fingerprint===inventory.fingerprint:null;
         if(!partner)pairs.set(pairKey,{id,fingerprint:inventory.fingerprint});
         if(parity===false)throw Error('Guided/Agent generated source drift compared to '+partner.id);
-        cases.push({...entry,status:'SOURCE_GENERATED',passed:true,
-          issues:[],...safety,
+        cases.push({...entry,
+          status:materializeFlutterSource?'SOURCE_GENERATED':'CONFIG_ONLY_UNVERIFIED',
+          passed:Boolean(materializeFlutterSource),
+          issues:materializeFlutterSource?[]:
+            ['W4 full Flutter project source not materialized'],...safety,
           fingerprint:inventory.fingerprint,fileCount:inventory.fileCount,
           fullFlutterProjectMaterialized:Boolean(materializeFlutterSource),
           comparedWith:partner?.id??null,
@@ -269,7 +321,8 @@ export async function runW4WizardMatrix({
         developer:a?.id??null,agent:b?.id??null};
     }));
     if(paired.some(p=>!p.passed))issues.push('At least one W4 Guided/Agent source pair is unverified or different');
-    if(!materializeFlutterSource)issues.push('Full Flutter project materialization was not requested');
+    if(!materializeFlutterSource)
+      issues.push('Full Flutter project materialization was not requested');
     return {schemaVersion:1,batch:'RC212-W4',
       passed:issues.length===0,sourceOnly: true,
       counts:{scenarios:cases.length,generated:cases.filter(c=>c.passed).length,
