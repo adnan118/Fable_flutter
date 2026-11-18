@@ -194,7 +194,7 @@ function listDto(op){
       '        input.length!=(remaining>20?20:remaining)))',
       '      throw const FormatException("Inconsistent signed page item count");',
     ]:[]),
-    '    final items=<'+item+'>[];',
+    '    final _parsedItems=<'+item+'>[];',
     '    for(final _sourceRecord in input){',
     '      if(_sourceRecord is! Map || _sourceRecord.keys.any((k)=>k is! String))',
     "        throw const FormatException('Invalid list item object');",
@@ -220,7 +220,7 @@ function listDto(op){
       '        throw const FormatException('+dart('Invalid '+f.name+' datetime field')+');',
     );
   }
-  parts.push('      items.add('+item+'(');
+  parts.push('      _parsedItems.add('+item+'(');
   for(const f of op.fields){
     const value=f.type==='double'?(f.required?f.name+'.toDouble()':'('+f.name+' as num?)?.toDouble()'):
       (f.required?f.name:f.name+' as '+fieldType(f));
@@ -230,7 +230,7 @@ function listDto(op){
     '      ));',
     '    }',
     '    return '+name+'Dto('+name+'Entity(',
-    '      items:List<'+item+'>.unmodifiable(items),',
+    '      items:List<'+item+'>.unmodifiable(_parsedItems),',
     ...(op.resultKind==='paginated-list'?[
       '      mode:meta["mode"]=="search"?'+name+'ListMode.search:'+name+'ListMode.page,',
       "      page:meta['page'] as int,",
@@ -765,6 +765,7 @@ function presentation(op){
     '    if(_closed || _state is '+name+'Loading)return;',
     '    final revision=++_revision;',
     '    _change(const '+name+'Loading());',
+    '    try {',
     '    final result=await _read.call('+callArgs(op)+');',
     '    if(_closed || _revision!=revision)return;',
     '    switch(result){',
@@ -772,6 +773,13 @@ function presentation(op){
     '        _change('+name+'Ready(ok.value));',
     '      case TypedReadFailed<'+name+'Entity> error:',
     '        _change('+name+'Failed(error.failure.kind));',
+    '    }',
+    '    } catch(_){',
+    '      // Defensive fallback for unexpected use-case Future failures.',
+    '      // A dispatched CREATE must not be reported as definitely absent.',
+    '      if(!_closed && _revision==revision)',
+    '        _change('+name+'Failed(TypedReadFailureKind.'+
+        (op.method==='POST'?'outcomeUncertain':'unknown')+'));',
     '    }',
     '  }',
     '  void invalidate(){',
