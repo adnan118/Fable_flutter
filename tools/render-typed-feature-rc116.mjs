@@ -2502,9 +2502,28 @@ export function renderTypedFeature(plan){
   put('.fable-operation-evidence.json',JSON.stringify({
     schemaVersion:1,kind:'fable.signed-feature-source-receipt',
     featureId:feature,projectId:plan.projectId,projectContractHash:plan.contractHash,
+    w5SourceDelivery:{
+      status:'SIGNED_TYPED_SOURCE_GENERATED_RUNTIME_UNVERIFIED',
+      supportedMethods:[...new Set(plan.operations.map(op=>op.method))].sort(),
+      signedOperationCount:plan.operations.length,
+      signedContractHash:plan.contractHash,
+      domainLayerGenerated:true,applicationLayerGenerated:true,
+      repositoryLayerGenerated:true,presentationLayerGenerated:true,
+      packageNavigationGenerated:true,
+      hostAppBindingVerified:false,
+      nativeFlutterExecuted:false,realBackendExecuted:false,
+      nativeDeviceE2EVerified:false,productionReady:false,
+    },
     operations:plan.operations.map(op=>({
       operationId:op.operationId,method:op.method,path:op.path,
       operationHash:op.contractHash,responseKind:op.resultKind,
+      generatedSourceLayers:{
+        entity:true,port:true,useCase:true,repository:true,controller:true,
+        page:true,packageNavigation:true,
+        hostAppBindingVerified:false,
+      },
+      mutationRequiresExplicitUserConfirmation:op.method!=='GET',
+      automaticMutationRetry:false,
       expectedSuccessStatus:op.expectedSuccessStatus??(op.method==='POST'?201:200),
       pathParamKinds:op.pathParamKinds??[],
       requestFields:(op.bodyFields??[]).map(f=>({name:f.name,required:f.required,type:f.type})),
@@ -2522,7 +2541,7 @@ export function renderTypedFeature(plan){
     'Operations: '+plan.operations.map(op=>op.operationId).join(', '),
     'Supported: signed object GET, unpaginated GET, infinite-scroll page GET with optional RC274 signed global search, reviewed create POST and signed owner PATCH/DELETE.',
     'Typed read screen, feature navigation, repository and state source are generated.',
-    'Host app still needs an explicit verified feature registry/pubspec binding.',
+    'This package generates its own verified feature navigation. The host app additionally needs explicit registry/pubspec wiring (the reviewed W6 Wizard can perform it); no native app launch is proven by source generation.',
     'Other Backend, arbitrary filters, unsigned tenancy, PUT, unsigned managed writes, unsafe PATCH and sensitive POST are NOT generated. Signed managed CREATE can use a secure per-request Idempotency-Key.',
     ...(managedOperations.length?['Managed GET/PATCH/DELETE: use the source-pinned binding factory and Backend-verified entity selection; pass gateway.scopeEvents to generated pages.']:[]),
     'No live Backend, DB, device, or authorization E2E has been verified.'));
