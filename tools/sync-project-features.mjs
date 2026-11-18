@@ -100,6 +100,44 @@ export function wiredTypedProjectFeatures(root,selected){
   return found;
 }
 
+/**
+ * RC397: Dart imports are not the complete package dependency graph.
+ * Every installed package pubspec can require another feature at compile
+ * time, even when that dependency is not currently imported by any .dart.
+ */
+export function declaredFeaturePackageDependents(root,featureId){
+  const project=resolve(root);
+  if(!KNOWN.includes(featureId))
+    throw Error('Unknown feature package dependency lookup: '+featureId);
+  const packagesRoot=join(project,'packages'),found=[];
+  const dependency=new RegExp('^  fable_'+featureId+':(?:[ \\t]|$)','m');
+  if(!pathEntryExists(packagesRoot))return found;
+  function walk(dir,depth=0){
+    if(depth>7)throw Error('RC397 unexpected package source nesting');
+    assertRegularProjectPath(project,dir,'dir');
+    for(const entry of readdirSync(dir,{withFileTypes:true})){
+      if(['.git','.dart_tool','build','node_modules','Pods'].includes(entry.name))
+        continue;
+      const path=join(dir,entry.name);
+      const rel=relative(project,path).split(sep).join('/');
+      if(entry.isSymbolicLink())
+        throw Error('RC397 package dependency graph contains symbolic link: '+rel);
+      if(entry.isDirectory())walk(path,depth+1);
+      else if(entry.isFile()&&entry.name==='pubspec.yaml'){
+        // A package's self declaration is not a dependent; all other
+        // package manifests must be considered, including generated ones.
+        if(rel==='packages/features/fable_'+featureId+'/pubspec.yaml')continue;
+        assertRegularProjectPath(project,path,'file');
+        if(dependency.test(readFileSync(path,'utf8')))found.push(rel);
+      }else if(!entry.isFile()){
+        throw Error('RC397 unknown package entry during dependency scan: '+rel);
+      }
+    }
+  }
+  walk(packagesRoot);
+  return found.sort();
+}
+
 function registry(features,projectFeatures=[]) {
   const all=[...features,...projectFeatures];
   const imports=all.map(id=>"import 'package:fable_"+id+"/fable_"+id+".dart';").join('\n');
@@ -262,6 +300,12 @@ function applyPrune(root,plan,{prune=false}={}){
       .filter(file=>file!==appPath && readFileSync(file,'utf8').includes(importNeedle));
     if(app.includes(importNeedle))others.push(appPath);
     if(others.length){blocked.push({feature:id,reason:'referenced-by-source',sources:others.map(x=>relative(project,x))});continue;}
+    const pubspecDependents=declaredFeaturePackageDependents(project,id);
+    if(pubspecDependents.length){
+      blocked.push({feature:id,reason:'required-by-other-package-pubspec',
+        sources:pubspecDependents});
+      continue;
+    }
     const dependency=new RegExp('^  fable_'+id+':\\r?\\n    path: packages/features/fable_'+id+'\\r?\\n','m');
     if(!dependency.test(yaml)){blocked.push({feature:id,reason:'nonstandard-dependency-ownership'});continue;}
     yaml=yaml.replace(dependency,'');
