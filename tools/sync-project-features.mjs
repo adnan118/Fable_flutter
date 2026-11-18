@@ -4,7 +4,7 @@
  * The reusable Flutter template is NOT pruned until a real project import
  * is pinned to an independently-known project ID and backend export hash.
  */
-import {existsSync,readFileSync,writeFileSync,mkdirSync,readdirSync,statSync,lstatSync,cpSync,rmSync} from 'node:fs';
+import {existsSync,readFileSync,writeFileSync,mkdirSync,readdirSync,statSync,lstatSync,cpSync,rmSync,renameSync} from 'node:fs';
 import {resolve,join,dirname,relative,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {importBackendDecisions} from './flutter-setup-wizard.mjs';
@@ -200,7 +200,8 @@ function applyPrune(root,plan,{prune=false}={}){
   let yaml=readFileSync(packageYaml,'utf8');
   const blocked=[];
   const toDelete=[];
-  const archivePaths=new Set(['lib/src/generated/feature_registry.dart','.fable/mobile-features.json','pubspec.yaml']);
+  const archivePaths=new Set(['lib/src/generated/feature_registry.dart',
+    '.fable/mobile-features.json','.fable/last-feature-sync.json','pubspec.yaml']);
   if(prune && plan.disabled.includes('notifications')){
     app=removePushSections(app);
     archivePaths.add('lib/src/app.dart');
@@ -225,7 +226,9 @@ function applyPrune(root,plan,{prune=false}={}){
     }
     rejectLinks(candidate);
     const importNeedle="package:fable_"+id+"/";
-    const others=allSource(project,new Set([rel,'lib/src/generated']))
+    // Only the registry itself is replaced by this sync. Other generated
+    // Dart source may contain real feature imports that must prevent pruning.
+    const others=allSource(project,new Set([rel,'lib/src/generated/feature_registry.dart']))
       .filter(file=>file!==appPath && readFileSync(file,'utf8').includes(importNeedle));
     if(app.includes(importNeedle))others.push(appPath);
     if(others.length){blocked.push({feature:id,reason:'referenced-by-source',sources:others.map(x=>relative(project,x))});continue;}
@@ -233,7 +236,7 @@ function applyPrune(root,plan,{prune=false}={}){
     if(!dependency.test(yaml)){blocked.push({feature:id,reason:'nonstandard-dependency-ownership'});continue;}
     yaml=yaml.replace(dependency,'');
     toDelete.push(rel);
-    archivePaths.add(rel);
+    // The live source tree will be moved atomically to the backup, not erased.
   }
   // Preserve the full pre-mutation source for rollback; never overwrite a
   // previous backup or delete any source tree before making the snapshot.
@@ -266,25 +269,89 @@ function applyPrune(root,plan,{prune=false}={}){
     disabled:plan.disabled,
     clientOnlyReview:plan.clientOnlyReview,
   };
-  writeFileSync(registryPath,registry(plan.retainedPackages,plan.wiredProjectFeatures));
-  writeJSON(inventoryPath,inventory);
-  if(prune){
-    writeFileSync(appPath,app);
-    writeFileSync(packageYaml,yaml);
-    for(const rel of toDelete)rmSync(join(project,rel),{recursive:true,force:false});
+  const lastSyncPath=join(fableDir,'last-feature-sync.json');
+  if(pathEntryExists(lastSyncPath))
+    assertRegularProjectPath(project,lastSyncPath,'file');
+  // The backup is durable before the first mutation. Each write is
+  // compare-before-revert; another editor's changes are NEVER overwritten.
+  const originalText=new Map([
+    registryPath,inventoryPath,appPath,packageYaml,lastSyncPath,
+  ].map(path=>[path,pathEntryExists(path)?readFileSync(path,'utf8'):null]));
+  const writes=new Map(),moved=[];
+  const archived=[];
+  function saveSource(path,content){
+    if(pathEntryExists(path))
+      assertRegularProjectPath(project,path,'file');
+    writes.set(path,content);
+    writeFileSync(path,content,'utf8');
   }
-  writeJSON(join(project,'.fable','last-feature-sync.json'),{
-    schemaVersion:1,kind:'fable.flutter-feature-sync',
-    projectId:plan.projectId,contractHash:plan.contractHash,
-    enabled:plan.enabled,disabled:plan.disabled,
-    retainedPackages:plan.retainedPackages,
-    frontendDecisionsRequired:plan.frontendDecisionsRequired,
-    hybridRetained:plan.hybridRetained,
-    prunedPackages:toDelete,blocked,backup:relative(project,backup),
-    projectFeatureCountPreserved:plan.protectedProjectFeatureCount,
-  });
-  return {applied:true,backup:relative(project,backup),
-    hidden:plan.disabled,retainedPackages:plan.retainedPackages,prunedPackages:toDelete,blocked};
+  try{
+    saveSource(registryPath,registry(plan.retainedPackages,plan.wiredProjectFeatures));
+    saveSource(inventoryPath,JSON.stringify(inventory,null,2)+'\n');
+    if(prune){
+      saveSource(appPath,app);
+      saveSource(packageYaml,yaml);
+      // Source packages are relocated to an immutable recovery location.
+      // Moving directories is atomic on the same filesystem, unlike rmSync.
+      for(const rel of toDelete){
+        const source=join(project,rel);
+        const archivedAt=join(backup,'pruned-packages',rel);
+        if(pathEntryExists(archivedAt))
+          throw Error('RC384 package archive collision: '+rel);
+        assertRegularProjectPath(project,source,'dir');
+        mkdirSync(dirname(archivedAt),{recursive:true});
+        assertRegularProjectPath(project,dirname(archivedAt),'dir');
+        renameSync(source,archivedAt);
+        moved.push({source,archivedAt,rel});
+        archived.push(relative(project,archivedAt).split(sep).join('/'));
+      }
+    }
+    const report={
+      schemaVersion:1,kind:'fable.flutter-feature-sync',
+      projectId:plan.projectId,contractHash:plan.contractHash,
+      enabled:plan.enabled,disabled:plan.disabled,
+      retainedPackages:plan.retainedPackages,
+      frontendDecisionsRequired:plan.frontendDecisionsRequired,
+      hybridRetained:plan.hybridRetained,
+      prunedPackages:toDelete,
+      archivedPackages:archived,
+      blocked,backup:relative(project,backup),
+      projectFeatureCountPreserved:plan.protectedProjectFeatureCount,
+    };
+    saveSource(lastSyncPath,JSON.stringify(report,null,2)+'\n');
+    return {applied:true,backup:relative(project,backup),
+      hidden:plan.disabled,retainedPackages:plan.retainedPackages,
+      prunedPackages:toDelete,archivedPackages:archived,blocked};
+  }catch(error){
+    const recovery=[];
+    // Restore each moved package only when its original destination is
+    // still vacant; a concurrent writer always wins over auto-recovery.
+    for(const {source,archivedAt,rel} of [...moved].reverse()){
+      try{
+        if(!pathEntryExists(source)&&pathEntryExists(archivedAt))
+          renameSync(archivedAt,source);
+        else recovery.push('Review archived package: '+rel);
+      }catch{recovery.push('Restore package from archive manually: '+rel);}
+    }
+    for(const [path,written] of [...writes].reverse()){
+      try{
+        if(!pathEntryExists(path)){
+          recovery.push('Review missing app source: '+relative(project,path));
+          continue;
+        }
+        assertRegularProjectPath(project,path,'file');
+        if(readFileSync(path,'utf8')!==written){
+          recovery.push('Concurrent app source preserved: '+relative(project,path));
+          continue;
+        }
+        const original=originalText.get(path);
+        if(original===null)rmSync(path,{force:false});
+        else writeFileSync(path,original,'utf8');
+      }catch{recovery.push('Restore original app source from backup: '+relative(project,path));}
+    }
+    throw Error(error.message+(recovery.length?
+      '; STOP and review source backups: '+recovery.join('; '):''));
+  }
 }
 export function syncProjectFeatures(root,verified,{apply=false,prune=false}={}){
   if(prune&&!apply)throw Error('--prune requires --apply');
