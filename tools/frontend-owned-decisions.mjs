@@ -71,7 +71,7 @@ export function readFrontendOwnedDecisions(root,projectId){
   validateOfflineSyncPolicy(current.offlineSync);
   return current;
 }
-export function saveFrontendOwnedDecisions(root,config,{apply=false}={}){
+export function saveFrontendOwnedDecisions(root,config,{apply=false,onWrite=null}={}){
   if(config?.kind!=='fable.flutter-owned-decisions' || config.schemaVersion!==1 ||
     config.authority!=='frontend-only' || config.backendSecurityOverride!==false)
     throw Error('Invalid Flutter decisions');
@@ -90,7 +90,12 @@ export function saveFrontendOwnedDecisions(root,config,{apply=false}={}){
   if(existsSync(path))readFrontendOwnedDecisions(root,config.projectId);
   if(!apply)return {applied:false,path:OWNED_CONFIG_PATH};
   write(path,config);
-  write(resolve(root,OWNED_ASSET_PATH),config);
+  // The guarded Wizard apply records the exact bytes after each write, not
+  // just after the whole multi-file operation successfully completes.
+  onWrite?.(OWNED_CONFIG_PATH,readFileSync(path));
+  const asset=resolve(root,OWNED_ASSET_PATH);
+  write(asset,config);
+  onWrite?.(OWNED_ASSET_PATH,readFileSync(asset));
   return {applied:true,path:OWNED_CONFIG_PATH};
 }
 export function updateFrontendOwnedChoice(root,projectId,feature,enabled,{apply=false}={}){
