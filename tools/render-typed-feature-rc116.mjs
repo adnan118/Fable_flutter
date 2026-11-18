@@ -554,7 +554,6 @@ function adapter(op,projectHash){
       '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
     ]:[]),
     '      rethrow;',
-    '    }',
     ...(op.method==='POST'?[
       '    } catch(_){',
       '      // The unexpected failure may occur after Backend committed CREATE.',
@@ -562,7 +561,8 @@ function adapter(op,projectHash){
       '      if(mutationStarted)',
       '        throw const TypedReadFailure(TypedReadFailureKind.outcomeUncertain);',
       '      throw const TypedReadFailure(TypedReadFailureKind.unknown);',
-    ]:[]),
+      '    }',
+    ]:['    }']),
     '  }','}');
   return line(...parts);
 }
