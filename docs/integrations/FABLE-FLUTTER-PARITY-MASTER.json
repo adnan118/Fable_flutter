@@ -1354,7 +1354,7 @@
     ]
   },
   "w5TypedListMilestone": {
-    "lastSourceUpdate": "RC404",
+    "lastSourceUpdate": "RC408",
     "date": "2026-11-18",
     "backendReferenceCommit": "0604d91ba22277f84fe1f4715b981683e0139754",
     "flutterSourceScope": "signed Fable paginated-list generated consumer; not all Flutter feature operations",
@@ -1392,7 +1392,10 @@
       "RC387–RC391 W3/W4 source corrections: reviewed Flutter Wizard snapshots bound to signed Backend handoff, source symlink refusal, secure 12-path Wizard materialization with real project package names, and independent W3 verification inside W4 Fable scenarios",
       "RC402 W6 reviewed Wizard now preflights newly selected unbound features, imports signed Backend, generates missing selected typed packages via RC401, wires them to app and applies strict W6 sync",
       "RC403 W6 refuses to silently erase unknown installed feature registry imports/entries, while previews explicitly report pending selected features",
-      "RC404 W6 source-delivery receipt distinguishes finalized signed source integration from unexecuted Flutter SDK, Backend runtime and device tests"
+      "RC404 W6 source-delivery receipt distinguishes finalized signed source integration from unexecuted Flutter SDK, Backend runtime and device tests",
+      "RC406 Dart POST CreateRequest optional String? properties are promoted to local non-nullable String before trim/length/UUID validation to generate valid source",
+      "RC407 list DTO uses collision-free _parsedItems accumulator and GET/POST/PATCH/DELETE controllers recover from unexpected Futures without unsafe write retries",
+      "RC408 signed typed GET/POST/PATCH/DELETE generated package receipts separately attest source layers and note host app wiring versus runtime/Flutter acceptance"
     ],
     "sourceTestEvidence": "RC309 source parser inspected; regression tests authored but deliberately not executed per user request. No Flutter 3.50 Android build or real Backend integration performed.",
     "unverified": [
@@ -1421,7 +1424,8 @@
       "RC309 multi-selected generated Dart feature packages / Flutter 3.50 compilation and end-to-end navigation left to user; staged batch source does not certify production",
       "RC309 supports only signed typed selected features; unsupported operations halt the whole batch until reviewed",
       "RC391 W3/W4 source delivered but no current real Backend export and Flutter project handoff or 12-case materialized Wizard matrix executed by owner; Backend export generation origin provenance and native builds remain unverified",
-      "W6 source pipeline delivered in RC404; current real generated project, 12 Wizard scenarios, Backend execution and Flutter/Android/iOS live E2E were intentionally not executed under owner instruction; release gate remains NO_GO"
+      "W6 source pipeline delivered in RC404; current real generated project, 12 Wizard scenarios, Backend execution and Flutter/Android/iOS live E2E were intentionally not executed under owner instruction; release gate remains NO_GO",
+      "W5 signed typed source delivery is closed at RC408; unreviewed Backend operations deliberately remain fail-closed and all real project/Flutter SDK/Android/iOS/Backend live E2E are unexecuted by owner direction"
     ],
     "w5Closed": false,
     "w6Closed": false,
@@ -1518,5 +1522,60 @@
     "releaseAcceptanceW6Closed": false,
     "productionReady": false,
     "ownerDirection": "No tests executed; source milestones are complete but cannot certify runtime behavior."
+  },
+  "w5SourceMilestone": {
+    "schemaVersion": 1,
+    "kind": "fable.w5-signed-typed-operation-source-delivery",
+    "lastSourceUpdate": "RC408",
+    "date": "2026-11-18",
+    "w5SourceCodeDelivered": true,
+    "w5SignedTypedPipelineClosed": true,
+    "supportedSignedMethods": [
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE"
+    ],
+    "sourceScope": "Independently reviewed and signed Fable Backend operations supported by the strict typed generator; not a claim that every arbitrary Backend route is generated or production-approved",
+    "workflows": [
+      "Independently pin Backend project identity, contract hash, operation hash, method, path and permission/record access",
+      "Generate strict typed Entity, DTO, Repository, UseCase, Controller, Flutter Page and package navigation from supported operations",
+      "Support signed scalar GET, bounded unpaginated GET and paginated/infinite-scroll GET with reviewed search, filters and sorts",
+      "Generate explicit-confirmation bounded non-sensitive POST and scoped POST with signed idempotency where required",
+      "Generate owner/manager scoped UUID PATCH and DELETE with a separately signed fresh ETag GET and no automatic write retry",
+      "Reject unsupported operations rather than invent security policy, data types, permissions or backend routes",
+      "Scope authorization and loaded UI to namespace identity, managed entity context and Backend 403 revocation",
+      "Treat uncertain write completion conservatively and require manual Backend reconciliation before repeating mutations",
+      "Keep signed generated package source, app binding and native/runtime acceptance distinct in source receipts"
+    ],
+    "sourceCorrectionsCompleted": [
+      "RC380",
+      "RC381",
+      "RC393",
+      "RC395",
+      "RC398",
+      "RC399",
+      "RC400",
+      "RC406",
+      "RC407",
+      "RC408"
+    ],
+    "unsupportedScopeExplicit": [
+      "Arbitrary unsigned, privileged or tenant-unsafe Backend operations",
+      "PUT, unrestricted form fields, provider-only/webhook operations and unreviewed mutation schemas",
+      "Unsafely guessed Other Backend endpoints or access permissions",
+      "Real server concurrency, live device and production behavior without execution"
+    ],
+    "pendingSourceSteps": [],
+    "signedProjectFeatureGenerationExecuted": false,
+    "dartFlutterAnalyzerExecuted": false,
+    "flutterSDKBuildExecuted": false,
+    "liveBackendOperationExecution": false,
+    "androidIosE2EExecuted": false,
+    "allSeventeenFeatureFamiliesLiveAccepted": false,
+    "sourceOnly": true,
+    "releaseAcceptanceW5Closed": false,
+    "productionReady": false,
+    "ownerDirection": "Do not run tests. Source-level closure does not substitute for real generated project execution or live E2E."
   }
 }
