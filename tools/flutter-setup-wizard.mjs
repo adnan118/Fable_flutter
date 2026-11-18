@@ -432,6 +432,21 @@ export async function applyReviewedSnapshot(root,snapshot,{source,prune=false}={
   if(backup)result.preSyncBackup=backup;
   if(result.applied&&snapshot.backendAuthority)
     reportSelectedFeatureGapsAfterApply(root,result); // AFTER final feature sync
+  // RC404: W6's source pipeline has a defined terminal receipt. A
+  // successful sync means signed source and app registry were written, not
+  // that a native app, live Backend or selected API flow has been exercised.
+  if(result.featureSync?.w6SourceReceipt){
+    result.w6SourceDelivery={
+      ...result.featureSync.w6SourceReceipt,
+      generatedBatchCommitted:Boolean(result.featureGeneration?.applied),
+      generatedPackageCount:result.featureGeneration?.createdPackages??0,
+      reusedPackageCount:result.featureGeneration?.reusedPackages??0,
+      selectedFeaturesInstalled:result.featureSync.wiredProjectFeatures.length,
+      selectedFeaturesPending:result.featureSync.pendingProjectFeatures.length,
+      selectedFeaturesSourceComplete:result.featureSync.pendingProjectFeatures.length===0,
+      testsExecuted:false,productionReady:false,
+    };
+  }
   return result;
 }
 // The confirmation callback is intentionally injectable to test refusals.
